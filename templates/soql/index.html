@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}SOQL Workbench - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="mc-page-header mb-2">
+    <h4 class="mc-page-title">SOQL Workbench</h4>
+  </div>
+
+  <div class="row g-0">
+    <!-- ── Object Explorer Sidebar (3 cols) ─────────────────────────── -->
+    <div class="col-lg-3 col-md-4 pe-2">
+      <div class="object-explorer">
+        <div class="mb-2">
+          <input id="objectSearch" type="text" class="form-control form-control-sm"
+                 placeholder="Search objects…">
+        </div>
+        <div id="objectListLoading" class="text-center py-3 text-muted small d-none">
+          <div class="spinner-border spinner-border-sm text-warning me-1" role="status"></div>
+          Loading objects…
+        </div>
+        <div id="objectList">
+          <!-- Populated by MC.soql.loadObjects() -->
+        </div>
+        <!-- Fields Panel -->
+        <div id="fieldsPanelWrap" class="d-none mt-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <small class="fw-semibold text-navy" id="fieldsObjectLabel" style="color:var(--doane-navy)"></small>
+            <button id="btnInsertAllFields" class="btn btn-link btn-sm p-0 small text-muted">Insert All</button>
+          </div>
+          <div class="fields-list" id="fieldsList">
+            <!-- Populated by MC.soql.loadFields() -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Main Editor (9 cols) ─────────────────────────────────────── -->
+    <div class="col-lg-9 col-md-8">
+      <!-- Editor -->
+      <div class="mb-2">
+        <textarea id="soqlEditor" class="form-control w-100" rows="8"
+                  spellcheck="false"
+                  placeholder="SELECT Id, Name FROM Account WHERE IsPersonAccount = true LIMIT 100"></textarea>
+      </div>
+
+      <!-- Button row -->
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3 no-print">
+        <button id="btnRun" class="btn btn-doane btn-sm">&#9654; Run</button>
+        <button id="btnRunAll" class="btn btn-navy btn-sm">&#9654;&#9654; Run All Pages</button>
+        <button id="btnExplain" class="btn btn-outline-secondary btn-sm">Explain Plan</button>
+        <button id="btnExport" class="btn btn-outline-secondary btn-sm">&#11123; Download CSV</button>
+        <button id="btnSave" class="btn btn-outline-secondary btn-sm">&#128190; Save Query</button>
+        <select id="savedQueriesSelect" class="form-select form-select-sm">
+          <option value="">-- Saved queries --</option>
+        </select>
+        <button id="btnDeleteSaved" class="btn btn-outline-danger btn-sm d-none">Delete</button>
+      </div>
+
+      <!-- Results area -->
+      <div id="resultsArea">
+        <!-- Empty state -->
+        <div id="resultsEmpty" class="text-center py-4 text-muted small">
+          Run a query to see results here.
+        </div>
+
+        <!-- Result count + table -->
+        <div id="resultsContent" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted" id="resultCount"></small>
+            <small id="explainResult" class="text-info d-none font-monospace"></small>
+          </div>
+          <div class="table-responsive" style="max-height: calc(100vh - 340px); overflow-y: auto;">
+            <table class="table table-sm table-striped results-table mb-0" id="resultsTable">
+              <thead id="resultsTableHead"></thead>
+              <tbody id="resultsTableBody"></tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div id="paginationBar" class="d-flex justify-content-between align-items-center mt-2 d-none">
+            <small class="text-muted" id="pageInfo"></small>
+            <div class="d-flex gap-2">
+              <button id="btnPrevPage" class="btn btn-sm btn-outline-secondary">&#8592; Prev</button>
+              <button id="btnNextPage" class="btn btn-sm btn-outline-secondary">Next &#8594;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.soql.init();
+  });
+</script>
+{% endblock %}

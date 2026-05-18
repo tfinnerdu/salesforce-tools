@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="active-org" content="{{ session.get('active_org', 'dev') }}">
+  <title>{% block title %}Doane SF Mission Control{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mission-control.css') }}">
+</head>
+<body>
+
+  <!-- ── Top Navbar ─────────────────────────────────────────────────────── -->
+  <nav class="navbar navbar-expand-lg mc-navbar">
+    <div class="container-fluid">
+
+      <!-- Brand -->
+      <a class="navbar-brand mc-brand" href="/migration">
+        <span class="mc-brand-icon">&#9679;</span> Doane SF Mission Control
+      </a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#mainNav" aria-controls="mainNav"
+              aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="mainNav">
+
+        <!-- Tab nav links -->
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0 mc-tab-nav">
+          {% set path = request.path %}
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/migration') %}mc-active{% endif %}"
+               href="/migration">Migration</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/validation') %}mc-active{% endif %}"
+               href="/validation">Validation</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/soql') %}mc-active{% endif %}"
+               href="/soql">SOQL</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/schema') %}mc-active{% endif %}"
+               href="/schema">Schema</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/data-ops') %}mc-active{% endif %}"
+               href="/data-ops">Data Ops</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/settings') %}mc-active{% endif %}"
+               href="/settings">Settings</a>
+          </li>
+        </ul>
+
+        <!-- Org picker + badge -->
+        <div class="d-flex align-items-center gap-2 me-2">
+          <label for="orgPicker" class="text-white mb-0 small fw-semibold">Org:</label>
+          <select id="orgPicker" class="form-select form-select-sm mc-org-picker">
+            <option value="dev" {% if session.get('active_org', 'dev') == 'dev' %}selected{% endif %}>dev</option>
+            <option value="prod" {% if session.get('active_org', 'dev') == 'prod' %}selected{% endif %}>prod</option>
+            <option value="sandbox" {% if session.get('active_org', 'dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+          </select>
+          <span id="activeOrgBadge" class="badge mc-org-badge">
+            {{ session.get('active_org', 'dev') | upper }}
+          </span>
+        </div>
+
+        <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Flash Messages ─────────────────────────────────────────────────── -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="container-fluid mt-2">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ── Loading Spinner Overlay ────────────────────────────────────────── -->
+  <div id="mcSpinnerOverlay" class="mc-spinner-overlay d-none">
+    <div class="mc-spinner-box">
+      <div class="spinner-border mc-spinner-icon" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2 mb-0 text-white small">Working...</p>
+    </div>
+  </div>
+
+  <!-- ── Toast Container ────────────────────────────────────────────────── -->
+  <div id="mcToastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+  </div>
+
+  <!-- ── Main Content ───────────────────────────────────────────────────── -->
+  <main class="container-fluid py-3">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmBBhg93N32qUw4BFLMLE04ORIA0"
+          crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='js/mission-control.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

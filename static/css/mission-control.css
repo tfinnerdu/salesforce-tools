@@ -1,0 +1,735 @@
+/* ── Doane SF Mission Control — mission-control.css ─────────────────────── */
+
+:root {
+  --doane-orange: #FF7900;
+  --doane-navy:   #1F3864;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.mc-navbar {
+  background-color: var(--doane-navy);
+  border-bottom: 3px solid var(--doane-orange);
+}
+
+.mc-brand {
+  color: var(--doane-orange) !important;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+}
+
+.mc-brand:hover {
+  color: #ffaa44 !important;
+}
+
+.mc-brand-icon {
+  color: var(--doane-orange);
+  font-size: 0.8rem;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: var(--doane-orange);
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* ── Tab Nav ─────────────────────────────────────────────────────────────── */
+.mc-tab-nav .nav-link {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-weight: 500;
+  padding: 0.5rem 0.85rem;
+  transition: color 0.15s ease;
+}
+
+.mc-tab-nav .nav-link:hover {
+  color: var(--doane-orange) !important;
+}
+
+.mc-tab-nav .mc-active {
+  color: var(--doane-orange) !important;
+  border-bottom: 3px solid var(--doane-orange);
+  padding-bottom: calc(0.5rem - 3px);
+}
+
+/* ── Org Picker & Badge ──────────────────────────────────────────────────── */
+.mc-org-picker {
+  font-size: 0.8rem;
+  border: 1px solid var(--doane-navy);
+  border-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 0.2rem 0.5rem;
+  min-width: 80px;
+}
+
+.mc-org-picker option {
+  background-color: var(--doane-navy);
+  color: #fff;
+}
+
+.mc-org-badge {
+  background-color: var(--doane-orange) !important;
+  color: #fff !important;
+  font-size: 0.75rem;
+  border-radius: 0.375rem;
+  padding: 0.3em 0.65em;
+  font-weight: 600;
+}
+
+/* ── Spinner Overlay ─────────────────────────────────────────────────────── */
+.mc-spinner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mc-spinner-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.mc-spinner-icon {
+  color: var(--doane-orange);
+  width: 3rem;
+  height: 3rem;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge-green {
+  background-color: #28a745;
+  color: #fff;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-amber {
+  background-color: #ffc107;
+  color: #212529;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-red {
+  background-color: #dc3545;
+  color: #fff;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-navy {
+  background-color: var(--doane-navy);
+  color: #fff;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* ── Scorecard Table ─────────────────────────────────────────────────────── */
+.scorecard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.scorecard-table th {
+  background-color: var(--doane-navy);
+  color: #fff;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.scorecard-table td {
+  padding: 0.55rem 1rem;
+  vertical-align: middle;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.scorecard-table tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+.scorecard-table tbody tr:hover {
+  background-color: #fff3e0;
+}
+
+.scorecard-table .status-green td:first-child {
+  border-left: 4px solid #28a745;
+}
+
+.scorecard-table .status-amber td:first-child {
+  border-left: 4px solid #ffc107;
+}
+
+.scorecard-table .status-red td:first-child {
+  border-left: 4px solid #dc3545;
+}
+
+/* ── Metric Cards ────────────────────────────────────────────────────────── */
+.metric-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.metric-number {
+  font-size: 2.5rem;
+  color: var(--doane-orange);
+  font-weight: 700;
+  line-height: 1.1;
+  display: block;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+/* ── Overall Banner ──────────────────────────────────────────────────────── */
+.overall-banner {
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.overall-banner.banner-green {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.overall-banner.banner-amber {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffecb5;
+}
+
+.overall-banner.banner-red {
+  background-color: #dc3545;
+  color: #fff;
+  border: 1px solid #c82333;
+}
+
+/* ── Error Cards ─────────────────────────────────────────────────────────── */
+.error-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.error-card .card-body {
+  padding: 1rem 1.25rem;
+}
+
+.error-card.severity-high {
+  border-left: 5px solid #dc3545;
+}
+
+.error-card.severity-medium {
+  border-left: 5px solid #ffc107;
+}
+
+.error-card.severity-low {
+  border-left: 5px solid #28a745;
+}
+
+.error-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.error-card-cause {
+  font-size: 0.85rem;
+  color: #495057;
+  margin-bottom: 0.4rem;
+}
+
+.error-card-fix {
+  font-size: 0.82rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.error-sis-ids {
+  font-size: 0.8rem;
+  font-family: monospace;
+  max-height: 120px;
+  overflow-y: auto;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  margin-top: 0.5rem;
+}
+
+/* ── SOQL Editor ─────────────────────────────────────────────────────────── */
+#soqlEditor {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9rem;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  border: 2px solid var(--doane-navy);
+  border-radius: 0.375rem;
+  resize: vertical;
+  min-height: 160px;
+  padding: 0.75rem;
+  line-height: 1.5;
+}
+
+#soqlEditor:focus {
+  outline: none;
+  border-color: var(--doane-orange);
+  box-shadow: 0 0 0 0.2rem rgba(255, 121, 0, 0.25);
+}
+
+/* ── Results Table ───────────────────────────────────────────────────────── */
+.results-table {
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.results-table th {
+  background-color: var(--doane-navy);
+  color: #fff;
+  white-space: nowrap;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+}
+
+.results-table td {
+  padding: 0.4rem 0.75rem;
+  vertical-align: middle;
+  cursor: pointer;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-table td:hover {
+  background-color: #fff3e0;
+}
+
+.results-table tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+/* ── Inline Edit ─────────────────────────────────────────────────────────── */
+.inline-edit-input {
+  border: none;
+  border-bottom: 2px solid var(--doane-orange);
+  outline: none;
+  background: transparent;
+  font-size: inherit;
+  font-family: inherit;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+}
+
+/* ── Sub-nav Pills ───────────────────────────────────────────────────────── */
+.sub-nav {
+  background-color: #f0f1f3;
+  border-bottom: 1px solid #dee2e6;
+  padding: 0.4rem 0;
+}
+
+.sub-nav .nav-link {
+  color: var(--doane-navy);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.35rem 1rem;
+  border-radius: 0.375rem;
+}
+
+.sub-nav .nav-link:hover {
+  background-color: #fff3e0;
+  color: var(--doane-orange);
+}
+
+.sub-nav .nav-link.active {
+  background-color: var(--doane-orange);
+  color: #fff;
+}
+
+/* ── ContactPoint Cards ──────────────────────────────────────────────────── */
+.cp-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.cp-card-title {
+  font-weight: 700;
+  color: var(--doane-navy);
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+.cp-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.875rem;
+}
+
+.cp-stat-row:last-of-type {
+  border-bottom: none;
+}
+
+/* ── Upload Zone ─────────────────────────────────────────────────────────── */
+.upload-zone {
+  border: 2px dashed #adb5bd;
+  border-radius: 0.5rem;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  background-color: #fafafa;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--doane-orange);
+  background-color: #fff8f0;
+}
+
+.upload-zone .upload-icon {
+  font-size: 2.5rem;
+  color: #adb5bd;
+  margin-bottom: 0.5rem;
+}
+
+.upload-zone:hover .upload-icon {
+  color: var(--doane-orange);
+}
+
+.upload-zone p {
+  color: #6c757d;
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+/* ── Coverage Bar ────────────────────────────────────────────────────────── */
+.coverage-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.coverage-bar {
+  height: 8px;
+  border-radius: 4px;
+  background-color: #e9ecef;
+  overflow: hidden;
+  min-width: 60px;
+  flex: 1;
+}
+
+.coverage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.coverage-bar-fill.fill-green  { background-color: #28a745; }
+.coverage-bar-fill.fill-amber  { background-color: #ffc107; }
+.coverage-bar-fill.fill-red    { background-color: #dc3545; }
+
+/* ── Gap Indicators ──────────────────────────────────────────────────────── */
+.gap-positive {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.gap-negative {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* ── Object Explorer Sidebar ─────────────────────────────────────────────── */
+.object-explorer {
+  height: calc(100vh - 120px);
+  overflow-y: auto;
+  border-right: 1px solid #dee2e6;
+  padding-right: 0.5rem;
+}
+
+.object-explorer-item {
+  cursor: pointer;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  color: #212529;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.12s;
+}
+
+.object-explorer-item:hover {
+  background-color: #fff3e0;
+  color: var(--doane-orange);
+}
+
+.object-explorer-item.selected {
+  background-color: var(--doane-navy);
+  color: #fff;
+}
+
+.fields-list {
+  font-size: 0.82rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.fields-list-item {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.2rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+}
+
+.fields-list-item:hover {
+  background-color: #e9ecef;
+}
+
+.field-type-badge {
+  font-size: 0.7rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* ── Accordion Enhancements ──────────────────────────────────────────────── */
+.diff-left-only {
+  background-color: #e7f3ff;
+  color: #1565c0;
+}
+
+.diff-right-only {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.diff-mismatch {
+  background-color: #fdecea;
+  color: #b71c1c;
+}
+
+.diff-section-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #495057;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0 0.2rem;
+  border-top: 1px solid #dee2e6;
+  margin-top: 0.75rem;
+}
+
+/* ── Mapping Table ───────────────────────────────────────────────────────── */
+.mapping-table input {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* ── Code Block ──────────────────────────────────────────────────────────── */
+.code-block {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85rem;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  min-height: 80px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 2px solid var(--doane-navy);
+}
+
+/* ── Info Box ────────────────────────────────────────────────────────────── */
+.info-box {
+  background-color: #e7f3ff;
+  border: 1px solid #bee3f8;
+  border-left: 4px solid #3182ce;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #1a365d;
+}
+
+/* ── Page Headers ────────────────────────────────────────────────────────── */
+.mc-page-header {
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.mc-page-title {
+  color: var(--doane-navy);
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ── Button overrides ────────────────────────────────────────────────────── */
+.btn-doane {
+  background-color: var(--doane-orange);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+
+.btn-doane:hover {
+  background-color: #e06a00;
+  color: #fff;
+}
+
+.btn-navy {
+  background-color: var(--doane-navy);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+
+.btn-navy:hover {
+  background-color: #162a4f;
+  color: #fff;
+}
+
+/* ── Saved queries select ────────────────────────────────────────────────── */
+#savedQueriesSelect {
+  max-width: 300px;
+  font-size: 0.875rem;
+}
+
+/* ── Settings Table ──────────────────────────────────────────────────────── */
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+.settings-section-title {
+  color: var(--doane-navy);
+  font-weight: 700;
+  font-size: 1rem;
+  border-bottom: 2px solid var(--doane-orange);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.masked-value {
+  font-family: monospace;
+  color: #6c757d;
+  letter-spacing: 0.1em;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .mc-navbar {
+    flex-wrap: wrap;
+  }
+
+  .mc-tab-nav .nav-link {
+    font-size: 0.82rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .metric-card {
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+
+  .object-explorer {
+    height: auto;
+    max-height: 220px;
+    border-right: none;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 1rem;
+  }
+
+  #soqlEditor {
+    min-height: 100px;
+  }
+
+  .sub-nav .nav-link {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+  }
+}
+
+/* ── Print / Export PDF ──────────────────────────────────────────────────── */
+@media print {
+  .mc-navbar,
+  .sub-nav,
+  .btn,
+  #mcToastContainer,
+  .mc-spinner-overlay,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  .scorecard-table {
+    page-break-inside: auto;
+  }
+
+  .scorecard-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  .overall-banner {
+    border: 2px solid #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .scorecard-table th,
+  .scorecard-table .status-green td:first-child,
+  .scorecard-table .status-amber td:first-child,
+  .scorecard-table .status-red td:first-child {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

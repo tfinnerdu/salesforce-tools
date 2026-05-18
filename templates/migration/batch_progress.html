@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Batch Progress - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/readiness">Readiness Score</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/migration/batch">Batch Progress</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/reconciler">Error Reconciler</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Batch Progress Tracker</h4>
+  </div>
+
+  <!-- Controls -->
+  <div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-4 col-lg-3">
+          <label for="wfName" class="form-label small fw-semibold mb-1">Workflow Name</label>
+          <input id="wfName" type="text" class="form-control form-control-sm"
+                 placeholder="EDA_Person_Sync" value="EDA_Person_Sync">
+        </div>
+        <div class="col-sm-4 col-lg-3">
+          <label for="wfStartTime" class="form-label small fw-semibold mb-1">Start Time</label>
+          <input id="wfStartTime" type="datetime-local" class="form-control form-control-sm">
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnLoadStatus" class="btn btn-doane btn-sm">
+            Load Status
+          </button>
+        </div>
+        <div class="col-sm-auto d-flex align-items-center gap-2">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="autoRefresh">
+            <label class="form-check-label small" for="autoRefresh">Auto-refresh (15s)</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Section -->
+  <div id="progressSection" class="d-none">
+    <!-- Progress Bar -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold" id="progressLabel">Overall Progress</span>
+        <small class="text-muted" id="etaText">ETA: — | Rate: —/min</small>
+      </div>
+      <div class="card-body">
+        <div class="progress mb-2" style="height: 24px;">
+          <div id="progressBar" class="progress-bar bg-warning progress-bar-striped progress-bar-animated"
+               role="progressbar" style="width: 0%"
+               aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <span id="progressPct" class="fw-bold">0%</span>
+          </div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="row g-3 mt-1">
+          <div class="col-6 col-md-3">
+            <div class="metric-card">
+              <span class="metric-number" id="metricCompleted">—</span>
+              <div class="metric-label">Completed</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="metric-card">
+              <span class="metric-number text-danger" id="metricFailed">—</span>
+              <div class="metric-label">Failed</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="metric-card">
+              <span class="metric-number text-info" id="metricRunning">—</span>
+              <div class="metric-label">Running</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="metric-card">
+              <span class="metric-number text-secondary" id="metricQueued">—</span>
+              <div class="metric-label">Queued</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Failure Breakdown Table -->
+  <div id="failureTable" class="card shadow-sm d-none">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="fw-semibold">Failure Breakdown</span>
+      <div class="d-flex gap-2 no-print">
+        <button id="btnRerunAll" class="btn btn-sm btn-danger">Re-run All Failures</button>
+        <button id="btnExportFailures" class="btn btn-sm btn-outline-secondary">Export</button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped results-table mb-0" id="failureTableBody">
+          <thead>
+            <tr>
+              <th>Error Type</th>
+              <th>Count</th>
+              <th>Sample SIS IDs</th>
+              <th class="no-print">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="failureTbody">
+            <!-- Populated by MC.batch.renderFailures() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.batch.init();
+  });
+</script>
+{% endblock %}

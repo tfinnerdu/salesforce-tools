@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% block title %}Join Builder - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">SF &#8596; SQL Join Builder</h4>
+  </div>
+
+  <!-- ODBC Info Box (shown/hidden by JS) -->
+  <div id="odbcInfoBox" class="info-box mb-3 d-none">
+    <strong>ODBC Setup Required</strong> — SQL Server integration requires an ODBC driver to be
+    configured on the server.
+    <a href="https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server"
+       target="_blank" rel="noopener">View setup instructions &#8599;</a>
+  </div>
+
+  <!-- Two-column config -->
+  <div class="row g-3 mb-3">
+    <!-- Left: SQL Server -->
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold" style="background-color: var(--doane-navy); color:#fff;">
+          &#128421; SQL Server
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="sqlTable" class="form-label small fw-semibold">Table Name</label>
+            <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
+                   placeholder="dbo.Students">
+          </div>
+          <div class="mb-3">
+            <label for="sqlFields" class="form-label small fw-semibold">
+              Fields
+              <small class="text-muted fw-normal">(one per line)</small>
+            </label>
+            <textarea id="sqlFields" class="form-control form-control-sm font-monospace" rows="6"
+                      placeholder="student_id&#10;first_name&#10;last_name&#10;email"></textarea>
+          </div>
+          <div class="mb-0">
+            <label for="joinFieldSql" class="form-label small fw-semibold">Join Field (SQL side)</label>
+            <input id="joinFieldSql" type="text" class="form-control form-control-sm font-monospace"
+                   placeholder="student_id">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Salesforce -->
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold" style="background-color: var(--doane-orange); color:#fff;">
+          &#9928; Salesforce
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="sfObject" class="form-label small fw-semibold">Object</label>
+            <select id="sfObject" class="form-select form-select-sm">
+              <option value="">-- Select SF Object --</option>
+              <option value="Account">Account</option>
+              <option value="Contact">Contact</option>
+              <option value="hed__Application__c">hed__Application__c</option>
+              <option value="hed__Course_Enrollment__c">hed__Course_Enrollment__c</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="sfFields" class="form-label small fw-semibold">
+              SF Fields
+              <small class="text-muted fw-normal">(one per line)</small>
+            </label>
+            <textarea id="sfFields" class="form-control form-control-sm font-monospace" rows="6"
+                      placeholder="Id&#10;SIS_ID__c&#10;FirstName&#10;LastName&#10;PersonEmail"></textarea>
+          </div>
+          <div class="mb-0">
+            <label for="joinFieldSf" class="form-label small fw-semibold">Join Field (SF side)</label>
+            <input id="joinFieldSf" type="text" class="form-control form-control-sm font-monospace"
+                   placeholder="SIS_ID__c">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="d-flex flex-wrap gap-2 mb-3 no-print">
+    <button id="btnBuild" class="btn btn-doane btn-sm">&#9881; Build Query</button>
+    <button id="btnRun" class="btn btn-navy btn-sm">&#9654; Run (Python fallback)</button>
+  </div>
+
+  <!-- Generated SQL -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Generated SQL</span>
+      <button id="btnCopy" class="btn btn-sm btn-outline-secondary no-print">&#128203; Copy to Clipboard</button>
+    </div>
+    <div class="card-body p-0">
+      <pre id="generatedSql" class="code-block mb-0 p-3">-- Build a query above to see the generated SQL here.</pre>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="joinResultsWrap" class="d-none">
+    <div id="joinLoading" class="text-center py-3 d-none">
+      <div class="spinner-border text-warning" role="status">
+        <span class="visually-hidden">Running…</span>
+      </div>
+      <p class="mt-2 text-muted small">Executing join query…</p>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Results</span>
+        <small class="text-muted" id="joinResultCount"></small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+          <table class="table table-sm table-striped results-table mb-0">
+            <thead id="joinResultsHead"></thead>
+            <tbody id="resultsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.joinBuilder.init();
+  });
+</script>
+{% endblock %}

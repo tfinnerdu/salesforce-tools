@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}External ID Coverage - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/duplicates">Duplicate Radar</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/validation/external-ids">External ID Coverage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/contactpoints">ContactPoint Integrity</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h4 class="mc-page-title">External ID Coverage Report</h4>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <button id="btnRun" class="btn btn-doane btn-sm">&#9654; Run Report</button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="coverageLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Loading…</span>
+    </div>
+    <p class="mt-2 text-muted small">Running external ID coverage check…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="coverageEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No coverage data yet.</p>
+    <p class="small">Click <strong>Run Report</strong> to check external ID coverage across all objects.</p>
+  </div>
+
+  <!-- Coverage Table -->
+  <div id="coverageTableWrap" class="card shadow-sm d-none">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped results-table mb-0">
+          <thead>
+            <tr>
+              <th>Object</th>
+              <th>Total Records</th>
+              <th>SIS_ID__c Coverage</th>
+              <th>Ethos_Guid__c Coverage</th>
+            </tr>
+          </thead>
+          <tbody id="coverageTable">
+            <!-- Populated by MC.externalIds.renderTable() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drill-down Panel -->
+  <div id="drillPanel" class="card shadow-sm mt-3 d-none">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold" id="drillPanelTitle">Missing Records</span>
+      <div class="d-flex gap-2 no-print">
+        <button id="btnExportDrill" class="btn btn-sm btn-outline-secondary">Export CSV</button>
+        <button id="btnCloseDrill" class="btn btn-sm btn-outline-secondary">&#10005; Close</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <p class="small text-muted mb-2" id="drillSummary"></p>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped results-table mb-0">
+          <thead>
+            <tr>
+              <th>Record ID</th>
+              <th>Name</th>
+              <th>Created Date</th>
+            </tr>
+          </thead>
+          <tbody id="drillTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.externalIds.init();
+  });
+</script>
+{% endblock %}

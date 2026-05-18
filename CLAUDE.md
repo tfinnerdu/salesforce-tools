@@ -1,0 +1,103 @@
+# SF Mission Control — Project Context
+
+**Doane University — Salesforce Education Cloud tooling dashboard**
+
+## What this is
+
+Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all Salesforce developer/migration tooling in one authenticated dashboard. Replaces ad-hoc scripts + Salesforce Inspector + Demand Tools gaps.
+
+## Stack
+
+- Python 3.11 / Flask 3.x
+- `simple_salesforce` — SF REST + Bulk API
+- `requests` — Conductor API calls
+- `psycopg2` — PostgreSQL (result persistence, saved queries, collections)
+- `APScheduler` — daily readiness check at 06:00 CT
+- Bootstrap 5 CDN + vanilla JS (no React/Vue)
+- K8s `ns=prod`, Traefik stripPrefix
+
+## Tabs and their routes
+
+| Tab | URL prefix | Blueprints |
+|---|---|---|
+| Migration | `/migration` | `migration_bp` |
+| Validation | `/validation` | `validation_bp` |
+| SOQL | `/soql` | `soql_bp` |
+| Schema | `/schema` | `schema_bp` |
+| Data Ops | `/data-ops` | `data_ops_bp` |
+| Settings | `/settings` | `settings_bp` |
+
+**API routes live UNDER the blueprint prefix**, not at `/api/v1/`. Example: `POST /migration/readiness/run` (not `/api/v1/migration/readiness/run`). The blueprint prefix IS the namespace.
+
+## Provider pattern
+
+- `sf_provider.get_sf(org)` — real or `MockSalesforce` when `SF_MOCK=true`
+- `conductor_provider.get_conductor_client()` — real or `MockConductorClient` when `CONDUCTOR_MOCK=true`
+- Default dev behavior: both mocks active, no credentials needed
+
+## Salesforce context
+
+- Ed Cloud (EDA → Ed Cloud migration in progress)
+- Person Account model — upsert to `Account` with `__pc` suffix fields
+- External IDs: `SIS_ID__c` (Colleague person ID), `Ethos_Guid__c` (LDM GUID)
+- ContactPoint records parent to `Account` + `Individual` (NOT Contact)
+- Migration pipeline: Colleague → Ethos → Conductor → Salesforce
+
+## Key files
+
+```
+app.py               Flask factory, registers all blueprints
+config.py            Config class, get_org_config()
+db.py                psycopg2 connection, init_db(), db_available()
+sf_provider.py       SF client + MockSalesforce (4,312 mock PersonAccounts)
+conductor_provider.py Conductor client + MockConductorClient (91 mock failures)
+scheduler.py         APScheduler daily readiness job
+routes/              One blueprint file per tab
+services/            Business logic, one module per feature
+  readiness_validator.py   §3 pre-go-live scorecard
+  duplicate_radar.py       §5 duplicate PersonAccount scan
+  batch_tracker.py         §6 migration batch progress
+  error_reconciler.py      §7 Conductor failure categorization
+  schema_diff.py           §8 sandbox vs prod field diff
+  soql_workbench.py        §9 SOQL runner + object explorer
+  external_id_coverage.py  §10 SIS_ID__c / Ethos_Guid__c coverage
+  contactpoint_scanner.py  §11 broken ContactPoint parent links
+  crosswalk_diff.py        §4 EDA→Ed Cloud field mapping diff
+  join_builder.py          §14 SF↔SQL Server join query builder
+  collection_manager.py    §13 Postman collection runner
+templates/           Jinja2, all extend base.html
+static/css/          mission-control.css (Doane brand)
+static/js/           mission-control.js (MC.* namespace, vanilla JS)
+tests/               pytest, all services mocked
+docs/                e2e walkthrough + user guide
+k8s/manifest.yaml   Deployment + IngressRoute + Middleware + TLS
+```
+
+## Running locally
+
+```powershell
+.\start-local.ps1           # normal
+.\start-local.ps1 -ForceDeps # force pip reinstall
+```
+
+Or directly:
+```bash
+python app.py
+```
+
+## Environment variables
+
+Copy `.env.example` to `.env`. With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), the app runs fully without any credentials.
+
+## Testing
+
+```bash
+pytest tests/ -v
+```
+
+## Common gotchas
+
+- `secretKeyRef` indentation in K8s manifest: `name` and `key` must indent UNDER `secretKeyRef`
+- Flask binds `0.0.0.0` so Conductor/Docker can reach via `host.docker.internal`
+- `use_reloader=False` in hub-launched mode
+- Mock data is seeded from `sf_provider.py` — numbers match handoff doc examples

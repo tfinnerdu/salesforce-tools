@@ -1,0 +1,159 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sf-mission-control
+  namespace: prod
+  labels:
+    app: sf-mission-control
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sf-mission-control
+  template:
+    metadata:
+      labels:
+        app: sf-mission-control
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: sf-mission-control
+          image: doaneu/sf-mission-control:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: PORT
+              value: "5000"
+            - name: SF_MOCK
+              value: "false"
+            - name: CONDUCTOR_MOCK
+              value: "false"
+            - name: SCHEDULER_ENABLED
+              value: "true"
+            - name: DEFAULT_ORG
+              value: "prod"
+            - name: SF_DEV_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SF_DEV_USERNAME
+            - name: SF_DEV_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SF_DEV_PASSWORD
+            - name: SF_DEV_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SF_DEV_TOKEN
+            - name: SF_PROD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SF_PROD_USERNAME
+            - name: SF_PROD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SF_PROD_PASSWORD
+            - name: SF_PROD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SF_PROD_TOKEN
+            - name: CONDUCTOR_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: CONDUCTOR_URL
+            - name: CONDUCTOR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: CONDUCTOR_API_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: SECRET_KEY
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sf-mission-control
+  namespace: prod
+spec:
+  selector:
+    app: sf-mission-control
+  ports:
+    - port: 80
+      targetPort: 5000
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: sf-mission-control
+  namespace: prod
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`du-int.doane.edu`) && PathPrefix(`/prod/sf-mission-control`)
+      kind: Rule
+      middlewares:
+        - name: prod-sf-mission-control-prefix
+      services:
+        - name: sf-mission-control
+          port: 80
+  tls:
+    secretName: wildcard-doane-tls
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: prod-sf-mission-control-prefix
+  namespace: prod
+spec:
+  stripPrefix:
+    prefixes:
+      - /prod/sf-mission-control
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sf-mission-control-tls
+  namespace: prod
+spec:
+  secretName: wildcard-doane-tls
+  issuerRef:
+    name: prod-letsencrypt
+    kind: ClusterIssuer
+  dnsNames:
+    - du-int.doane.edu

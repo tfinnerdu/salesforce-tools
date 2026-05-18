@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% block title %}Settings - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Settings</h4>
+  </div>
+
+  <!-- ── Section 1: Org Connections ─────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">Org Connections</div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0" id="orgConnectionsTable">
+            <thead>
+              <tr>
+                <th>Org Name</th>
+                <th>Username</th>
+                <th>Instance URL</th>
+                <th>Status</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="orgConnectionsTbody">
+              <tr>
+                <td><strong>dev</strong></td>
+                <td><span class="masked-value">user••••••••••@doane.edu</span></td>
+                <td><span class="text-muted small">–</span></td>
+                <td><span id="orgStatusDev" class="badge badge-amber">Unknown</span></td>
+                <td class="no-print">
+                  <button class="btn btn-sm btn-outline-secondary" onclick="MC.settings.testOrg('dev')">
+                    Test Connection
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td><strong>prod</strong></td>
+                <td><span class="masked-value">user••••••••••@doane.edu</span></td>
+                <td><span class="text-muted small">–</span></td>
+                <td><span id="orgStatusProd" class="badge badge-amber">Unknown</span></td>
+                <td class="no-print">
+                  <button class="btn btn-sm btn-outline-secondary" onclick="MC.settings.testOrg('prod')">
+                    Test Connection
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td><strong>sandbox</strong></td>
+                <td><span class="masked-value">user••••••••••@doane.edu</span></td>
+                <td><span class="text-muted small">–</span></td>
+                <td><span id="orgStatusSandbox" class="badge badge-amber">Unknown</span></td>
+                <td class="no-print">
+                  <button class="btn btn-sm btn-outline-secondary" onclick="MC.settings.testOrg('sandbox')">
+                    Test Connection
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Conductor Config ────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">Conductor Config</div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">Conductor Base URL</label>
+            <div class="d-flex align-items-center gap-2">
+              <span class="masked-value" id="conductorUrl">https://conductor.doane.edu/api/••••</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">API Key</label>
+            <div class="d-flex align-items-center gap-2">
+              <span class="masked-value" id="conductorApiKey">••••••••••••••••••••••••</span>
+            </div>
+          </div>
+          <div class="col-12 no-print">
+            <button id="btnTestConductor" class="btn btn-outline-secondary btn-sm">
+              Test Conductor Connection
+            </button>
+            <span id="conductorTestResult" class="ms-2 small"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 3: API Collections ─────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">API Collections</div>
+
+    <!-- Upload -->
+    <div class="card shadow-sm mb-3 no-print">
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-sm-auto">
+            <label class="form-label small fw-semibold mb-1">Import Postman Collection (JSON)</label>
+            <input id="collectionFileInput" type="file" accept=".json" class="form-control form-control-sm"
+                   style="max-width:320px;">
+          </div>
+          <div class="col-sm-auto">
+            <button id="btnImportCollection" class="btn btn-doane btn-sm">
+              &#11014; Import
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collections Table -->
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div id="collectionsLoading" class="text-center py-3 d-none">
+          <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+          <span class="ms-2 text-muted small">Loading collections…</span>
+        </div>
+        <div id="collectionsEmpty" class="text-center py-4 text-muted small d-none">
+          No collections imported yet.
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0">
+            <thead>
+              <tr>
+                <th>Collection Name</th>
+                <th>Requests</th>
+                <th>Last Run</th>
+                <th>Last Status</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="collectionsTbody">
+              <!-- Populated by MC.settings.listCollections() -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Run Collection Modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="runModal" tabindex="-1" aria-labelledby="runModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color: var(--doane-navy); color:#fff;">
+        <h5 class="modal-title" id="runModalLabel">Run Collection</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="runModalCollectionId">
+        <div class="mb-3">
+          <label for="runModalEnvOverrides" class="form-label fw-semibold">
+            Environment Variable Overrides
+            <small class="text-muted fw-normal">(KEY=VALUE, one per line)</small>
+          </label>
+          <textarea id="runModalEnvOverrides" class="form-control font-monospace" rows="4"
+                    placeholder="BASE_URL=https://sandbox.salesforce.com&#10;API_VERSION=59.0"></textarea>
+        </div>
+
+        <!-- Per-request results -->
+        <div id="runResultsWrap" class="d-none">
+          <div class="fw-semibold mb-2 small text-uppercase" style="color:var(--doane-navy);">
+            Request Results
+          </div>
+          <div id="runResultsList" class="list-group list-group-flush small">
+            <!-- Items added per request by JS -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" id="btnRunCollection" class="btn btn-doane">
+          &#9654; Run Collection
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.settings.init();
+  });
+</script>
+{% endblock %}

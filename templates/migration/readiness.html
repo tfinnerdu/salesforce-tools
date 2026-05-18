@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Migration Readiness - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link active" href="/migration/readiness">Readiness Score</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/batch">Batch Progress</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/reconciler">Error Reconciler</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Migration Readiness</h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <small class="text-muted">Last run: <span id="lastRunTime">Never</span></small>
+      <button id="btnRunReadiness" class="btn btn-doane btn-sm">
+        &#9654; Run Now
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+        &#128438; Export
+      </button>
+    </div>
+  </div>
+
+  <!-- Overall Banner -->
+  <div id="overallBanner" class="overall-banner banner-amber d-none" role="status">
+    <strong>Overall Readiness:</strong>&nbsp;<span id="bannerText">—</span>
+  </div>
+
+  <!-- Scorecard Table -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div id="scorecardLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Running readiness checks…</p>
+      </div>
+
+      <div id="scorecardEmpty" class="text-center py-5 text-muted">
+        <p class="mb-1">No readiness data yet.</p>
+        <p class="small">Click <strong>Run Now</strong> to execute all checks.</p>
+      </div>
+
+      <table id="scorecardTable" class="scorecard-table d-none">
+        <thead>
+          <tr>
+            <th style="width:40%">Check</th>
+            <th style="width:15%">Score</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody id="scorecardBody">
+          <!-- Populated by MC.readiness.renderScorecard() -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.readiness.init();
+  });
+</script>
+{% endblock %}
