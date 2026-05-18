@@ -55,6 +55,27 @@ def api_join_run():
     sql_query = body.get('sql_query', '').strip()
     soql_query = body.get('soql_query', '').strip()
     join_mapping = body.get('join_mapping', {})
+
+    # Accept _collectConfig() format from JS frontend:
+    # {sql_table, sql_fields, join_field_sql, sf_object, sf_fields, join_field_sf}
+    if not sql_query and body.get('sql_table'):
+        built = join_builder.build_query(
+            sql_table=body.get('sql_table', ''),
+            sql_fields=body.get('sql_fields', []),
+            sf_object=body.get('sf_object', ''),
+            sf_fields=body.get('sf_fields', []),
+            join_mapping={
+                'sql_field': body.get('join_field_sql', ''),
+                'sf_field': body.get('join_field_sf', ''),
+            },
+        )
+        sql_query = built['sql_only']
+        soql_query = built['soql']
+        join_mapping = {
+            'sql_field': built['join_field_sql'],
+            'sf_field': built['join_field_sf'],
+        }
+
     if not sql_query or not soql_query:
         return jsonify({'success': False, 'data': None, 'error': 'sql_query and soql_query are required'}), 400
     try:

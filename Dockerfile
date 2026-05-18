@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system deps for pyodbc
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unixodbc \
+    unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 5000
+
+ENV SF_MOCK=false
+ENV CONDUCTOR_MOCK=false
+ENV SCHEDULER_ENABLED=true
+
+# Use -u for unbuffered stdout so hub-logs capture output immediately
+CMD ["python", "-u", "app.py"]

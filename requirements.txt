@@ -9,3 +9,4 @@ pyodbc==5.1.0
 pytest==8.2.2
 pytest-mock==3.14.0
 responses==0.25.3
+tzdata>=2024.1
