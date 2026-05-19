@@ -84,7 +84,7 @@ def api_batch_status():
 @migration_bp.route('/batch/rerun', methods=['POST'])
 def api_batch_rerun():
     body = request.get_json(silent=True) or {}
-    workflow_ids = body.get('workflow_ids', [])
+    workflow_ids = body.get('ids', body.get('workflow_ids', []))
     if not workflow_ids:
         return jsonify({'success': False, 'data': None, 'error': 'workflow_ids is required'}), 400
     try:
@@ -117,7 +117,7 @@ def api_reconciler_errors():
 @migration_bp.route('/reconciler/rerun', methods=['POST'])
 def api_reconciler_rerun():
     body = request.get_json(silent=True) or {}
-    workflow_ids = body.get('workflow_ids', [])
+    workflow_ids = body.get('sis_ids', body.get('workflow_ids', []))
     if not workflow_ids:
         return jsonify({'success': False, 'data': None, 'error': 'workflow_ids is required'}), 400
     try:

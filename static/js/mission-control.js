@@ -32,6 +32,10 @@ MC.api = async (path, method = 'GET', body = null) => {
   if (data && data.success === false) {
     throw new Error(data.error || data.message || 'Request failed');
   }
+  // Unwrap the standard {success, data} envelope used by most routes.
+  if (data !== null && typeof data === 'object' && 'success' in data && 'data' in data) {
+    return data.data;
+  }
   return data;
 };
 
@@ -140,13 +144,16 @@ MC.readiness = {
   async load() {
     try {
       const data = await MC.api('/migration/readiness/history');
-      if (!data || !data.results || data.results.length === 0) return;
-      const latest = data.results[0];
+      const history = Array.isArray(data) ? data : (data && data.results) || [];
+      if (!history || history.length === 0) return;
+      const latest = history[0];
+      // DB row: {id, org, run_at, results: <JSONB run dict>, overall_pct}
+      const runResult = (latest.results && typeof latest.results === 'object') ? latest.results : latest;
       const tsEl = document.getElementById('lastRunTime');
-      if (tsEl) tsEl.textContent = MC._fmtTime(latest.timestamp);
-      this.renderScorecard(latest.checks || []);
-      const pct = latest.overall_pct ?? latest.overall_score ?? 0;
-      this.renderOverallBanner(pct, latest.status || (pct >= 90 ? 'PASS' : pct >= 70 ? 'WARN' : 'FAIL'));
+      if (tsEl) tsEl.textContent = MC._fmtTime(runResult.timestamp || latest.run_at);
+      this.renderScorecard(runResult.checks || []);
+      const pct = latest.overall_pct ?? runResult.overall_pct ?? runResult.overall_score ?? 0;
+      this.renderOverallBanner(pct, runResult.status || (pct >= 90 ? 'PASS' : pct >= 70 ? 'WARN' : 'FAIL'));
     } catch (err) {
       // No history yet — stay in empty state
     }
@@ -254,10 +261,10 @@ MC.batch = {
     }
     MC.showSpinner();
     try {
-      const params = new URLSearchParams({ workflow: wfName });
-      if (startTime) params.set('start_time', startTime);
+      const params = new URLSearchParams({ workflow_name: wfName });
+      if (startTime) params.set('start_time_ms', startTime);
       const data = await MC.api(`/migration/batch/status?${params.toString()}`);
-      this.renderProgress(data);
+      this.renderProgress(data.status || data);
       if (data.failures && data.failures.length > 0) {
         this.renderFailures(data.failures);
       }
@@ -387,7 +394,7 @@ MC.reconciler = {
     if (summaryEl) { summaryEl.classList.add('d-none'); }
 
     try {
-      const params = new URLSearchParams({ workflow: wfName, hours: hoursBack });
+      const params = new URLSearchParams({ workflow_name: wfName, hours_back: hoursBack });
       const data = await MC.api(`/migration/reconciler/errors?${params.toString()}`);
       this._categories = data.categories || data || [];
       if (this._categories.length === 0) {
@@ -918,7 +925,7 @@ MC.soql = {
     MC.showSpinner();
     try {
       const data = await MC.api('/soql/run', 'POST', { soql, all_pages: allPages });
-      this.renderResults(data);
+      this.renderResults(data.data || data);
     } catch (err) {
       MC.showToast(`Query failed: ${err.message}`, 'danger');
       if (emptyEl) {
@@ -959,7 +966,7 @@ MC.soql = {
     this._columns = columns;
     this._currentPage = 0;
 
-    const total = data.totalSize ?? data.total ?? records.length;
+    const total = data.totalSize ?? data.total_size ?? data.total ?? records.length;
     const allFetched = data.done !== false;
     if (countEl) {
       countEl.textContent = `${total.toLocaleString()} record${total !== 1 ? 's' : ''}${allFetched ? '' : ' (partial — use Run All Pages for complete set)'}`;
@@ -1022,7 +1029,8 @@ MC.soql = {
       const emptyEl = document.getElementById('resultsEmpty');
       const headEl = document.getElementById('resultsTableHead');
       const bodyEl = document.getElementById('resultsTableBody');
-      const plan = data.plans?.[0] || data.plan || data;
+      const inner = data.data || data;
+      const plan = inner.plans?.[0] || inner.plan || inner;
       if (explainEl) {
         explainEl.textContent = JSON.stringify(plan, null, 2);
         explainEl.classList.remove('d-none');
@@ -1251,7 +1259,7 @@ MC.crosswalk = {
       const res = await fetch('/schema/crosswalk/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
-      const mappings = data.mappings || [];
+      const mappings = data.data || data.mappings || [];
       mappings.forEach(m => this.addMappingRow(m));
       this._showMappingTable();
       MC.showToast(`Imported ${mappings.length} mapping${mappings.length !== 1 ? 's' : ''}`, 'success');
@@ -1401,7 +1409,7 @@ MC.orgDiff = {
     MC.showSpinner();
     try {
       const data = await MC.api('/schema/org-diff/run', 'POST', { right_org: rightOrg, objects });
-      this.renderResults(data.diff || data || {});
+      this.renderResults(data.objects || data.diff || data || {});
       if (legend) legend.classList.remove('d-none');
     } catch (err) {
       MC.showToast(`Diff failed: ${err.message}`, 'danger');
@@ -1523,7 +1531,7 @@ MC.joinBuilder = {
     try {
       const data = await MC.api('/data-ops/join/build', 'POST', config);
       const sqlEl = document.getElementById('generatedSql');
-      if (sqlEl) sqlEl.textContent = data.sql || data.query || '-- No SQL generated';
+      if (sqlEl) sqlEl.textContent = data.openquery_sql || data.sql || data.query || '-- No SQL generated';
       MC.showToast('Query built', 'success');
     } catch (err) {
       MC.showToast(`Build failed: ${err.message}`, 'danger');
@@ -1756,7 +1764,7 @@ MC.settings = {
     MC.showSpinner();
     try {
       const data = await MC.api(`/settings/collections/${encodeURIComponent(colId)}/run`, 'POST', { env_overrides: envOverrides });
-      const requests = data.results || data.requests || [];
+      const requests = data.results || data.requests || data || [];
       if (resultsList) {
         resultsList.innerHTML = requests.map(req => {
           const ok = req.status === 'pass' || req.status === 'success' || (req.status_code >= 200 && req.status_code < 300);
