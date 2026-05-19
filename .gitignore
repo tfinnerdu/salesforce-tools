@@ -32,6 +32,7 @@ coverage.xml
 .DS_Store
 
 # Logs
+.hub-logs/
 hub-logs/
 *.log
 
@@ -43,3 +44,6 @@ hub-logs/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Project
+.vs/

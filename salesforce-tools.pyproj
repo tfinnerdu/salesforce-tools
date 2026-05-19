@@ -47,20 +47,66 @@
     <Compile Include="services\join_builder.py" />
     <Compile Include="services\collection_manager.py" />
     <Compile Include="tests\conftest.py" />
+    <Compile Include="tests\test_collection_manager.py" />
+    <Compile Include="tests\test_contracts.py" />
+    <Compile Include="tests\test_coverage_gaps.py" />
+    <Compile Include="tests\test_crosswalk_diff.py" />
+    <Compile Include="tests\test_join_builder.py" />
     <Compile Include="tests\test_readiness_validator.py" />
     <Compile Include="tests\test_duplicate_radar.py" />
     <Compile Include="tests\test_batch_tracker.py" />
     <Compile Include="tests\test_error_reconciler.py" />
+    <Compile Include="tests\test_routes_extended.py" />
     <Compile Include="tests\test_schema_diff.py" />
     <Compile Include="tests\test_external_id_coverage.py" />
     <Compile Include="tests\test_contactpoint_scanner.py" />
     <Compile Include="tests\test_routes.py" />
+    <Compile Include="tests\test_soql_workbench.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include=".env" />
+    <Content Include=".gitignore" />
+    <Content Include="CLAUDE.md" />
+    <Content Include="Dockerfile" />
+    <Content Include="docs\bashCommands.txt" />
+    <Content Include="docs\e2e-test-walkthrough.md" />
+    <Content Include="docs\notes.md" />
+    <Content Include="docs\user-guide.md" />
+    <Content Include="k8s\manifest.yaml" />
     <Content Include="requirements.txt" />
     <Content Include=".env.example" />
     <Content Include="start-local.ps1" />
     <Content Include="static\css\mission-control.css" />
     <Content Include="static\js\mission-control.js" />
+    <Content Include="templates\base.html" />
+    <Content Include="templates\data_ops\join_builder.html" />
+    <Content Include="templates\migration\batch_progress.html" />
+    <Content Include="templates\migration\error_reconciler.html" />
+    <Content Include="templates\migration\readiness.html" />
+    <Content Include="templates\schema\crosswalk_diff.html" />
+    <Content Include="templates\schema\org_diff.html" />
+    <Content Include="templates\settings\index.html" />
+    <Content Include="templates\soql\index.html" />
+    <Content Include="templates\validation\contactpoint.html" />
+    <Content Include="templates\validation\duplicate_radar.html" />
+    <Content Include="templates\validation\external_id.html" />
+    <Content Include="TESTING.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="docs\" />
+    <Folder Include="k8s\" />
+    <Folder Include="routes\" />
+    <Folder Include="services\" />
+    <Folder Include="static\" />
+    <Folder Include="static\css\" />
+    <Folder Include="static\js\" />
+    <Folder Include="templates\" />
+    <Folder Include="templates\data_ops\" />
+    <Folder Include="templates\migration\" />
+    <Folder Include="templates\schema\" />
+    <Folder Include="templates\settings\" />
+    <Folder Include="templates\soql\" />
+    <Folder Include="templates\validation\" />
+    <Folder Include="tests\" />
   </ItemGroup>
 </Project>
