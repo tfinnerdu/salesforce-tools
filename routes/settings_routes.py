@@ -15,7 +15,22 @@ settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 @settings_bp.route('/')
 @settings_bp.route('')
 def index():
-    return render_template('settings/index.html')
+    from config import get_org_config, Config
+    orgs = ['dev', 'prod', 'sandbox']
+    org_configs = {}
+    for org in orgs:
+        cfg = get_org_config(org)
+        org_configs[org] = {'username': cfg.get('username', '')}
+    dml_settings = {
+        'rate_limit': Config.SF_DML_RATE_LIMIT,
+        'bypass_setting': Config.SF_BYPASS_SETTING,
+        'bypass_field': Config.SF_BYPASS_FIELD,
+    }
+    bypass_active = session.get('bypass_triggers', False)
+    return render_template('settings/index.html',
+                           org_configs=org_configs,
+                           dml_settings=dml_settings,
+                           bypass_active=bypass_active)
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -26,10 +41,20 @@ def api_org_test(name):
         sf = get_sf(name)
         result = sf.query('SELECT Id FROM Account LIMIT 1')
         record_count = result.get('totalSize', 0)
-        return jsonify({'success': True, 'org': name, 'record_count': record_count})
+        instance_url = getattr(sf, 'sf_instance', '')
+        return jsonify({'success': True, 'org': name, 'record_count': record_count,
+                        'instance_url': instance_url})
     except Exception as exc:
         logger.exception('org connection test failed for %s', name)
         return jsonify({'success': False, 'org': name, 'error': str(exc)}), 200
+
+
+@settings_bp.route('/bypass-triggers', methods=['POST'])
+def api_bypass_triggers():
+    body = request.get_json(silent=True) or {}
+    enabled = bool(body.get('enabled', False))
+    session['bypass_triggers'] = enabled
+    return jsonify({'success': True, 'data': {'bypass_triggers': enabled}})
 
 
 @settings_bp.route('/org/switch', methods=['POST'])

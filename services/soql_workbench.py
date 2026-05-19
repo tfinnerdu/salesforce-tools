@@ -116,12 +116,15 @@ def delete_saved_query(user_key: str, query_id: int) -> None:
         logger.error("delete_saved_query failed id=%s: %s", query_id, exc)
 
 
-def update_record(org: str, object_name: str, record_id: str, field_name: str, value) -> dict:
+def update_record(org: str, object_name: str, record_id: str, field_name: str, value,
+                  bypass: bool = False) -> dict:
     """Update a single field on a record and return a confirmation dict."""
+    from sf_provider import dml_guard
     sf = get_sf(org)
     try:
         sf_obj = getattr(sf, object_name)
-        sf_obj.update(record_id, {field_name: value})
+        with dml_guard(sf, bypass=bypass):
+            sf_obj.update(record_id, {field_name: value})
     except AttributeError as exc:
         logger.warning("update_record: object %s not found on client: %s", object_name, exc)
     return {

@@ -1649,7 +1649,9 @@ MC.settings = {
   },
 
   async testOrg(orgName) {
-    const statusEl = document.getElementById(`orgStatus${orgName.charAt(0).toUpperCase() + orgName.slice(1)}`);
+    const orgCap = orgName.charAt(0).toUpperCase() + orgName.slice(1);
+    const statusEl = document.getElementById(`orgStatus${orgCap}`);
+    const instanceEl = document.getElementById(`orgInstance${orgCap}`);
     if (statusEl) {
       statusEl.className = 'badge badge-amber';
       statusEl.textContent = 'Testing…';
@@ -1665,6 +1667,10 @@ MC.settings = {
       badgeText = ok ? 'Connected' : 'Failed';
       toastMsg = `${orgName.toUpperCase()} — ${(data && data.message) || 'Connection tested'}`;
       toastType = ok ? 'success' : 'danger';
+      if (ok && instanceEl) {
+        instanceEl.textContent = data.instance_url || '–';
+        instanceEl.className = data.instance_url ? 'small font-monospace' : 'text-muted small';
+      }
     } catch (err) {
       toastMsg = `Test failed for ${orgName}: ${err.message}`;
     }
@@ -1673,6 +1679,17 @@ MC.settings = {
       statusEl.textContent = badgeText;
     }
     MC.showToast(toastMsg, toastType);
+  },
+
+  async toggleBypass(enabled) {
+    try {
+      await MC.api('/settings/bypass-triggers', 'POST', { enabled });
+      MC.showToast(`Bypass triggers ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'warning' : 'success');
+    } catch (err) {
+      MC.showToast(`Failed to toggle bypass triggers: ${err.message}`, 'danger');
+      const el = document.getElementById('bypassTriggersToggle');
+      if (el) el.checked = !enabled;
+    }
   },
 
   async importCollection(file) {

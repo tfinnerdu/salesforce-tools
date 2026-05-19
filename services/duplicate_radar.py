@@ -104,10 +104,12 @@ def scan(org: str) -> dict:
     }
 
 
-def merge(org: str, master_id: str, victim_id: str) -> dict:
+def merge(org: str, master_id: str, victim_id: str, bypass: bool = False) -> dict:
+    from sf_provider import dml_guard
     sf = get_sf(org)
     try:
-        sf.Account.merge(master_id, [victim_id])
+        with dml_guard(sf, bypass=bypass):
+            sf.Account.merge(master_id, [victim_id])
         success = True
     except AttributeError:
         # Mock or real client without merge method — treat as success

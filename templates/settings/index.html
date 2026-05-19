@@ -25,39 +25,28 @@
               </tr>
             </thead>
             <tbody id="orgConnectionsTbody">
+              {% for org_name in ['dev', 'prod', 'sandbox'] %}
+              {% set org_cap = org_name[0]|upper + org_name[1:] %}
+              {% set cfg = org_configs.get(org_name, {}) %}
               <tr>
-                <td><strong>dev</strong></td>
-                <td><span class="masked-value">user••••••••••@doane.edu</span></td>
-                <td><span class="text-muted small">–</span></td>
-                <td><span id="orgStatusDev" class="badge badge-amber">Unknown</span></td>
+                <td><strong>{{ org_name }}</strong></td>
+                <td>
+                  {% if cfg.username %}
+                    <span class="masked-value small">{{ cfg.username }}</span>
+                  {% else %}
+                    <span class="text-muted small">Not configured</span>
+                  {% endif %}
+                </td>
+                <td><span id="orgInstance{{ org_cap }}" class="text-muted small">–</span></td>
+                <td><span id="orgStatus{{ org_cap }}" class="badge badge-amber">Unknown</span></td>
                 <td class="no-print">
-                  <button class="btn btn-sm btn-outline-secondary" onclick="MC.settings.testOrg('dev')">
+                  <button class="btn btn-sm btn-outline-secondary"
+                          onclick="MC.settings.testOrg('{{ org_name }}')">
                     Test Connection
                   </button>
                 </td>
               </tr>
-              <tr>
-                <td><strong>prod</strong></td>
-                <td><span class="masked-value">user••••••••••@doane.edu</span></td>
-                <td><span class="text-muted small">–</span></td>
-                <td><span id="orgStatusProd" class="badge badge-amber">Unknown</span></td>
-                <td class="no-print">
-                  <button class="btn btn-sm btn-outline-secondary" onclick="MC.settings.testOrg('prod')">
-                    Test Connection
-                  </button>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>sandbox</strong></td>
-                <td><span class="masked-value">user••••••••••@doane.edu</span></td>
-                <td><span class="text-muted small">–</span></td>
-                <td><span id="orgStatusSandbox" class="badge badge-amber">Unknown</span></td>
-                <td class="no-print">
-                  <button class="btn btn-sm btn-outline-secondary" onclick="MC.settings.testOrg('sandbox')">
-                    Test Connection
-                  </button>
-                </td>
-              </tr>
+              {% endfor %}
             </tbody>
           </table>
         </div>
@@ -94,7 +83,50 @@
     </div>
   </div>
 
-  <!-- ── Section 3: API Collections ─────────────────────────────────── -->
+  <!-- ── Section 3: DML / Trigger Settings ──────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">DML / Trigger Settings</div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Rate Limit (calls/sec)</label>
+            <div class="text-muted small">
+              {{ dml_settings.rate_limit if dml_settings.rate_limit else '0 — unlimited' }}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Bypass Setting Object</label>
+            <div class="text-muted small font-monospace">
+              {{ dml_settings.bypass_setting or '(not configured)' }}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Bypass Field</label>
+            <div class="text-muted small font-monospace">{{ dml_settings.bypass_field }}</div>
+          </div>
+          <div class="col-12 no-print">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="bypassTriggersToggle"
+                     role="switch"
+                     {% if bypass_active %}checked{% endif %}
+                     onchange="MC.settings.toggleBypass(this.checked)">
+              <label class="form-check-label fw-semibold" for="bypassTriggersToggle">
+                Bypass Triggers <span class="fw-normal text-muted">(session-wide)</span>
+              </label>
+            </div>
+            {% if not dml_settings.bypass_setting %}
+            <div class="text-muted small mt-1">
+              Set <code>SF_BYPASS_SETTING</code> in your environment to enable this feature.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 4: API Collections ─────────────────────────────────── -->
   <div class="settings-section">
     <div class="settings-section-title">API Collections</div>
 

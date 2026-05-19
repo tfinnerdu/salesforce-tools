@@ -54,8 +54,9 @@ def api_duplicates_merge():
     victim_id = body.get('victim_id')
     if not master_id or not victim_id:
         return jsonify({'success': False, 'data': None, 'error': 'master_id and victim_id are required'}), 400
+    bypass = session.get('bypass_triggers', False)
     try:
-        result = duplicate_radar.merge(org=org, master_id=master_id, victim_id=victim_id)
+        result = duplicate_radar.merge(org=org, master_id=master_id, victim_id=victim_id, bypass=bypass)
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('duplicate merge failed')

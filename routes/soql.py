@@ -111,6 +111,7 @@ def api_update():
     value = body.get('value')
     if not object_name or not record_id or not field_name:
         return jsonify({'success': False, 'data': None, 'error': 'object_name, record_id and field_name are required'}), 400
+    bypass = session.get('bypass_triggers', False)
     try:
         result = soql_workbench.update_record(
             org=org,
@@ -118,6 +119,7 @@ def api_update():
             record_id=record_id,
             field_name=field_name,
             value=value,
+            bypass=bypass,
         )
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
