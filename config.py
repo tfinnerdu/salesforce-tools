@@ -28,3 +28,6 @@ class Config:
     SQLSERVER_CONN = os.environ.get('SQLSERVER_CONN', '')
     PORT = int(os.environ.get('PORT', 5000))
     VERSION = '1.0.0'
+    SF_DML_RATE_LIMIT = int(os.environ.get('SF_DML_RATE_LIMIT', '0'))
+    SF_BYPASS_SETTING = os.environ.get('SF_BYPASS_SETTING', '')
+    SF_BYPASS_FIELD = os.environ.get('SF_BYPASS_FIELD', 'Bypass_Triggers__c')

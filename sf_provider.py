@@ -2,11 +2,59 @@
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+import threading
+import time
+from contextlib import contextmanager
+from typing import Any, Dict, Generator, List, Optional
 
 from config import Config, get_org_config
 
 logger = logging.getLogger(__name__)
+
+# ── DML helpers ───────────────────────────────────────────────────────────────
+
+_dml_lock = threading.Lock()
+_last_dml_time: float = 0.0
+
+
+def dml_throttle() -> None:
+    """Sleep if needed to honour SF_DML_RATE_LIMIT (calls/sec). No-op when 0."""
+    rate = Config.SF_DML_RATE_LIMIT
+    if not rate:
+        return
+    global _last_dml_time
+    with _dml_lock:
+        elapsed = time.monotonic() - _last_dml_time
+        min_gap = 1.0 / rate
+        if elapsed < min_gap:
+            time.sleep(min_gap - elapsed)
+        _last_dml_time = time.monotonic()
+
+
+def set_bypass_triggers(sf, enable: bool) -> None:
+    """Flip the org-level bypass-triggers Custom Setting via REST. No-op when unconfigured."""
+    setting = Config.SF_BYPASS_SETTING
+    field = Config.SF_BYPASS_FIELD
+    if not setting or not field:
+        return
+    try:
+        sf.restful(f'sobjects/{setting}/', method='PATCH', json={field: enable})
+        logger.info("bypass_triggers set to %s on %s", enable, setting)
+    except Exception as exc:
+        logger.warning("set_bypass_triggers(%s) failed: %s", enable, exc)
+
+
+@contextmanager
+def dml_guard(sf, bypass: bool = False) -> Generator:
+    """Rate-throttle and optionally bypass Apex triggers around a DML block."""
+    dml_throttle()
+    if bypass:
+        set_bypass_triggers(sf, True)
+    try:
+        yield
+    finally:
+        if bypass:
+            set_bypass_triggers(sf, False)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -241,6 +289,7 @@ class MockSalesforce:
     def __init__(self, org: str = 'dev') -> None:
         self.org = org
         self.base_url = 'https://mock.salesforce.com/services/data/v59.0/'
+        self.sf_instance = 'mock.salesforce.com'
         # Expose SObject-style attributes
         self.Account = _MockSFObject('Account')
         self.ContactPointEmail = _MockSFObject('ContactPointEmail')
