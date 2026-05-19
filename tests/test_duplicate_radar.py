@@ -13,7 +13,7 @@ def test_scan_has_strategies_key():
     result = scan('dev')
     assert 'strategies' in result
     assert isinstance(result['strategies'], list)
-    assert len(result['strategies']) == 4
+    assert len(result['strategies']) == 5
 
 
 def test_scan_has_run_at_and_total():
@@ -43,6 +43,7 @@ def test_scan_strategy_names():
     assert 'same_name_dob' in names
     assert 'same_email' in names
     assert 'same_ethos_guid' in names
+    assert 'fuzzy_name' in names
 
 
 def test_scan_status_green_when_no_duplicates():

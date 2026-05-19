@@ -481,6 +481,12 @@ class MockSalesforce:
                 params = kwargs.get('params', {})
                 q_str = params.get('q', path)
                 q_lower = q_str.lower() if isinstance(q_str, str) else path_lower
+                if 'validationrule' in q_lower:
+                    records = [_make_validation_rule(i) for i in range(1, 6)]
+                    return {'totalSize': 5, 'done': True, 'records': records}
+                if 'flowdefinition' in q_lower:
+                    records = [_make_flow_definition(i) for i in range(1, 8)]
+                    return {'totalSize': 7, 'done': True, 'records': records}
                 if 'apexlog' in q_lower:
                     records = [_make_apex_log(i) for i in range(1, 11)]
                     return {'totalSize': 10, 'done': True, 'records': records}
@@ -544,7 +550,22 @@ class MockSalesforce:
         soql_lower = soql.lower()
         records: List[dict] = []
 
-        if 'contactpointaddress' in soql_lower:
+        if 'permissionsetassignment' in soql_lower:
+            for i in range(1, min(limit, 20) + 1):
+                records.append(_make_perm_set_assignment(i))
+        elif 'fieldpermissions' in soql_lower:
+            for i in range(1, min(limit, 30) + 1):
+                records.append(_make_field_permission(i))
+        elif 'report' in soql_lower and 'contactpoint' not in soql_lower:
+            for i in range(1, min(limit, 12) + 1):
+                records.append({
+                    'Id': f'00O{i:015d}',
+                    'Name': f'Student Report {i}',
+                    'FolderName': 'Enrollment Reports',
+                    'LastRunDate': '2026-05-01',
+                    'attributes': {'type': 'Report'},
+                })
+        elif 'contactpointaddress' in soql_lower:
             for i in range(1, limit + 1):
                 records.append(_make_contactpoint_address(i))
         elif 'contactpointemail' in soql_lower:
