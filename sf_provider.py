@@ -558,6 +558,21 @@ class MockSalesforce:
                 if 'processexception' in q_lower:
                     records = [_make_process_exception(i) for i in range(1, 5)]
                     return {'totalSize': 4, 'done': True, 'records': records}
+                if 'customfield' in q_lower:
+                    objects = ['Account', 'Account', 'Account', 'ContactPointEmail', 'ContactPointEmail']
+                    fields = ['SIS_ID__c', 'Ethos_Guid__c', 'Legacy_ID__c', 'SIS_ID__c', 'Source_System__c']
+                    labels = ['SIS ID', 'Ethos GUID', 'Legacy ID', 'SIS ID', 'Source System']
+                    records = [
+                        {
+                            'Id': f'00N{i:015d}',
+                            'DeveloperName': fields[i - 1].replace('__c', ''),
+                            'Label': labels[i - 1],
+                            'EntityDefinition': {'QualifiedApiName': objects[i - 1]},
+                            'attributes': {'type': 'CustomField'},
+                        }
+                        for i in range(1, 6)
+                    ]
+                    return {'totalSize': 5, 'done': True, 'records': records}
                 return {'totalSize': 0, 'done': True, 'records': []}
 
             if 'tooling/sobjects/apexlog' in path_lower:
@@ -632,6 +647,46 @@ class MockSalesforce:
                     'FolderName': 'Enrollment Reports',
                     'LastRunDate': '2026-05-01',
                     'attributes': {'type': 'Report'},
+                })
+        elif 'apexclass' in soql_lower:
+            for i in range(1, min(limit, 12) + 1):
+                name = (
+                    'StudentSyncService' if i == 1
+                    else 'AccountTriggerHandler' if i == 2
+                    else f'EthosIntegrationUtil_{i}'
+                )
+                records.append({
+                    'Id': f'01p{i:015d}',
+                    'Name': name,
+                    'LastModifiedDate': '2026-05-19T10:00:00.000+0000',
+                    'attributes': {'type': 'ApexClass'},
+                })
+        elif 'apextrigger' in soql_lower:
+            for i in range(1, min(limit, 4) + 1):
+                records.append({
+                    'Id': f'01q{i:015d}',
+                    'Name': f'AccountTrigger' if i == 1 else f'ContactPointTrigger_{i}',
+                    'TableEnumOrId': 'Account' if i == 1 else 'ContactPointEmail',
+                    'attributes': {'type': 'ApexTrigger'},
+                })
+        elif 'flowdefinition' in soql_lower:
+            for i in range(1, min(limit, 5) + 1):
+                records.append({
+                    'Id': f'301{i:015d}',
+                    'DeveloperName': f'Sync_Student_Record_{i}',
+                    'MasterLabel': f'Sync Student Record {i}',
+                    'ProcessType': 'AutoLaunchedFlow',
+                    'Status': 'Active',
+                    'attributes': {'type': 'FlowDefinition'},
+                })
+        elif 'permissionset' in soql_lower and 'assignment' not in soql_lower:
+            for i in range(1, min(limit, 6) + 1):
+                records.append({
+                    'Id': f'0PS{i:015d}',
+                    'Name': f'Migration_User_PS_{i}',
+                    'Label': f'Migration User {i}',
+                    'IsOwnedByProfile': False,
+                    'attributes': {'type': 'PermissionSet'},
                 })
         elif 'contactpointaddress' in soql_lower:
             for i in range(1, limit + 1):

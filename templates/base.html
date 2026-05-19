@@ -71,6 +71,10 @@
                href="/admin">Admin</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/deploy') %}mc-active{% endif %}"
+               href="/deploy">Deploy</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link {% if path.startswith('/settings') %}mc-active{% endif %}"
                href="/settings">Settings</a>
           </li>

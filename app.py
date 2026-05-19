@@ -17,6 +17,7 @@ from routes.observe import observe_bp
 from routes.logs import logs_bp
 from routes.impact import impact_bp
 from routes.admin import admin_bp
+from routes.deploy import deploy_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +41,7 @@ def create_app() -> Flask:
     app.register_blueprint(logs_bp)
     app.register_blueprint(impact_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(deploy_bp)
 
     @app.context_processor
     def inject_globals():
