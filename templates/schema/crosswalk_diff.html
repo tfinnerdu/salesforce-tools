@@ -19,7 +19,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header">
-    <h4 class="mc-page-title">Crosswalk Field Diff — Live Checker</h4>
+    <h4 class="mc-page-title">Crosswalk Field Diff — Live Checker
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="EDA → Ed Cloud Crosswalk"
+            data-bs-content="Compares the field mapping document (uploaded CSV) against live field metadata from the org. Identifies fields in the crosswalk that no longer exist, fields with changed types, and unmapped fields.">ⓘ</span>
+    </h4>
   </div>
 
   <!-- Upload Zone -->
@@ -81,7 +88,14 @@
     </div>
 
     <div class="card shadow-sm">
-      <div class="card-header fw-semibold">Diff Results</div>
+      <div class="card-header fw-semibold">Diff Results
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Unmapped Fields"
+              data-bs-content="Fields present in the org that have no entry in the crosswalk mapping. These may be custom fields added after the crosswalk was created — verify whether they need to be part of the migration.">ⓘ</span>
+      </div>
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-sm table-striped results-table mb-0">

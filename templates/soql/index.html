@@ -4,7 +4,14 @@
 {% block content %}
 <div class="container-fluid">
   <div class="mc-page-header mb-2">
-    <h4 class="mc-page-title">SOQL Workbench</h4>
+    <h4 class="mc-page-title">SOQL Workbench
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="SOQL Editor"
+            data-bs-content="Full SOQL supported: WHERE, ORDER BY, LIMIT, OFFSET, aggregates. Use SELECT COUNT() for fast existence checks. 'Run All Pages' calls query_all() to paginate past the 2,000-record default limit.">ⓘ</span>
+    </h4>
   </div>
 
   <div class="row g-0">
@@ -26,6 +33,12 @@
         <div id="fieldsPanelWrap" class="d-none mt-3">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <small class="fw-semibold text-navy" id="fieldsObjectLabel" style="color:var(--doane-navy)"></small>
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Object Explorer"
+                  data-bs-content="Lists all queryable SObjects via the Describe Global API (GET /services/data/v{version}/sobjects/). Custom objects end in __c. Click an object to load its fields.">ⓘ</span>
             <button id="btnInsertAllFields" class="btn btn-link btn-sm p-0 small text-muted">Insert All</button>
           </div>
           <div class="fields-list" id="fieldsList">
@@ -54,6 +67,12 @@
         <select id="savedQueriesSelect" class="form-select form-select-sm">
           <option value="">-- Saved queries --</option>
         </select>
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Saved Queries"
+              data-bs-content="Saved queries are stored per IP address in the local PostgreSQL database. They persist across sessions. Share common diagnostic queries here so the whole team uses consistent definitions.">ⓘ</span>
         <button id="btnDeleteSaved" class="btn btn-outline-danger btn-sm d-none">Delete</button>
       </div>
 

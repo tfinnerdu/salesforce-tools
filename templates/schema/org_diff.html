@@ -19,7 +19,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header">
-    <h4 class="mc-page-title">Org Schema Diff</h4>
+    <h4 class="mc-page-title">Org Schema Diff
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Schema Diff"
+            data-bs-content="Compares field metadata between two orgs using the Salesforce Describe API (GET /sobjects/{Object}/describe). Identifies fields present in one org but not the other, and flags type/required mismatches.">ⓘ</span>
+    </h4>
   </div>
 
   <!-- Config row -->
@@ -73,9 +80,23 @@
 
   <!-- Legend -->
   <div id="diffLegend" class="d-flex flex-wrap gap-2 mb-2 small d-none">
-    <span class="px-2 py-1 rounded diff-left-only">Left-only field</span>
+    <span class="px-2 py-1 rounded diff-left-only">Left-only field
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Missing in Target"
+            data-bs-content="These fields exist in the source org but not in the target. Deploying code or a change set that references them will cause errors in the target until the fields are created.">ⓘ</span>
+    </span>
     <span class="px-2 py-1 rounded diff-right-only">Right-only field</span>
-    <span class="px-2 py-1 rounded diff-mismatch">Type / required / picklist mismatch</span>
+    <span class="px-2 py-1 rounded diff-mismatch">Type / required / picklist mismatch
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Type Mismatch"
+            data-bs-content="Same API name, different field type (e.g. Text vs Textarea). Type mismatches can cause data loss on migration or trigger failures.">ⓘ</span>
+    </span>
   </div>
 
   <!-- Results Accordion -->

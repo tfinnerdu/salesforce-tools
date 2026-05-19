@@ -660,6 +660,17 @@
   letter-spacing: 0.1em;
 }
 
+/* ── Info Icon (ⓘ popovers) ─────────────────────────────────────────────── */
+.mc-info-icon {
+  cursor: pointer;
+  color: var(--doane-navy);
+  opacity: 0.55;
+  font-size: 0.8rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+.mc-info-icon:hover { opacity: 1; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .mc-navbar {

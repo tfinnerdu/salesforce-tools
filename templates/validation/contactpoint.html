@@ -22,7 +22,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <h4 class="mc-page-title">ContactPoint Integrity Scanner</h4>
+    <h4 class="mc-page-title">ContactPoint Integrity Scanner
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="ContactPoint Scanner"
+            data-bs-content="Scans ContactPointEmail, ContactPointPhone, and ContactPointAddress for broken parent links. In Ed Cloud, ContactPoints must link to both ParentId (Account) and IndividualId (Individual) to surface correctly.">ⓘ</span>
+    </h4>
     <div class="d-flex align-items-center gap-2 no-print">
       <button id="btnScan" class="btn btn-doane btn-sm">&#128269; Scan Now</button>
     </div>
@@ -51,13 +58,34 @@
   <div id="cpResults" class="row g-3 d-none">
     <div class="col-md-4">
       <div class="cp-card h-100" id="cpEmail">
-        <div class="cp-card-title">&#64; ContactPointEmail</div>
+        <div class="cp-card-title">&#64; ContactPointEmail
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="SIS_ID__c on ContactPoints"
+                data-bs-content="ContactPoint SIS_ID__c allows the migration pipeline to match and update individual contact points. Missing = the pipeline must create new ContactPoints on each run instead of updating existing ones.">ⓘ</span>
+        </div>
         <div class="cp-stat-row">
-          <span>Missing Parent</span>
+          <span>Missing Parent
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="ParentId Missing"
+                  data-bs-content="SELECT COUNT() FROM ContactPointEmail WHERE ParentId = null. A null ParentId means the contact point is completely orphaned — it won't appear on any person record.">ⓘ</span>
+          </span>
           <span id="cpEmailMissingParent" class="badge badge-green">—</span>
         </div>
         <div class="cp-stat-row">
-          <span>Missing Individual</span>
+          <span>Missing Individual
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="IndividualId Missing"
+                  data-bs-content="SELECT COUNT() FROM ContactPointEmail WHERE IndividualId = null. The Individual object is the Ed Cloud privacy layer. Missing IndividualId means consent and data-use tracking won't work.">ⓘ</span>
+          </span>
           <span id="cpEmailMissingIndividual" class="badge badge-green">—</span>
         </div>
         <div class="cp-stat-row">

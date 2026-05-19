@@ -5,7 +5,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header">
-    <h4 class="mc-page-title">SF &#8596; SQL Join Builder</h4>
+    <h4 class="mc-page-title">SF &#8596; SQL Join Builder
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Join Builder"
+            data-bs-content="Generates a T-SQL OPENQUERY statement joining a Salesforce object (queried via SF REST API) with a SQL Server table. Useful for reconciliation reports that need data from both systems side-by-side.">ⓘ</span>
+    </h4>
   </div>
 
   <!-- ODBC Info Box (shown/hidden by JS) -->
@@ -26,7 +33,14 @@
         </div>
         <div class="card-body">
           <div class="mb-3">
-            <label for="sqlTable" class="form-label small fw-semibold">Table Name</label>
+            <label for="sqlTable" class="form-label small fw-semibold">Table Name
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="SQL Server Table"
+                    data-bs-content="The SQL Server table to join against. Uses the SQLSERVER_CONN connection string from environment variables via pyodbc.">ⓘ</span>
+            </label>
             <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
                    placeholder="dbo.Students">
           </div>
@@ -55,7 +69,14 @@
         </div>
         <div class="card-body">
           <div class="mb-3">
-            <label for="sfObject" class="form-label small fw-semibold">Object</label>
+            <label for="sfObject" class="form-label small fw-semibold">Object
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="SF Object"
+                    data-bs-content="The Salesforce object to query. Uses SELECT {fields} FROM {object} LIMIT {n}. The result set is aliased as the SF side of the join.">ⓘ</span>
+            </label>
             <select id="sfObject" class="form-select form-select-sm">
               <option value="">-- Select SF Object --</option>
               <option value="Account">Account</option>
@@ -73,7 +94,14 @@
                       placeholder="Id&#10;SIS_ID__c&#10;FirstName&#10;LastName&#10;PersonEmail"></textarea>
           </div>
           <div class="mb-0">
-            <label for="joinFieldSf" class="form-label small fw-semibold">Join Field (SF side)</label>
+            <label for="joinFieldSf" class="form-label small fw-semibold">Join Field (SF side)
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="Join Key"
+                    data-bs-content="The field used to match records between systems. Typically SIS_ID__c on the Salesforce side and a person ID column on the SQL Server side.">ⓘ</span>
+            </label>
             <input id="joinFieldSf" type="text" class="form-control form-control-sm font-monospace"
                    placeholder="SIS_ID__c">
           </div>

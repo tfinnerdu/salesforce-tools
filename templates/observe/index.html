@@ -17,7 +17,14 @@
   <!-- ── Section 1: API Limits Dashboard ─────────────────────────────────── -->
   <div class="card shadow-sm mb-4">
     <div class="card-header d-flex align-items-center justify-content-between">
-      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">API Limits</h5>
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">API Limits
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="API Limits"
+              data-bs-content="Calls GET /services/data/v{version}/limits/ — a single request returning all org governor limits and remaining capacity. Green = &lt;50% used; amber = 50–80%; red = &gt;80%.">ⓘ</span>
+      </h5>
       <div class="d-flex align-items-center gap-2 no-print">
         <select id="limitsOrgSelect" class="form-select form-select-sm" style="width:auto;">
           <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
@@ -36,7 +43,14 @@
       </div>
       <div id="limitsEmpty" class="text-center py-4 text-muted">
         <p class="mb-1">No limits data loaded yet.</p>
-        <p class="small">Select an org and click <strong>Refresh</strong>.</p>
+        <p class="small">Select an org and click <strong>Refresh</strong>.
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="DailyApiRequests"
+                data-bs-content="Total REST/SOAP API calls allowed per 24-hour period. Resets at midnight GMT. If this approaches 0, integrations start returning REQUEST_LIMIT_EXCEEDED.">ⓘ</span>
+        </p>
       </div>
       <div id="limitsGrid" class="row g-3 d-none"></div>
     </div>
@@ -45,7 +59,14 @@
   <!-- ── Section 2: Data Quality Trends ──────────────────────────────────── -->
   <div class="card shadow-sm mb-4">
     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Data Quality Trends</h5>
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Data Quality Trends
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Data Quality Trends"
+              data-bs-content="Charts daily readiness check results (stored in the readiness_runs PostgreSQL table) over time. Each line is one check's pass rate or coverage percentage. Use to see whether migration is improving or degrading data quality.">ⓘ</span>
+      </h5>
       <div class="d-flex align-items-center gap-2 no-print">
         <select id="trendsOrgSelect" class="form-select form-select-sm" style="width:auto;">
           <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
@@ -79,7 +100,14 @@
   <!-- ── Section 3: Cross-Org Record Count ───────────────────────────────── -->
   <div class="card shadow-sm mb-4">
     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Cross-Org Record Count</h5>
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Cross-Org Record Count
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Cross-Org Comparison"
+              data-bs-content="Runs the same COUNT() SOQL queries against multiple orgs and compares results. Yellow = &gt;10% divergence from baseline; red = &gt;25%. Use after a sandbox refresh to verify the sandbox matches prod.">ⓘ</span>
+      </h5>
       <div class="d-flex align-items-center gap-2 no-print">
         <span class="small text-muted me-1">Orgs:</span>
         <div class="form-check form-check-inline mb-0">

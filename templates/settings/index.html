@@ -90,7 +90,14 @@
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-4">
-            <label class="form-label small fw-semibold mb-1">Rate Limit (calls/sec)</label>
+            <label class="form-label small fw-semibold mb-1">Rate Limit (calls/sec)
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="Rate Limit"
+                    data-bs-content="SF_DML_RATE_LIMIT controls the maximum DML operations per second from this app. 0 = unlimited. Set to 2–5 during production migration windows to avoid hitting Apex CPU limits from concurrent trigger execution.">ⓘ</span>
+            </label>
             <div class="text-muted small">
               {{ dml_settings.rate_limit if dml_settings.rate_limit else '0 — unlimited' }}
             </div>
@@ -113,6 +120,12 @@
                      onchange="MC.settings.toggleBypass(this.checked)">
               <label class="form-check-label fw-semibold" for="bypassTriggersToggle">
                 Bypass Triggers <span class="fw-normal text-muted">(session-wide)</span>
+                <span class="mc-info-icon"
+                      data-bs-toggle="popover"
+                      data-bs-trigger="focus"
+                      tabindex="0"
+                      data-bs-title="Bypass Triggers"
+                      data-bs-content="Sets a Hierarchy Custom Setting field (SF_BYPASS_SETTING.SF_BYPASS_FIELD) to true via REST PATCH before each DML op, then clears it in a finally block. Apex triggers check this setting at their top line and return immediately if true. Use during bulk migration loads to prevent trigger storms.">ⓘ</span>
               </label>
             </div>
             {% if not dml_settings.bypass_setting %}

@@ -39,7 +39,14 @@
     <div class="tab-pane fade show active" id="tab-field" role="tabpanel" aria-labelledby="tab-field-btn">
       <div class="card shadow-sm mb-3">
         <div class="card-body">
-          <h6 class="card-title fw-semibold mb-3">What breaks if I delete this field?</h6>
+          <h6 class="card-title fw-semibold mb-3">What breaks if I delete this field?
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Field Impact Scanner"
+                data-bs-content="Uses the Tooling API to find ValidationRule records whose ErrorConditionFormula contains the field name, and queries FlowDefinition for active flows. Flow XML inspection requires manual review — active flows are listed as potentially affected.">ⓘ</span>
+        </h6>
           <div class="row g-2 align-items-end">
             <div class="col-sm-4">
               <label for="fieldScanObject" class="form-label small fw-semibold">Object API Name</label>
@@ -155,7 +162,14 @@
     <div class="tab-pane fade" id="tab-perms" role="tabpanel" aria-labelledby="tab-perms-btn">
       <div class="card shadow-sm mb-3">
         <div class="card-body">
-          <h6 class="card-title fw-semibold mb-3">Who has access to this field?</h6>
+          <h6 class="card-title fw-semibold mb-3">Who has access to this field?
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Permission Set Audit"
+                  data-bs-content="Queries FieldPermissions (SELECT SobjectType, Field, PermissionsRead, PermissionsEdit FROM FieldPermissions WHERE SobjectType = :obj) across all Permission Sets. Answers 'who can edit this field?' without clicking through dozens of permission sets.">ⓘ</span>
+          </h6>
           <div class="row g-2 align-items-end">
             <div class="col-sm-4">
               <label for="permObject" class="form-label small fw-semibold">Object API Name</label>
@@ -220,7 +234,14 @@
     <!-- ── Regression Tester ──────────────────────────────────────────────── -->
     <div class="tab-pane fade" id="tab-regression" role="tabpanel" aria-labelledby="tab-regression-btn">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-semibold mb-0">Saved Test Suites</h6>
+        <h6 class="fw-semibold mb-0">Saved Test Suites
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Regression Tester"
+                data-bs-content="Define a suite of SOQL COUNT assertions with expected values. Run before and after a migration batch to verify no records were lost or duplicated. Pass = actual count matches expected; fail = mismatch.">ⓘ</span>
+        </h6>
         <button class="btn btn-doane btn-sm" id="btnNewSuite">+ New Suite</button>
       </div>
 
@@ -252,6 +273,12 @@
       <div id="regRunResults" class="d-none mt-3">
         <h6 class="fw-semibold mb-2">Run Results: <span id="regRunSuiteName"></span>
           <small id="regRunSummary" class="text-muted ms-2"></small>
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Baseline"
+                data-bs-content="The baseline is a snapshot of COUNT query results taken at a known-good state. After running a migration batch, re-run the suite — any count that changed unexpectedly is flagged as a failure.">ⓘ</span>
         </h6>
         <div class="table-responsive">
           <table class="table table-sm table-bordered">

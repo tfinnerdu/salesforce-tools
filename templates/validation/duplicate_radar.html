@@ -22,7 +22,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <h4 class="mc-page-title">Duplicate PersonAccount Radar</h4>
+    <h4 class="mc-page-title">Duplicate PersonAccount Radar
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Duplicate PersonAccount Scan"
+            data-bs-content="Scans all PersonAccounts (Account WHERE IsPersonAccount = true) using four exact-match strategies plus fuzzy name matching. SF Duplicate Rules only fire on create/edit — this catches pre-existing duplicates.">ⓘ</span>
+    </h4>
     <div class="d-flex align-items-center gap-2 no-print">
       <small class="text-muted">Last scan: <span id="lastScanTime">Never</span></small>
       <button id="btnScan" class="btn btn-doane btn-sm">&#128269; Run Scan</button>
@@ -40,6 +47,50 @@
   <div id="scanEmpty" class="text-center py-5 text-muted">
     <p class="mb-1">No scan results yet.</p>
     <p class="small">Click <strong>Run Scan</strong> to detect duplicate PersonAccounts.</p>
+  </div>
+
+  <!-- Strategy key — inline ⓘ popovers -->
+  <div class="d-flex flex-wrap gap-3 mb-2 small text-muted no-print">
+    <span>Strategies:
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same SIS ID"
+            data-bs-content="SELECT Id, SIS_ID__c FROM Account WHERE IsPersonAccount = true AND SIS_ID__c != null. Groups by SIS_ID__c. Two records sharing a SIS ID represent the same Colleague person — one must be merged.">ⓘ</span> Same SIS ID
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same Name + Birthdate"
+            data-bs-content="Groups by lower(Name) + PersonBirthdate. SOQL has no LOWER() — done in Python post-query. A name+DOB match is a strong indicator of a true duplicate even without matching IDs.">ⓘ</span> Name + DOB
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same Email"
+            data-bs-content="SELECT Id, PersonEmail FROM Account WHERE IsPersonAccount = true AND PersonEmail != null. Duplicate emails cause issues with Ethos person matching and student portal login.">ⓘ</span> Same Email
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same Ethos GUID"
+            data-bs-content="SELECT Id, Ethos_Guid__c FROM Account WHERE IsPersonAccount = true AND Ethos_Guid__c != null. Two records with the same Ethos GUID will cause upsert collisions in the migration pipeline.">ⓘ</span> Same Ethos GUID
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Fuzzy Name"
+            data-bs-content="Python-side Wagner-Fischer edit-distance ≤ 2, comparing names within the same 3-character prefix group. Catches typos (e.g. 'Johnson' vs 'Jonhson'). Higher false-positive rate — review carefully before merging.">ⓘ</span> Fuzzy Name
+    </span>
   </div>
 
   <!-- Results Table -->
@@ -100,7 +151,14 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="btnConfirmMerge" class="btn btn-danger" disabled>Confirm Merge</button>
+        <button type="button" id="btnConfirmMerge" class="btn btn-danger" disabled>Confirm Merge
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Account Merge"
+                data-bs-content="Calls Account.merge() via the SF REST API. The master record retains its Id; related records (ContactPoints, Opportunities) are re-parented. This is permanent — verify master vs victim before confirming.">ⓘ</span>
+        </button>
       </div>
     </div>
   </div>

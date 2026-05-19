@@ -23,7 +23,14 @@
   <!-- Page header -->
   <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2">
-      <h4 class="mc-page-title mb-0">Migration Readiness</h4>
+      <h4 class="mc-page-title mb-0">Migration Readiness
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Pre-Migration Readiness"
+              data-bs-content="Runs 8 checks against the active org. Each check queries Salesforce and scores your data against go-live thresholds. Green ≥95% coverage; amber = 80–94%; red = below 80% or query failed.">ⓘ</span>
+      </h4>
       <span class="badge mc-org-badge" id="headerOrgBadge">
         {{ session.get('active_org', 'dev') | upper }}
       </span>
@@ -44,6 +51,50 @@
     <strong>Overall Readiness:</strong>&nbsp;<span id="bannerText">—</span>
   </div>
 
+  <!-- Check key — inline ⓘ popovers for each readiness check -->
+  <div class="d-flex flex-wrap gap-3 mb-2 small text-muted no-print">
+    <span>Checks:
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="SIS ID Coverage"
+            data-bs-content="SELECT COUNT() FROM Account WHERE IsPersonAccount = true AND SIS_ID__c = null. Measures % of PersonAccounts missing Colleague person ID. Target: &lt;5% missing.">ⓘ</span> SIS ID
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Ethos GUID Coverage"
+            data-bs-content="SELECT COUNT() FROM Account WHERE IsPersonAccount = true AND Ethos_Guid__c = null. Measures % missing the LDM GUID used to match records in Ethos. Target: &lt;5% missing.">ⓘ</span> Ethos GUID
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="ContactPoint Parent Links"
+            data-bs-content="Queries ContactPointEmail, ContactPointPhone, ContactPointAddress for ParentId = null. Broken parent links mean contact data is orphaned and won't surface on the person record.">ⓘ</span> CP Parents
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Required Fields"
+            data-bs-content="Checks FirstName, LastName, RecordTypeId for null values on PersonAccount. These fields are required for downstream Ethos and Conductor processing.">ⓘ</span> Required Fields
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Individual Links"
+            data-bs-content="Checks whether ContactPoint records have a populated IndividualId linking to the Individual object. Required for Ed Cloud data model compliance. May return amber if IndividualId field is unavailable.">ⓘ</span> Individual Links
+    </span>
+  </div>
+
   <!-- Scorecard Table -->
   <div class="card shadow-sm">
     <div class="card-body p-0">
@@ -62,7 +113,14 @@
       <table id="scorecardTable" class="scorecard-table d-none">
         <thead>
           <tr>
-            <th style="width:40%">Check</th>
+            <th style="width:40%">Check
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="Check Reference"
+                    data-bs-content="SIS ID Coverage: COUNT() WHERE SIS_ID__c = null. Ethos GUID: COUNT() WHERE Ethos_Guid__c = null. ContactPoint Parents: ParentId = null on CP objects. Required Fields: FirstName/LastName/RecordTypeId null. Individual Links: IndividualId = null on ContactPoints.">ⓘ</span>
+            </th>
             <th style="width:15%">Score</th>
             <th>Detail</th>
           </tr>

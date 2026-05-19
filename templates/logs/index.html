@@ -22,7 +22,14 @@
   <div id="panelApex">
     <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
       <div class="d-flex align-items-center gap-2">
-        <h4 class="mc-page-title mb-0">Apex Debug Logs</h4>
+        <h4 class="mc-page-title mb-0">Apex Debug Logs
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Apex Logs"
+                data-bs-content="Lists the 50 most recent Apex debug logs via the Tooling API (SELECT Id,LogUser,Operation,Status,LogLength FROM ApexLog ORDER BY LastModifiedDate DESC). Click a row to parse the full log body.">ⓘ</span>
+        </h4>
         <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
       </div>
       <button id="btnRefreshApex" class="btn btn-doane btn-sm">&#8635; Refresh</button>
@@ -77,7 +84,14 @@
           </div>
 
           <!-- Governor Limits -->
-          <h6 class="fw-semibold mb-2">Governor Limits</h6>
+          <h6 class="fw-semibold mb-2">Governor Limits
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Governor Limits"
+                  data-bs-content="Extracted from the LIMIT_USAGE_FOR_NS block at the end of each log. Shows actual usage vs maximum for SOQL queries, DML statements, CPU time, heap, and callouts. Amber = &gt;50% used; red = &gt;80%.">ⓘ</span>
+          </h6>
           <div id="detailLimitsEmpty" class="text-muted small mb-3 d-none">No limit data found in log.</div>
           <div class="table-responsive mb-3">
             <table id="detailLimitsTable" class="table table-sm table-bordered mb-0 d-none">
@@ -94,7 +108,14 @@
           </div>
 
           <!-- Exceptions -->
-          <h6 class="fw-semibold mb-2">Exceptions</h6>
+          <h6 class="fw-semibold mb-2">Exceptions
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Exceptions"
+                  data-bs-content="Lines matching FATAL_ERROR or EXCEPTION_THROWN in the log body. A FATAL_ERROR terminates the transaction and rolls back all DML in that context.">ⓘ</span>
+          </h6>
           <div id="detailExceptionsEmpty" class="text-muted small mb-3 d-none">No exceptions found.</div>
           <ul id="detailExceptionsList" class="list-group list-group-flush mb-3 d-none"></ul>
 
@@ -111,7 +132,14 @@
   <div id="panelFlows" class="d-none">
     <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
       <div class="d-flex align-items-center gap-2">
-        <h4 class="mc-page-title mb-0">Flow Errors</h4>
+        <h4 class="mc-page-title mb-0">Flow Errors
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Flow Errors"
+                data-bs-content="Queries FlowInterview WHERE InterviewStatus = 'Error' via the Tooling API. Shows which flow element caused the failure and the error message. ProcessExceptions are created when a flow fails and the error is surfaced to the record.">ⓘ</span>
+        </h4>
         <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
       </div>
       <button id="btnRefreshFlows" class="btn btn-doane btn-sm">&#8635; Refresh</button>

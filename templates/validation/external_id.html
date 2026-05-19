@@ -22,7 +22,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <h4 class="mc-page-title">External ID Coverage Report</h4>
+    <h4 class="mc-page-title">External ID Coverage Report
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="External ID Coverage"
+            data-bs-content="Measures what % of PersonAccounts and ContactPoint records have their external ID fields populated. Low coverage means the migration pipeline cannot reliably match records for upsert.">ⓘ</span>
+    </h4>
     <div class="d-flex align-items-center gap-2 no-print">
       <button id="btnRun" class="btn btn-doane btn-sm">&#9654; Run Report</button>
     </div>
@@ -51,8 +58,22 @@
             <tr>
               <th>Object</th>
               <th>Total Records</th>
-              <th>SIS_ID__c Coverage</th>
-              <th>Ethos_Guid__c Coverage</th>
+              <th>SIS_ID__c Coverage
+                <span class="mc-info-icon"
+                      data-bs-toggle="popover"
+                      data-bs-trigger="focus"
+                      tabindex="0"
+                      data-bs-title="SIS_ID__c"
+                      data-bs-content="Holds the Colleague person ID (e.g. STU12345). Used as the external ID for Account upserts from Colleague SIS. Missing = that person cannot be updated by the pipeline without a full lookup.">ⓘ</span>
+              </th>
+              <th>Ethos_Guid__c Coverage
+                <span class="mc-info-icon"
+                      data-bs-toggle="popover"
+                      data-bs-trigger="focus"
+                      tabindex="0"
+                      data-bs-title="Ethos_Guid__c"
+                      data-bs-content="Holds the LDM GUID assigned by the Ethos integration layer. Used to correlate the Salesforce record back to the canonical person record in Ethos.">ⓘ</span>
+              </th>
             </tr>
           </thead>
           <tbody id="coverageTable">

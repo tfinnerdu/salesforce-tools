@@ -22,7 +22,14 @@
 <div class="container-fluid">
   <!-- Page header -->
   <div class="mc-page-header">
-    <h4 class="mc-page-title">Error Reconciler</h4>
+    <h4 class="mc-page-title">Error Reconciler
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Error Reconciler"
+            data-bs-content="Queries Conductor for failed workflows in the last N hours and groups them by error type with suggested remediation. Designed for post-migration triage — identify highest-volume error classes first.">ⓘ</span>
+    </h4>
   </div>
 
   <!-- Controls -->
@@ -35,7 +42,14 @@
                  placeholder="EDA_Person_Sync" value="EDA_Person_Sync">
         </div>
         <div class="col-sm-3 col-lg-2">
-          <label for="hoursBack" class="form-label small fw-semibold mb-1">Time Range</label>
+          <label for="hoursBack" class="form-label small fw-semibold mb-1">Time Range
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Hours Back"
+                  data-bs-content="Looks back this many hours into Conductor's execution history. Conductor retains failed workflow state indefinitely, but very large windows may be slow to query.">ⓘ</span>
+          </label>
           <select id="hoursBack" class="form-select form-select-sm">
             <option value="1">Last 1 hour</option>
             <option value="6" selected>Last 6 hours</option>
