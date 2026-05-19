@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}Logs - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1" id="logsSubNav">
+      <li class="nav-item">
+        <a class="nav-link active" href="#" id="tabApexLogs" data-tab="apex">Apex Logs</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" id="tabFlowErrors" data-tab="flows">Flow Errors</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+
+  <!-- ── Apex Logs panel ─────────────────────────────────────────────────── -->
+  <div id="panelApex">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Apex Debug Logs</h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <button id="btnRefreshApex" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    </div>
+
+    <!-- Log list -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-body p-0">
+        <div id="apexLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching Apex logs…</p>
+        </div>
+
+        <div id="apexEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-1">No Apex logs found.</p>
+          <p class="small">Enable debug logging in Setup → Debug Logs.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="apexTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>User</th>
+                <th>Operation</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Duration</th>
+                <th>Date</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody id="apexBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log detail panel -->
+    <div id="apexDetailPanel" class="d-none">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <strong id="detailTitle">Log Detail</strong>
+          <button type="button" class="btn-close" id="btnCloseDetail" aria-label="Close"></button>
+        </div>
+        <div class="card-body">
+          <div id="detailLoading" class="text-center py-3 d-none">
+            <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+            <span class="ms-2 text-muted small">Parsing log…</span>
+          </div>
+
+          <!-- Governor Limits -->
+          <h6 class="fw-semibold mb-2">Governor Limits</h6>
+          <div id="detailLimitsEmpty" class="text-muted small mb-3 d-none">No limit data found in log.</div>
+          <div class="table-responsive mb-3">
+            <table id="detailLimitsTable" class="table table-sm table-bordered mb-0 d-none">
+              <thead class="table-light">
+                <tr>
+                  <th>Limit</th>
+                  <th>Used</th>
+                  <th>Max</th>
+                  <th>Usage</th>
+                </tr>
+              </thead>
+              <tbody id="detailLimitsBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Exceptions -->
+          <h6 class="fw-semibold mb-2">Exceptions</h6>
+          <div id="detailExceptionsEmpty" class="text-muted small mb-3 d-none">No exceptions found.</div>
+          <ul id="detailExceptionsList" class="list-group list-group-flush mb-3 d-none"></ul>
+
+          <!-- Timeline -->
+          <h6 class="fw-semibold mb-2">Timeline</h6>
+          <div id="detailTimelineEmpty" class="text-muted small d-none">No timeline events.</div>
+          <ol id="detailTimelineList" class="list-group list-group-numbered d-none" style="max-height:260px;overflow-y:auto;"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Flow Errors panel ───────────────────────────────────────────────── -->
+  <div id="panelFlows" class="d-none">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Flow Errors</h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <button id="btnRefreshFlows" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    </div>
+
+    <!-- Flow Interviews -->
+    <h6 class="fw-semibold mb-2 mt-2">Flow Interview Errors</h6>
+    <div class="card shadow-sm mb-4">
+      <div class="card-body p-0">
+        <div id="flowsLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching flow errors…</p>
+        </div>
+
+        <div id="flowsEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-0">No flow interview errors found.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="flowsTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>Element</th>
+                <th>Error Message</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+              </tr>
+            </thead>
+            <tbody id="flowsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Process Exceptions -->
+    <h6 class="fw-semibold mb-2">Process Exceptions</h6>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div id="procExEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-0">No pending process exceptions.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="procExTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>Exception Type</th>
+                <th>Message</th>
+                <th>Source Object</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="procExBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.logs.init();
+  });
+</script>
+{% endblock %}
