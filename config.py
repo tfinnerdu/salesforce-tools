@@ -31,3 +31,5 @@ class Config:
     SF_DML_RATE_LIMIT = int(os.environ.get('SF_DML_RATE_LIMIT', '0'))
     SF_BYPASS_SETTING = os.environ.get('SF_BYPASS_SETTING', '')
     SF_BYPASS_FIELD = os.environ.get('SF_BYPASS_FIELD', 'Bypass_Triggers__c')
+    # Salesforce SOAP login rejects API versions above ~59.0; REST calls use SF_API_VERSION.
+    SF_SOAP_AUTH_VERSION = os.environ.get('SF_SOAP_AUTH_VERSION', '57.0')

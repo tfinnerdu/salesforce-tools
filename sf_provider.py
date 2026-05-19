@@ -395,11 +395,20 @@ def get_sf(org: str = 'dev'):
 
     from simple_salesforce import Salesforce  # type: ignore
     cfg = get_org_config(org)
-    logger.info("Connecting to real Salesforce org '%s' as %s (API v%s)", org, cfg['username'], cfg['api_version'])
-    return Salesforce(
+    api_version = cfg['api_version']
+    # SOAP login endpoint rejects versions above ~59; authenticate with capped version
+    # then upgrade base_url so all REST calls use the configured API version.
+    soap_version = Config.SF_SOAP_AUTH_VERSION
+    logger.info("Connecting to real Salesforce org '%s' as %s (auth v%s → API v%s)",
+                org, cfg['username'], soap_version, api_version)
+    sf = Salesforce(
         username=cfg['username'],
         password=cfg['password'],
         security_token=cfg['security_token'],
         domain=cfg['domain'],
-        version=cfg['api_version'],
+        version=soap_version,
     )
+    if api_version != soap_version:
+        sf.sf_version = api_version
+        sf.base_url = f"https://{sf.sf_instance}/services/data/v{api_version}/"
+    return sf
