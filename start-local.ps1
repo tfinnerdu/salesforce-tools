@@ -29,6 +29,18 @@ if ($ForceDeps -or (-not (Test-Path "$Root\.venv\Lib\site-packages\flask"))) {
     pip install -r "$Root\requirements.txt" --quiet
 }
 
+# Load .env into the process environment so it takes precedence over hub-injected vars
+$EnvFile = "$Root\.env"
+if (Test-Path $EnvFile) {
+    Get-Content $EnvFile | ForEach-Object {
+        if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
+            $key = $matches[1]
+            $val = $matches[2].Trim().Trim('"').Trim("'")
+            [System.Environment]::SetEnvironmentVariable($key, $val, 'Process')
+        }
+    }
+}
+
 # Set env vars for Flask (Debug mode for local dev)
 $env:FLASK_DEBUG = if ($env:FLASK_ENV -eq 'production') { '0' } else { '1' }
 $env:FLAGS_use_mkldnn = '0'
