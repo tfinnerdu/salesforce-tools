@@ -13,6 +13,7 @@ from routes.soql import soql_bp
 from routes.schema import schema_bp
 from routes.data_ops import data_ops_bp
 from routes.settings_routes import settings_bp
+from routes.observe import observe_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +33,7 @@ def create_app() -> Flask:
     app.register_blueprint(schema_bp)
     app.register_blueprint(data_ops_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(observe_bp)
 
     @app.route('/')
     def root():

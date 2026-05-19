@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}Observe - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Observe</h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+  </div>
+
+  <!-- ── Section 1: API Limits Dashboard ─────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">API Limits</h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <select id="limitsOrgSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
+          <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
+          <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+        </select>
+        <button id="btnRefreshLimits" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="limitsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Fetching governor limits…</p>
+      </div>
+      <div id="limitsEmpty" class="text-center py-4 text-muted">
+        <p class="mb-1">No limits data loaded yet.</p>
+        <p class="small">Select an org and click <strong>Refresh</strong>.</p>
+      </div>
+      <div id="limitsGrid" class="row g-3 d-none"></div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Data Quality Trends ──────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Data Quality Trends</h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <select id="trendsOrgSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
+          <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
+          <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+        </select>
+        <select id="trendsDaysSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="7">7 days</option>
+          <option value="14">14 days</option>
+          <option value="30" selected>30 days</option>
+        </select>
+        <button id="btnRefreshTrends" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="trendsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading trend data…</p>
+      </div>
+      <div id="trendsEmpty" class="text-center py-4 text-muted d-none">
+        <p class="mb-0">No trend data available for the selected range.</p>
+      </div>
+      <div id="trendsChartWrap" style="position:relative;height:300px;">
+        <canvas id="trendsChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 3: Cross-Org Record Count ───────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Cross-Org Record Count</h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <span class="small text-muted me-1">Orgs:</span>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input cross-org-check" type="checkbox" id="coOrgDev" value="dev" checked>
+          <label class="form-check-label small" for="coOrgDev">dev</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input cross-org-check" type="checkbox" id="coOrgProd" value="prod">
+          <label class="form-check-label small" for="coOrgProd">prod</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input cross-org-check" type="checkbox" id="coOrgSandbox" value="sandbox" checked>
+          <label class="form-check-label small" for="coOrgSandbox">sandbox</label>
+        </div>
+        <button id="btnRunCrossOrg" class="btn btn-doane btn-sm">&#9654; Run Comparison</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="crossOrgLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Querying orgs…</p>
+      </div>
+      <div id="crossOrgEmpty" class="text-center py-4 text-muted">
+        <p class="mb-1">No comparison run yet.</p>
+        <p class="small">Select orgs and click <strong>Run Comparison</strong>.</p>
+      </div>
+      <div id="crossOrgTableWrap" class="d-none">
+        <div class="info-box mb-3 small">
+          Cells are color-coded: <span class="badge badge-amber">amber</span> = &gt;10% divergence from first org,
+          <span class="badge badge-red">red</span> = &gt;25% divergence.
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered results-table" id="crossOrgTable">
+            <thead id="crossOrgTableHead"></thead>
+            <tbody id="crossOrgTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"
+        crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/mc-observe-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.observe.init();
+  });
+</script>
+{% endblock %}

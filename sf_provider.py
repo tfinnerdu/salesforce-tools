@@ -134,6 +134,55 @@ def _parse_mock_count(soql: str) -> int:
     return 100
 
 
+def _make_perm_set_assignment(idx: int) -> dict:
+    return {
+        'Id': f'0Pa{idx:015d}',
+        'PermissionSet': {
+            'Name': f'PS_DataEntry_{idx}',
+            'Label': f'Data Entry {idx}',
+            'IsOwnedByProfile': False,
+        },
+        'Assignee': {
+            'Name': f'User {idx}',
+            'Username': f'user{idx}@doane.edu',
+        },
+        'attributes': {'type': 'PermissionSetAssignment'},
+    }
+
+
+def _make_field_permission(idx: int) -> dict:
+    return {
+        'Id': f'0PS{idx:015d}',
+        'SobjectType': 'Account',
+        'Field': 'Account.SIS_ID__c' if idx % 3 == 0 else 'Account.Ethos_Guid__c',
+        'PermissionsRead': True,
+        'PermissionsEdit': idx % 2 == 0,
+        'attributes': {'type': 'FieldPermissions'},
+    }
+
+
+def _make_validation_rule(idx: int) -> dict:
+    return {
+        'Id': f'03N{idx:015d}',
+        'EntityDefinition': {'QualifiedApiName': 'Account'},
+        'ValidationName': f'Require_SIS_ID_{idx}',
+        'Description': 'SIS ID required on save',
+        'ErrorMessage': 'SIS ID cannot be blank',
+        'attributes': {'type': 'ValidationRule'},
+    }
+
+
+def _make_flow_definition(idx: int) -> dict:
+    return {
+        'Id': f'301{idx:015d}',
+        'MasterLabel': f'Sync Student Record {idx}',
+        'ProcessType': 'AutoLaunchedFlow',
+        'Status': 'Active',
+        'Description': 'Syncs student data from SIS',
+        'attributes': {'type': 'FlowDefinition'},
+    }
+
+
 def _make_person_account(idx: int) -> dict:
     return {
         # TODO(salesforce): confirm PersonAccount field API names against org schema
@@ -203,6 +252,106 @@ def _describe_field(name: str, label: str, field_type: str, required: bool = Fal
 
 
 _DESCRIBE_CACHE: Dict[str, dict] = {}
+
+
+# ── mock Tooling API data factories ───────────────────────────────────────────
+
+_MOCK_LOG_BODY = """\
+09:00:00.0 (1)|EXECUTION_STARTED
+09:00:00.1 (2)|CODE_UNIT_STARTED|[EXTERNAL]|01q...|MyTrigger on Account trigger event BeforeInsert
+09:00:00.5 (3)|SOQL_EXECUTE_BEGIN|[12]|Aggregations:0|SELECT Id FROM Account WHERE SIS_ID__c = :sisId
+09:00:00.6 (4)|SOQL_EXECUTE_END|[12]|Rows:1
+09:00:01.0 (5)|DML_BEGIN|[25]|Op:Insert|Type:Account|Rows:1
+09:00:01.2 (6)|DML_END|[25]
+09:00:01.3 (7)|CODE_UNIT_FINISHED|MyTrigger on Account
+09:00:01.4 (8)|EXECUTION_FINISHED
+10:17:00.0 (100)|LIMIT_USAGE_FOR_NS|(default)|
+  Number of SOQL queries: 3 out of 100
+  Number of query rows: 15 out of 50000
+  Number of SOQL queries for Apex jobs: 0 out of 0
+  Number of DML statements: 1 out of 150
+  Number of DML rows: 1 out of 10000
+  Maximum CPU time: 180 out of 10000
+  Maximum heap size: 0 out of 6000000
+  Number of callouts: 0 out of 100
+  Number of Email Invocations: 0 out of 10
+  Number of future calls: 0 out of 50
+  Number of queueable jobs added to the queue: 0 out of 50
+  Number of Mobile Apex push calls: 0 out of 10
+"""
+
+
+def _make_apex_log(idx: int) -> dict:
+    return {
+        'Id': f'07L{idx:015d}',
+        'LogUser': {'Name': f'User {idx}', 'attributes': {'type': 'User'}},
+        'Operation': '/apex/MyPage' if idx % 3 == 0 else 'API',
+        'Application': 'Unknown Application',
+        'Status': 'Success' if idx % 5 != 0 else 'Truncated',
+        'LogLength': 45000 + idx * 1000,
+        'DurationMilliseconds': 200 + idx * 50,
+        'LastModifiedDate': '2026-05-19T10:00:00.000+0000',
+        'attributes': {'type': 'ApexLog'},
+    }
+
+
+_FLOW_ELEMENTS = [
+    'Update_Account_Record',
+    'Create_Enrollment_Record',
+    'Get_SIS_Data',
+    'Send_Confirmation_Email',
+    'Check_Duplicate_Account',
+    'Assign_Advisor',
+    'Update_Stage',
+]
+
+_FLOW_ERRORS = [
+    'FIELD_CUSTOM_VALIDATION_EXCEPTION: SIS ID is required.',
+    'CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: PersonAccount trigger threw unhandled exception.',
+    'FIELD_INTEGRITY_EXCEPTION: Account.PersonEmail: value not valid.',
+    'REQUIRED_FIELD_MISSING: Required fields are missing: [LastName]',
+    'DUPLICATE_VALUE: duplicate value found: SIS_ID__c',
+    'UNABLE_TO_LOCK_ROW: unable to obtain exclusive access to this record',
+]
+
+
+def _make_flow_interview(idx: int) -> dict:
+    element = _FLOW_ELEMENTS[idx % len(_FLOW_ELEMENTS)]
+    error = _FLOW_ERRORS[idx % len(_FLOW_ERRORS)]
+    return {
+        'Id': f'0lM{idx:015d}',
+        'FlowVersionId': f'301{idx:015d}',
+        'InterviewStatus': 'Error',
+        'CurrentElement': element,
+        'ErrorMessage': f'An error occurred at element {element}. {error}',
+        'StartInterviewTime': '2026-05-19T09:30:00.000+0000',
+        'EndInterviewTime': '2026-05-19T09:30:01.000+0000',
+        'attributes': {'type': 'FlowInterview'},
+    }
+
+
+_PROC_EX_TYPES = ['FlowException', 'ValidationException', 'DmlException']
+_PROC_EX_MSGS = [
+    'Record could not be saved due to a flow error.',
+    'Validation rule failed: SIS ID must not be blank.',
+    'Insert failed: required field missing.',
+    'Flow interview ended with unhandled fault.',
+    'DML operation failed on Account.',
+]
+_PROC_EX_OBJECTS = ['Account', 'ContactPointEmail', 'IndividualApplication']
+
+
+def _make_process_exception(idx: int) -> dict:
+    return {
+        'Id': f'0pE{idx:015d}',
+        'ExceptionType': _PROC_EX_TYPES[idx % len(_PROC_EX_TYPES)],
+        'Message': _PROC_EX_MSGS[idx % len(_PROC_EX_MSGS)],
+        'Status': 'Pending',
+        'SourceId': f'001{idx:015d}',
+        'SourceObjectApiName': _PROC_EX_OBJECTS[idx % len(_PROC_EX_OBJECTS)],
+        'CreatedDate': '2026-05-19T08:00:00.000+0000',
+        'attributes': {'type': 'ProcessException'},
+    }
 
 
 def _build_describe(obj: str) -> dict:
@@ -326,6 +475,32 @@ class MockSalesforce:
         """Return mock describe or explain responses."""
         path_lower = path.lower()
 
+        # ── Tooling API ──────────────────────────────────────────────────────
+        if 'tooling' in path_lower:
+            if 'tooling/query' in path_lower:
+                params = kwargs.get('params', {})
+                q_str = params.get('q', path)
+                q_lower = q_str.lower() if isinstance(q_str, str) else path_lower
+                if 'apexlog' in q_lower:
+                    records = [_make_apex_log(i) for i in range(1, 11)]
+                    return {'totalSize': 10, 'done': True, 'records': records}
+                if 'flowinterview' in q_lower:
+                    records = [_make_flow_interview(i) for i in range(1, 7)]
+                    return {'totalSize': 6, 'done': True, 'records': records}
+                if 'processexception' in q_lower:
+                    records = [_make_process_exception(i) for i in range(1, 5)]
+                    return {'totalSize': 4, 'done': True, 'records': records}
+                return {'totalSize': 0, 'done': True, 'records': []}
+
+            if 'tooling/sobjects/apexlog' in path_lower:
+                if method.upper() == 'DELETE':
+                    return {}
+                if path_lower.endswith('/body'):
+                    return _MOCK_LOG_BODY
+                return {}
+
+            return {}
+
         if 'sobjects' in path_lower and 'describe' in path_lower:
             parts = path.split('/')
             try:
@@ -344,6 +519,9 @@ class MockSalesforce:
                                'ContactPointAddress', 'IndividualApplication', 'Opportunity']
                 ]
             }
+
+        if 'limits' in path_lower and 'sobjects' not in path_lower and 'query' not in path_lower:
+            return self._mock_limits()
 
         if 'query/explain' in path_lower or 'explain' in path_lower:
             return {
@@ -383,6 +561,33 @@ class MockSalesforce:
                 records.append({'Id': f'gen{i:015d}', 'attributes': {'type': 'GenericObject'}})
 
         return records
+
+    def _mock_limits(self) -> dict:
+        org = self.org
+        if org == 'prod':
+            daily_remaining = 8100
+            bulk_remaining = 5200
+            async_remaining = 180000
+        elif org == 'sandbox':
+            daily_remaining = 14900
+            bulk_remaining = 9950
+            async_remaining = 249800
+        else:  # dev
+            daily_remaining = 14523
+            bulk_remaining = 9800
+            async_remaining = 249100
+        return {
+            'DailyApiRequests': {'Max': 15000, 'Remaining': daily_remaining},
+            'DataStorageMB': {'Max': 5120, 'Remaining': 5120 - (200 if org == 'prod' else 50)},
+            'FileStorageMB': {'Max': 20480, 'Remaining': 20480 - (480 if org == 'prod' else 100)},
+            'DailyBulkApiRequests': {'Max': 10000, 'Remaining': bulk_remaining},
+            'DailyWorkflowEmails': {'Max': 1000, 'Remaining': 987 if org != 'prod' else 650},
+            'MassEmail': {'Max': 5000, 'Remaining': 5000},
+            'SingleEmail': {'Max': 5000, 'Remaining': 4990 if org != 'prod' else 4500},
+            'DailyDurableStreamingApiEvents': {'Max': 10000, 'Remaining': 10000},
+            'DailyAsyncApexExecutions': {'Max': 250000, 'Remaining': async_remaining},
+            'DailyBulkV2QueryJobs': {'Max': 10000, 'Remaining': 9990 if org != 'prod' else 9100},
+        }
 
 
 # ── public factory ─────────────────────────────────────────────────────────────
