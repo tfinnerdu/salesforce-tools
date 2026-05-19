@@ -24,7 +24,7 @@ def api_run():
     org = session.get('active_org', 'dev')
     user_key = request.remote_addr
     body = request.get_json(silent=True) or {}
-    query = body.get('query', '').strip()
+    query = body.get('soql', body.get('query', '')).strip()
     all_pages = bool(body.get('all_pages', False))
     if not query:
         return jsonify({'success': False, 'data': None, 'error': 'query is required'}), 400
