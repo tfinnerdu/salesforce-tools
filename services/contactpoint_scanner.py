@@ -16,8 +16,11 @@ def _scan_type(sf, cp_type: str) -> dict:
     missing_parent_res = sf.query(f"SELECT COUNT() FROM {cp_type} WHERE ParentId = null")
     missing_parent = missing_parent_res['totalSize']
 
-    missing_indiv_res = sf.query(f"SELECT COUNT() FROM {cp_type} WHERE IndividualId = null")
-    missing_individual = missing_indiv_res['totalSize']
+    try:
+        missing_indiv_res = sf.query(f"SELECT COUNT() FROM {cp_type} WHERE IndividualId = null")
+        missing_individual = missing_indiv_res['totalSize']
+    except Exception:
+        missing_individual = 0
 
     sample_res = sf.query(
         f"SELECT Id FROM {cp_type} WHERE ParentId = null LIMIT 5"

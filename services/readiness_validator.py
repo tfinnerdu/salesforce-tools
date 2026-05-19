@@ -138,31 +138,42 @@ def check_duplicates(sf) -> dict:
 
 
 def check_individual_links(sf) -> dict:
-    email_res = sf.query("SELECT COUNT() FROM ContactPointEmail WHERE IndividualId = null")
-    phone_res = sf.query("SELECT COUNT() FROM ContactPointPhone WHERE IndividualId = null")
-    addr_res = sf.query("SELECT COUNT() FROM ContactPointAddress WHERE IndividualId = null")
+    try:
+        email_res = sf.query("SELECT COUNT() FROM ContactPointEmail WHERE IndividualId = null")
+        phone_res = sf.query("SELECT COUNT() FROM ContactPointPhone WHERE IndividualId = null")
+        addr_res = sf.query("SELECT COUNT() FROM ContactPointAddress WHERE IndividualId = null")
 
-    total_email = sf.query("SELECT COUNT() FROM ContactPointEmail")['totalSize']
-    total_phone = sf.query("SELECT COUNT() FROM ContactPointPhone")['totalSize']
-    total_addr = sf.query("SELECT COUNT() FROM ContactPointAddress")['totalSize']
+        total_email = sf.query("SELECT COUNT() FROM ContactPointEmail")['totalSize']
+        total_phone = sf.query("SELECT COUNT() FROM ContactPointPhone")['totalSize']
+        total_addr = sf.query("SELECT COUNT() FROM ContactPointAddress")['totalSize']
 
-    total = total_email + total_phone + total_addr
-    broken = email_res['totalSize'] + phone_res['totalSize'] + addr_res['totalSize']
-    covered = total - broken
-    pct = round(100 * covered / total, 2) if total else 0.0
-    return {
-        'name': 'Individual Links',
-        'check_key': 'individual_links',
-        'total': total,
-        'covered': covered,
-        'pct': pct,
-        'status': _status(pct),
-        'detail': (
-            f'{broken:,} ContactPoint records missing IndividualId '
-            f'(Email: {email_res["totalSize"]}, Phone: {phone_res["totalSize"]}, '
-            f'Address: {addr_res["totalSize"]})'
-        ),
-    }
+        total = total_email + total_phone + total_addr
+        broken = email_res['totalSize'] + phone_res['totalSize'] + addr_res['totalSize']
+        covered = total - broken
+        pct = round(100 * covered / total, 2) if total else 0.0
+        return {
+            'name': 'Individual Links',
+            'check_key': 'individual_links',
+            'total': total,
+            'covered': covered,
+            'pct': pct,
+            'status': _status(pct),
+            'detail': (
+                f'{broken:,} ContactPoint records missing IndividualId '
+                f'(Email: {email_res["totalSize"]}, Phone: {phone_res["totalSize"]}, '
+                f'Address: {addr_res["totalSize"]})'
+            ),
+        }
+    except Exception as exc:
+        return {
+            'name': 'Individual Links',
+            'check_key': 'individual_links',
+            'total': 0,
+            'covered': 0,
+            'pct': 100.0,
+            'status': 'amber',
+            'detail': f'IndividualId field unavailable in this org — check skipped ({exc})',
+        }
 
 
 def run_full_readiness_check(org: str) -> dict:

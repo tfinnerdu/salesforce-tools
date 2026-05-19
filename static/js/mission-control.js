@@ -53,6 +53,7 @@ MC.showToast = (message, type = 'success') => {
     </div>`;
   container.insertAdjacentHTML('beforeend', html);
   const el = document.getElementById(id);
+  if (typeof bootstrap === 'undefined' || !el) return;
   const t = new bootstrap.Toast(el);
   t.show();
   el.addEventListener('hidden.bs.toast', () => el.remove());
@@ -1645,21 +1646,25 @@ MC.settings = {
       statusEl.className = 'badge badge-amber';
       statusEl.textContent = 'Testing…';
     }
+    let badgeCls = 'badge badge-red';
+    let badgeText = 'Error';
+    let toastMsg = `Test failed for ${orgName}`;
+    let toastType = 'danger';
     try {
       const data = await MC.api(`/settings/org/${encodeURIComponent(orgName)}/test`);
-      if (statusEl) {
-        const ok = data.success !== false && !data.error;
-        statusEl.className = `badge ${ok ? 'badge-green' : 'badge-red'}`;
-        statusEl.textContent = ok ? 'Connected' : 'Failed';
-      }
-      MC.showToast(`${orgName.toUpperCase()} — ${data.message || 'Connection tested'}`, data.success !== false ? 'success' : 'danger');
+      const ok = data && data.success !== false && !data.error;
+      badgeCls = `badge ${ok ? 'badge-green' : 'badge-red'}`;
+      badgeText = ok ? 'Connected' : 'Failed';
+      toastMsg = `${orgName.toUpperCase()} — ${(data && data.message) || 'Connection tested'}`;
+      toastType = ok ? 'success' : 'danger';
     } catch (err) {
-      if (statusEl) {
-        statusEl.className = 'badge badge-red';
-        statusEl.textContent = 'Error';
-      }
-      MC.showToast(`Test failed for ${orgName}: ${err.message}`, 'danger');
+      toastMsg = `Test failed for ${orgName}: ${err.message}`;
     }
+    if (statusEl) {
+      statusEl.className = badgeCls;
+      statusEl.textContent = badgeText;
+    }
+    MC.showToast(toastMsg, toastType);
   },
 
   async importCollection(file) {

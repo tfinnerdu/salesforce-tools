@@ -346,10 +346,11 @@ def get_sf(org: str = 'dev'):
 
     from simple_salesforce import Salesforce  # type: ignore
     cfg = get_org_config(org)
-    logger.info("Connecting to real Salesforce org '%s' as %s", org, cfg['username'])
+    logger.info("Connecting to real Salesforce org '%s' as %s (API v%s)", org, cfg['username'], cfg['api_version'])
     return Salesforce(
         username=cfg['username'],
         password=cfg['password'],
         security_token=cfg['security_token'],
         domain=cfg['domain'],
+        version=cfg['api_version'],
     )

@@ -12,6 +12,7 @@ def get_org_config(org: str = 'dev') -> dict:
         'password': os.environ.get(f'{prefix}PASSWORD', ''),
         'security_token': os.environ.get(f'{prefix}TOKEN', ''),
         'domain': os.environ.get(f'{prefix}DOMAIN', 'login'),
+        'api_version': os.environ.get(f'{prefix}API_VERSION') or os.environ.get('SF_API_VERSION', '59.0'),
     }
 
 
