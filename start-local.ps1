@@ -11,11 +11,15 @@ New-Item -ItemType Directory -Path "$Root\.hub-logs" -Force | Out-Null
 if (Test-Path $Log)    { Remove-Item $Log }
 if (Test-Path $LogErr) { Remove-Item $LogErr }
 
-# Activate venv
+# Activate venv — create it automatically if missing
 $Venv = "$Root\.venv\Scripts\Activate.ps1"
 if (-not (Test-Path $Venv)) {
-    Write-Host "ERROR: .venv not found. Run: python -m venv .venv" -ForegroundColor Red
-    exit 1
+    Write-Host "Creating virtual environment..." -ForegroundColor Cyan
+    python -m venv "$Root\.venv"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: failed to create .venv. Is Python in PATH?" -ForegroundColor Red
+        exit 1
+    }
 }
 . $Venv
 
