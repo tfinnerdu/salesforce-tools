@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block title %}Admin - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Admin
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Admin Dashboard"
+              data-bs-content="Org health tools: scheduled job status, Apex test coverage, deployment history, and user activity audit.">ⓘ</span>
+      </h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Nav tabs -->
+  <ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-jobs" data-bs-toggle="tab"
+              data-bs-target="#panel-jobs" type="button" role="tab"
+              aria-controls="panel-jobs" aria-selected="true">
+        Scheduled Jobs
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-coverage" data-bs-toggle="tab"
+              data-bs-target="#panel-coverage" type="button" role="tab"
+              aria-controls="panel-coverage" aria-selected="false">
+        Test Coverage
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-deploys" data-bs-toggle="tab"
+              data-bs-target="#panel-deploys" type="button" role="tab"
+              aria-controls="panel-deploys" aria-selected="false">
+        Deployment History
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-users" data-bs-toggle="tab"
+              data-bs-target="#panel-users" type="button" role="tab"
+              aria-controls="panel-users" aria-selected="false">
+        User Audit
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="adminTabContent">
+
+    <!-- ── Scheduled Jobs ──────────────────────────────────────────────────── -->
+    <div class="tab-pane fade show active" id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">CronTrigger records from the active org</small>
+        <button id="btnRefreshJobs" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="jobsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading scheduled jobs…</p>
+      </div>
+      <div id="jobsEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No scheduled jobs found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="jobsCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="jobsTable">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>State</th>
+                <th>Next Fire</th>
+                <th>Previous Fire</th>
+                <th class="text-end">Triggered</th>
+                <th>Cron</th>
+              </tr>
+            </thead>
+            <tbody id="jobsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Test Coverage ───────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-coverage" role="tabpanel" aria-labelledby="tab-coverage">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          ApexCodeCoverageAggregate via Tooling API &mdash;
+          <span class="text-warning fw-semibold">75% threshold</span> required for SF deployments
+        </small>
+        <button id="btnRefreshCoverage" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <!-- Summary bar -->
+      <div id="coverageSummary" class="d-none mb-3">
+        <div class="d-flex gap-3 flex-wrap">
+          <span class="badge badge-green fs-6" id="covPassing">— passing</span>
+          <span class="badge badge-amber fs-6" id="covBelow">— below 75%</span>
+          <span class="badge badge-red fs-6" id="covFailing">— below 50%</span>
+        </div>
+      </div>
+      <div id="coverageLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading test coverage…</p>
+      </div>
+      <div id="coverageEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No coverage data found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="coverageCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="coverageTable">
+            <thead class="table-light">
+              <tr>
+                <th>Class / Trigger</th>
+                <th class="text-end">Covered</th>
+                <th class="text-end">Uncovered</th>
+                <th style="width:220px">Coverage</th>
+              </tr>
+            </thead>
+            <tbody id="coverageBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Deployment History ──────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-deploys" role="tabpanel" aria-labelledby="tab-deploys">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">Recent deployments via Tooling API DeployRequest</small>
+        <button id="btnRefreshDeploys" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="deploysLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading deployment history…</p>
+      </div>
+      <div id="deploysEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No deployments found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="deploysCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="deploysTable">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Deployed By</th>
+                <th class="text-end">Components</th>
+                <th class="text-end">Errors</th>
+                <th class="text-end">Tests</th>
+                <th class="text-end">Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="deploysBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── User Audit ──────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-users" role="tabpanel" aria-labelledby="tab-users">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">Standard + portal users ordered by last login</small>
+        <div class="d-flex gap-2">
+          <input id="userFilter" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by name or username…" style="width:220px">
+          <button id="btnRefreshUsers" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <!-- Summary cards -->
+      <div id="usersSummary" class="d-none mb-3">
+        <div class="row g-2">
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-success" id="sumActive">—</div>
+                <div class="small text-muted">Total Active</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-warning" id="sumInactive90">—</div>
+                <div class="small text-muted">Inactive &gt;90 days</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-danger" id="sumNeverLogin">—</div>
+                <div class="small text-muted">Never Logged In</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-primary" id="sumSysadmins">—</div>
+                <div class="small text-muted">Sys Admins</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="usersLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading user audit…</p>
+      </div>
+      <div id="usersEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No users found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="usersCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="usersTable">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Profile</th>
+                <th>Last Login</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-admin-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.admin.init();
+  });
+</script>
+{% endblock %}

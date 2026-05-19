@@ -341,6 +341,37 @@ _PROC_EX_MSGS = [
 _PROC_EX_OBJECTS = ['Account', 'ContactPointEmail', 'IndividualApplication']
 
 
+def _make_cron_trigger(idx: int) -> dict:
+    states = ['WAITING', 'WAITING', 'WAITING', 'PAUSED', 'ERROR']
+    return {
+        'Id': f'08e{idx:015d}',
+        'CronJobDetail': {'Name': f'Nightly_Sync_Job_{idx}', 'JobType': '7'},
+        'State': states[idx % len(states)],
+        'NextFireTime': '2026-05-20T06:00:00.000+0000',
+        'PreviousFireTime': '2026-05-19T06:00:00.000+0000',
+        'StartTime': '2026-01-01T00:00:00.000+0000',
+        'TimesTriggered': 140 + idx,
+        'CronExpression': '0 0 6 * * ?',
+        'attributes': {'type': 'CronTrigger'},
+    }
+
+
+def _make_sf_user(idx: int) -> dict:
+    days_ago = [1, 5, 30, 95, None]
+    last_login = None if days_ago[idx % 5] is None else f'2026-0{5 - (idx % 3):01d}-{max(1, 19 - days_ago[idx % 5] % 28):02d}T10:00:00.000+0000'
+    return {
+        'Id': f'005{idx:015d}',
+        'Name': f'User {idx}',
+        'Username': f'user{idx}@doane.edu',
+        'IsActive': idx % 8 != 0,
+        'LastLoginDate': last_login,
+        'UserType': 'Standard',
+        'Profile': {'Name': 'System Administrator' if idx % 10 == 0 else 'Standard User'},
+        'CreatedDate': '2024-01-15T00:00:00.000+0000',
+        'attributes': {'type': 'User'},
+    }
+
+
 def _make_process_exception(idx: int) -> dict:
     return {
         'Id': f'0pE{idx:015d}',
@@ -487,6 +518,37 @@ class MockSalesforce:
                 if 'flowdefinition' in q_lower:
                     records = [_make_flow_definition(i) for i in range(1, 8)]
                     return {'totalSize': 7, 'done': True, 'records': records}
+                if 'apexcodecoverageaggregate' in q_lower:
+                    records = [
+                        {
+                            'Id': f'apxcov{i:010d}',
+                            'ApexClassOrTrigger': {'Name': 'AccountTriggerHandler' if i % 3 == 0 else f'StudentSyncService_{i}'},
+                            'ApexClassOrTriggerId': f'01p{i:015d}',
+                            'NumLinesCovered': 80 + (i * 3 % 40),
+                            'NumLinesUncovered': i * 2 % 30,
+                            'attributes': {'type': 'ApexCodeCoverageAggregate'},
+                        }
+                        for i in range(1, 16)
+                    ]
+                    return {'totalSize': len(records), 'done': True, 'records': records}
+                if 'deployrequest' in q_lower:
+                    records = [
+                        {
+                            'Id': f'0Af{i:015d}',
+                            'Status': 'Succeeded' if i % 4 != 0 else 'Failed',
+                            'StartDate': '2026-05-19T08:00:00.000+0000',
+                            'CompletedDate': '2026-05-19T08:04:32.000+0000',
+                            'CreatedBy': {'Name': f'Dev User {i}'},
+                            'NumberComponentsTotal': 12 + i * 3,
+                            'NumberComponentErrors': 0 if i % 4 != 0 else 2,
+                            'NumberTestsCompleted': 45,
+                            'NumberTestErrors': 0 if i % 4 != 0 else 1,
+                            'StateDetail': None if i % 4 != 0 else 'Test failure: AccountTest.testInsert',
+                            'attributes': {'type': 'DeployRequest'},
+                        }
+                        for i in range(1, 11)
+                    ]
+                    return {'totalSize': len(records), 'done': True, 'records': records}
                 if 'apexlog' in q_lower:
                     records = [_make_apex_log(i) for i in range(1, 11)]
                     return {'totalSize': 10, 'done': True, 'records': records}
@@ -550,7 +612,13 @@ class MockSalesforce:
         soql_lower = soql.lower()
         records: List[dict] = []
 
-        if 'permissionsetassignment' in soql_lower:
+        if 'crontrigger' in soql_lower:
+            for i in range(1, min(limit, 10) + 1):
+                records.append(_make_cron_trigger(i))
+        elif 'from user' in soql_lower or ("select" in soql_lower and "'standard'" in soql_lower):
+            for i in range(1, min(limit, 25) + 1):
+                records.append(_make_sf_user(i))
+        elif 'permissionsetassignment' in soql_lower:
             for i in range(1, min(limit, 20) + 1):
                 records.append(_make_perm_set_assignment(i))
         elif 'fieldpermissions' in soql_lower:
