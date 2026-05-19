@@ -44,4 +44,6 @@ $IP = (Get-NetIPAddress -AddressFamily IPv4 |
 $Port = if ($env:PORT) { $env:PORT } else { '5000' }
 Write-Host "Starting SF Mission Control on http://${IP}:${Port}" -ForegroundColor Green
 
+# Continue (not Stop) so Python's stderr logging doesn't trip PowerShell's error handler
+$ErrorActionPreference = 'Continue'
 python -u "$Root\app.py" >> $Log 2>> $LogErr
