@@ -33,3 +33,4 @@ class Config:
     SF_BYPASS_FIELD = os.environ.get('SF_BYPASS_FIELD', 'Bypass_Triggers__c')
     # Salesforce SOAP login rejects API versions above ~59.0; REST calls use SF_API_VERSION.
     SF_SOAP_AUTH_VERSION = os.environ.get('SF_SOAP_AUTH_VERSION', '57.0')
+    PII_SERVICE_URL = os.environ.get('PII_SERVICE_URL', '')

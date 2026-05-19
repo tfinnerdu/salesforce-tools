@@ -5,6 +5,7 @@
 
 MC.logs = {
   _activeTab: 'apex',
+  _autoRefreshTimer: null,
 
   init() {
     // Sub-tab switching
@@ -18,6 +19,18 @@ MC.logs = {
     document.getElementById('btnRefreshApex')?.addEventListener('click', () => this.loadApexLogs());
     document.getElementById('btnRefreshFlows')?.addEventListener('click', () => this.loadFlowErrors());
     document.getElementById('btnCloseDetail')?.addEventListener('click', () => this._closeDetail());
+
+    // Time-range toolbar
+    document.getElementById('logTimeRange')?.addEventListener('change', (e) => {
+      const showCustom = e.target.value === 'custom';
+      document.getElementById('customRangeWrap')?.classList.toggle('d-none', !showCustom);
+      if (!showCustom) this.loadApexLogs();
+    });
+    document.getElementById('logCustomSince')?.addEventListener('change', () => this.loadApexLogs());
+    document.getElementById('autoRefreshToggle')?.addEventListener('change', (e) => {
+      this._setAutoRefresh(e.target.checked);
+    });
+    document.getElementById('btnDeleteAllLogs')?.addEventListener('click', () => this.deleteAllLogs());
 
     // Load the default tab
     this.loadApexLogs();
@@ -46,7 +59,9 @@ MC.logs = {
     this._closeDetail();
 
     try {
-      const logs = await MC.api('/logs/apex');
+      const since = this._getSince();
+      const url = since ? `/logs/apex?since=${encodeURIComponent(since)}` : '/logs/apex';
+      const logs = await MC.api(url);
       if (!logs || logs.length === 0) {
         empty?.classList.remove('d-none');
         return;
@@ -58,6 +73,37 @@ MC.logs = {
       empty?.classList.remove('d-none');
     } finally {
       loading?.classList.add('d-none');
+    }
+  },
+
+  _getSince() {
+    const range = document.getElementById('logTimeRange')?.value;
+    if (!range || range === 'custom') {
+      const custom = document.getElementById('logCustomSince')?.value;
+      return custom ? new Date(custom).toISOString() : null;
+    }
+    const map = { '15m': 15, '1h': 60, '6h': 360, '24h': 1440 };
+    const minutes = map[range];
+    if (!minutes) return null;
+    return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+  },
+
+  _setAutoRefresh(enabled) {
+    clearInterval(this._autoRefreshTimer);
+    this._autoRefreshTimer = null;
+    if (enabled) {
+      this._autoRefreshTimer = setInterval(() => this.loadApexLogs(), 10000);
+    }
+  },
+
+  async deleteAllLogs() {
+    if (!confirm('Delete ALL Apex logs for this org? This cannot be undone.')) return;
+    try {
+      await MC.api('/logs/apex/delete-all', 'DELETE');
+      MC.showToast('All logs deleted', 'success');
+      this.loadApexLogs();
+    } catch (err) {
+      MC.showToast(`Delete failed: ${err.message}`, 'danger');
     }
   },
 

@@ -35,6 +35,9 @@ MC.admin = {
       if (!document.getElementById('usersEmpty')?.classList.contains('d-none')) return;
       this.loadUsers();
     });
+    document.getElementById('tab-anonymizer-btn')?.addEventListener('shown.bs.tab', () => {
+      this.initAnonymizer();
+    });
   },
 
   // ── Scheduled Jobs ──────────────────────────────────────────────────────────
@@ -299,5 +302,88 @@ MC.admin = {
       (u.username || '').toLowerCase().includes(q)
     );
     this._renderUsersTable(filtered);
+  },
+
+  // ── Anonymizer ─────────────────────────────────────────────────────────────
+
+  async initAnonymizer() {
+    try {
+      const objects = await MC.api('/admin/anonymizer/objects');
+      const sel = document.getElementById('anonObjectSelect');
+      if (sel) {
+        (objects || []).forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.object;
+          opt.textContent = o.object;
+          opt.dataset.fields = JSON.stringify(o.fields);
+          sel.appendChild(opt);
+        });
+        sel.addEventListener('change', () => this._renderAnonFields(sel));
+      }
+    } catch (err) {
+      MC.showToast(`Failed to load anonymizer objects: ${err.message}`, 'danger');
+    }
+    document.getElementById('btnAnonPreview')?.addEventListener('click', () => this.anonPreview());
+    document.getElementById('btnAnonRun')?.addEventListener('click', () => this.anonRun());
+  },
+
+  _renderAnonFields(sel) {
+    const fields = JSON.parse(sel.selectedOptions[0]?.dataset.fields || '[]');
+    const wrap = document.getElementById('anonFieldsList');
+    if (!wrap) return;
+    if (!fields.length) {
+      wrap.innerHTML = '<span class="text-muted small">No fields available</span>';
+      return;
+    }
+    wrap.innerHTML = fields.map(f => `
+      <div class="form-check">
+        <input class="form-check-input anon-field-check" type="checkbox"
+               id="anonField_${MC._escHtml(f)}" value="${MC._escHtml(f)}" checked>
+        <label class="form-check-label small font-monospace" for="anonField_${MC._escHtml(f)}">${MC._escHtml(f)}</label>
+      </div>`).join('');
+    document.getElementById('btnAnonRun').disabled = false;
+  },
+
+  _getAnonSelection() {
+    const object = document.getElementById('anonObjectSelect')?.value;
+    const fields = Array.from(document.querySelectorAll('.anon-field-check:checked')).map(el => el.value);
+    return { object, fields };
+  },
+
+  async anonPreview() {
+    const { object, fields } = this._getAnonSelection();
+    if (!object) { MC.showToast('Select an object first', 'warning'); return; }
+    try {
+      const data = await MC.api('/admin/anonymizer/preview', 'POST', { object, fields });
+      document.getElementById('anonRecordCount').textContent = (data.record_count || 0).toLocaleString();
+      document.getElementById('anonPreviewObject').textContent = data.object || object;
+      document.getElementById('anonPreviewFields').textContent = (data.fields || fields).join(', ');
+      document.getElementById('anonPreviewSoql').textContent = data.soql || '';
+      document.getElementById('anonPreviewWrap')?.classList.remove('d-none');
+      document.getElementById('anonResultWrap')?.classList.add('d-none');
+    } catch (err) {
+      MC.showToast(`Preview failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async anonRun() {
+    const { object, fields } = this._getAnonSelection();
+    const dryRun = document.getElementById('anonDryRun')?.checked ?? true;
+    if (!object || !fields.length) { MC.showToast('Select object and at least one field', 'warning'); return; }
+    if (!dryRun && !confirm(`Run LIVE anonymization on ${object}? This modifies real data.`)) return;
+    MC.showSpinner();
+    try {
+      const data = await MC.api('/admin/anonymizer/run', 'POST', { object, fields, dry_run: dryRun });
+      const alertEl = document.getElementById('anonResultAlert');
+      if (alertEl) {
+        alertEl.className = `alert py-2 small mb-0 alert-${data.status === 'stub' || data.status === 'dry_run' ? 'info' : 'success'}`;
+        alertEl.textContent = data.message || JSON.stringify(data);
+      }
+      document.getElementById('anonResultWrap')?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Run failed: ${err.message}`, 'danger');
+    } finally {
+      MC.hideSpinner();
+    }
   },
 };

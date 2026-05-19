@@ -1,6 +1,6 @@
 import logging
 
-from flask import Blueprint, jsonify, render_template, session
+from flask import Blueprint, jsonify, render_template, request, session
 
 from services import admin_service
 
@@ -60,4 +60,49 @@ def api_users():
         return jsonify({'success': True, 'data': data})
     except Exception as exc:
         logger.exception('user audit failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/anonymizer/objects', methods=['GET'])
+def api_anonymizer_objects():
+    try:
+        from services import anonymizer
+        return jsonify({'success': True, 'data': anonymizer.list_objects()})
+    except Exception as exc:
+        logger.exception('anonymizer list_objects failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/anonymizer/preview', methods=['POST'])
+def api_anonymizer_preview():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    object_name = body.get('object', '').strip()
+    field_names = body.get('fields', [])
+    if not object_name:
+        return jsonify({'success': False, 'data': None, 'error': 'object is required'}), 400
+    try:
+        from services import anonymizer
+        result = anonymizer.preview(org=org, object_name=object_name, field_names=field_names)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('anonymizer preview failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/anonymizer/run', methods=['POST'])
+def api_anonymizer_run():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    object_name = body.get('object', '').strip()
+    field_names = body.get('fields', [])
+    dry_run = bool(body.get('dry_run', True))
+    if not object_name or not field_names:
+        return jsonify({'success': False, 'data': None, 'error': 'object and fields are required'}), 400
+    try:
+        from services import anonymizer
+        result = anonymizer.run(org=org, object_name=object_name, field_names=field_names, dry_run=dry_run)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('anonymizer run failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

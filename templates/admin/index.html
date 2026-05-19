@@ -50,6 +50,14 @@
         User Audit
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-anonymizer-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-anonymizer" type="button" role="tab"
+              aria-controls="tab-anonymizer" aria-selected="false">
+        Anonymizer
+        <span class="badge badge-amber ms-1">Stub</span>
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -237,6 +245,92 @@
             </thead>
             <tbody id="usersBody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Anonymizer ─────────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-anonymizer" role="tabpanel" aria-labelledby="tab-anonymizer-btn">
+      <div class="row g-3 mt-1">
+        <!-- Config notice -->
+        <div class="col-12">
+          <div class="alert alert-warning py-2 small mb-0">
+            <strong>Stub mode</strong> — <code>PII_SERVICE_URL</code> is not configured.
+            No records will be modified until the PII service is wired in.
+            See <code>services/anonymizer.py</code> for the integration point.
+          </div>
+        </div>
+
+        <!-- Object + field selector -->
+        <div class="col-md-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="fw-semibold mb-3" style="color:var(--doane-navy);">
+                Select Object &amp; Fields
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Data Anonymizer"
+                      data-bs-content="Selects which fields to scrub on sandbox/dev orgs after a refresh. Calls your PII service (PII_SERVICE_URL) to replace real values with synthetic ones. Currently stubbed — no records are modified.">ⓘ</span>
+              </h6>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Object</label>
+                <select id="anonObjectSelect" class="form-select form-select-sm">
+                  <option value="">— select object —</option>
+                </select>
+              </div>
+              <div class="mb-3" id="anonFieldsWrap">
+                <label class="form-label small fw-semibold">Fields to Anonymize</label>
+                <div id="anonFieldsList" class="d-flex flex-column gap-1">
+                  <span class="text-muted small">Select an object first</span>
+                </div>
+              </div>
+              <button class="btn btn-outline-secondary btn-sm w-100" id="btnAnonPreview">
+                Preview Affected Records
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview + run -->
+        <div class="col-md-8">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="fw-semibold mb-3" style="color:var(--doane-navy);">Preview &amp; Run</h6>
+
+              <div id="anonPreviewWrap" class="d-none mb-3">
+                <div class="d-flex gap-3 mb-2">
+                  <div>
+                    <div class="small text-muted">Records affected</div>
+                    <div class="fs-4 fw-bold" id="anonRecordCount">—</div>
+                  </div>
+                  <div>
+                    <div class="small text-muted">Object</div>
+                    <div class="fw-semibold" id="anonPreviewObject">—</div>
+                  </div>
+                  <div>
+                    <div class="small text-muted">Fields</div>
+                    <div class="small font-monospace" id="anonPreviewFields">—</div>
+                  </div>
+                </div>
+                <div class="bg-light rounded p-2 font-monospace small text-muted" id="anonPreviewSoql"></div>
+              </div>
+
+              <div id="anonResultWrap" class="d-none mb-3">
+                <div class="alert py-2 small mb-0" id="anonResultAlert"></div>
+              </div>
+
+              <div class="d-flex gap-2 no-print">
+                <div class="form-check form-switch mb-0 me-auto">
+                  <input class="form-check-input" type="checkbox" id="anonDryRun" role="switch" checked>
+                  <label class="form-check-label small" for="anonDryRun">
+                    Dry Run <span class="text-muted">(no changes made)</span>
+                  </label>
+                </div>
+                <button class="btn btn-warning btn-sm" id="btnAnonRun" disabled>
+                  Run Anonymizer
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

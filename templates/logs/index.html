@@ -35,6 +35,29 @@
       <button id="btnRefreshApex" class="btn btn-doane btn-sm">&#8635; Refresh</button>
     </div>
 
+    <!-- Time-range toolbar -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3 no-print">
+      <label class="small fw-semibold mb-0">Show logs from:</label>
+      <select id="logTimeRange" class="form-select form-select-sm" style="width:auto;">
+        <option value="">All available</option>
+        <option value="15m">Last 15 minutes</option>
+        <option value="1h" selected>Last 1 hour</option>
+        <option value="6h">Last 6 hours</option>
+        <option value="24h">Last 24 hours</option>
+        <option value="custom">Custom…</option>
+      </select>
+      <div id="customRangeWrap" class="d-none d-flex gap-2 align-items-center">
+        <input type="datetime-local" id="logCustomSince" class="form-control form-control-sm" style="width:auto;">
+      </div>
+      <div class="form-check form-switch mb-0 ms-2">
+        <input class="form-check-input" type="checkbox" id="autoRefreshToggle" role="switch">
+        <label class="form-check-label small" for="autoRefreshToggle">Auto-refresh (10s)</label>
+      </div>
+      <button class="btn btn-outline-danger btn-sm ms-auto" id="btnDeleteAllLogs">
+        Delete All Logs
+      </button>
+    </div>
+
     <!-- Log list -->
     <div class="card shadow-sm mb-3">
       <div class="card-body p-0">
@@ -124,6 +147,31 @@
           <div id="detailTimelineEmpty" class="text-muted small d-none">No timeline events.</div>
           <ol id="detailTimelineList" class="list-group list-group-numbered d-none" style="max-height:260px;overflow-y:auto;"></ol>
         </div>
+      </div>
+    </div>
+
+    <!-- Real-Time Stream skeleton -->
+    <div class="card shadow-sm mt-3">
+      <div class="card-header d-flex align-items-center gap-2" style="background:var(--doane-navy);color:#fff;">
+        <span class="fw-semibold">Real-Time Log Stream</span>
+        <span class="badge badge-amber ms-1">Coming Soon</span>
+        <span class="mc-info-icon"
+              data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+              data-bs-title="Real-Time Streaming"
+              data-bs-content="Subscribes to the Salesforce Streaming API (CometD) to push new Apex logs to this page as they are generated. Requires a WebSocket bridge — currently stubbed. Poll mode (above) works today.">ⓘ</span>
+      </div>
+      <div class="card-body text-center py-4">
+        <p class="text-muted small mb-3">
+          Real-time log streaming via the Salesforce Streaming API is not yet active.<br>
+          Use the <strong>Auto-refresh</strong> toggle above for near-real-time polling.
+        </p>
+        <button class="btn btn-outline-secondary btn-sm" id="btnStreamConnect" disabled>
+          Connect to Stream
+        </button>
+        <span class="ms-2 small text-muted" id="streamStatus">Not connected</span>
+      </div>
+      <div id="streamFeed" class="d-none p-3 font-monospace small" style="max-height:300px;overflow-y:auto;background:#1e1e1e;color:#d4d4d4;">
+        <!-- Live events will appear here -->
       </div>
     </div>
   </div>
