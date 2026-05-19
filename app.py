@@ -14,6 +14,8 @@ from routes.schema import schema_bp
 from routes.data_ops import data_ops_bp
 from routes.settings_routes import settings_bp
 from routes.observe import observe_bp
+from routes.logs import logs_bp
+from routes.impact import impact_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +36,17 @@ def create_app() -> Flask:
     app.register_blueprint(data_ops_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(observe_bp)
+    app.register_blueprint(logs_bp)
+    app.register_blueprint(impact_bp)
+
+    @app.context_processor
+    def inject_globals():
+        from flask import session
+        active_org = session.get('active_org', 'dev')
+        return {
+            'sf_mock_mode': Config.SF_MOCK,
+            'sf_instance': session.get(f'sf_instance_{active_org}', ''),
+        }
 
     @app.route('/')
     def root():

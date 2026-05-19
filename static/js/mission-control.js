@@ -1839,3 +1839,968 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ── SF Quick Links ────────────────────────────────────────────────────────────
+
+/** Build a Salesforce Lightning URL for a record. Returns '' when no instance known. */
+MC.sfUrl = (recordId, objectType = 'Account') => {
+  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
+  if (!instance || instance === 'mock.salesforce.com') return '';
+  return `https://${instance}/lightning/r/${encodeURIComponent(objectType)}/${encodeURIComponent(recordId)}/view`;
+};
+
+/**
+ * Return an anchor tag opening the record in Salesforce, or plain text if mock.
+ * label defaults to recordId.
+ */
+MC.sfLinkHtml = (recordId, objectType = 'Account', label = null) => {
+  const url = MC.sfUrl(recordId, objectType);
+  const display = MC._escHtml(label || recordId);
+  if (!url) return `<code class="small">${display}</code>`;
+  return `<a href="${url}" target="_blank" rel="noopener" class="font-monospace small"
+             title="Open in Salesforce">${display} &#8599;</a>`;
+};
+
+/** Return true when running in mock mode. */
+MC.isMock = () => document.querySelector('meta[name="sf-mock"]')?.content === 'true';
+
+// ── Popover / Tooltip init ────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof bootstrap === 'undefined') return;
+  document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+    new bootstrap.Popover(el, { trigger: el.dataset.bsTrigger || 'focus', html: false });
+  });
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el);
+  });
+});
+
+'use strict';
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+// Paste this object into mission-control.js after the last MC.* namespace block.
+
+MC.logs = {
+  _activeTab: 'apex',
+
+  init() {
+    // Sub-tab switching
+    document.querySelectorAll('[data-tab]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        this._switchTab(e.currentTarget.dataset.tab);
+      });
+    });
+
+    document.getElementById('btnRefreshApex')?.addEventListener('click', () => this.loadApexLogs());
+    document.getElementById('btnRefreshFlows')?.addEventListener('click', () => this.loadFlowErrors());
+    document.getElementById('btnCloseDetail')?.addEventListener('click', () => this._closeDetail());
+
+    // Load the default tab
+    this.loadApexLogs();
+  },
+
+  _switchTab(tab) {
+    this._activeTab = tab;
+    document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('active'));
+    document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
+
+    const showApex = tab === 'apex';
+    document.getElementById('panelApex')?.classList.toggle('d-none', !showApex);
+    document.getElementById('panelFlows')?.classList.toggle('d-none', showApex);
+
+    if (tab === 'flows') this.loadFlowErrors();
+  },
+
+  async loadApexLogs() {
+    const loading = document.getElementById('apexLoading');
+    const empty   = document.getElementById('apexEmpty');
+    const table   = document.getElementById('apexTable');
+
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    table?.classList.add('d-none');
+    this._closeDetail();
+
+    try {
+      const logs = await MC.api('/logs/apex');
+      if (!logs || logs.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderApexTable(logs);
+      table?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load Apex logs: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderApexTable(logs) {
+    const tbody = document.getElementById('apexBody');
+    if (!tbody) return;
+    tbody.innerHTML = logs.map(log => {
+      const kb = (log.log_length / 1024).toFixed(1);
+      const statusBadge = MC.statusBadge(log.status);
+      return `<tr style="cursor:pointer" data-log-id="${MC._escHtml(log.id)}" onclick="MC.logs.showLogDetail('${MC._escHtml(log.id)}', '${MC._escHtml(log.operation)}')">
+        <td>${MC._escHtml(log.user)}</td>
+        <td><code class="small">${MC._escHtml(log.operation)}</code></td>
+        <td>${statusBadge}</td>
+        <td class="text-muted small">${kb} KB</td>
+        <td class="text-muted small">${log.duration_ms} ms</td>
+        <td class="text-muted small">${MC._fmtTime(log.last_modified)}</td>
+        <td class="no-print">
+          <button class="btn btn-outline-danger btn-sm py-0"
+                  onclick="event.stopPropagation(); MC.logs.deleteLog('${MC._escHtml(log.id)}')">
+            &times; Delete
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  },
+
+  async showLogDetail(logId, operation) {
+    const panel    = document.getElementById('apexDetailPanel');
+    const loading  = document.getElementById('detailLoading');
+    const title    = document.getElementById('detailTitle');
+
+    panel?.classList.remove('d-none');
+    loading?.classList.remove('d-none');
+    if (title) title.textContent = `Log Detail — ${operation || logId}`;
+
+    // Scroll to panel
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Hide content sections while loading
+    ['detailLimitsTable', 'detailLimitsEmpty', 'detailExceptionsList',
+     'detailExceptionsEmpty', 'detailTimelineList', 'detailTimelineEmpty'].forEach(id => {
+      document.getElementById(id)?.classList.add('d-none');
+    });
+
+    try {
+      const parsed = await MC.api(`/logs/apex/${encodeURIComponent(logId)}`);
+      this._renderDetail(parsed);
+    } catch (err) {
+      MC.showToast(`Failed to load log: ${err.message}`, 'danger');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderDetail(parsed) {
+    // Limits
+    const limitsBody  = document.getElementById('detailLimitsBody');
+    const limitsTable = document.getElementById('detailLimitsTable');
+    const limitsEmpty = document.getElementById('detailLimitsEmpty');
+    const limits = parsed.limits || {};
+    const limitKeys = Object.keys(limits);
+    if (limitKeys.length === 0) {
+      limitsEmpty?.classList.remove('d-none');
+    } else {
+      if (limitsBody) {
+        limitsBody.innerHTML = limitKeys.map(label => {
+          const l = limits[label];
+          const pct = l.pct || 0;
+          const barCls = pct >= 80 ? 'bg-danger' : pct >= 50 ? 'bg-warning' : 'bg-success';
+          return `<tr>
+            <td class="small">${MC._escHtml(label)}</td>
+            <td class="small text-end">${l.used}</td>
+            <td class="small text-end">${l.max}</td>
+            <td style="min-width:120px">
+              <div class="progress" style="height:8px">
+                <div class="progress-bar ${barCls}" style="width:${Math.min(pct, 100)}%"></div>
+              </div>
+              <span class="small text-muted">${pct.toFixed(1)}%</span>
+            </td>
+          </tr>`;
+        }).join('');
+      }
+      limitsTable?.classList.remove('d-none');
+    }
+
+    // Exceptions
+    const excList  = document.getElementById('detailExceptionsList');
+    const excEmpty = document.getElementById('detailExceptionsEmpty');
+    const excs = parsed.exceptions || [];
+    if (excs.length === 0) {
+      excEmpty?.classList.remove('d-none');
+    } else {
+      if (excList) {
+        excList.innerHTML = excs.map(ex => `
+          <li class="list-group-item list-group-item-danger small">
+            <strong>${MC._escHtml(ex.type)}</strong><br>
+            <code>${MC._escHtml(ex.message)}</code>
+          </li>`).join('');
+      }
+      excList?.classList.remove('d-none');
+    }
+
+    // Timeline
+    const tmList  = document.getElementById('detailTimelineList');
+    const tmEmpty = document.getElementById('detailTimelineEmpty');
+    const timeline = parsed.timeline || [];
+    if (timeline.length === 0) {
+      tmEmpty?.classList.remove('d-none');
+    } else {
+      if (tmList) {
+        tmList.innerHTML = timeline.map(ev => `
+          <li class="list-group-item small py-1">
+            <span class="badge badge-navy me-1">${MC._escHtml(ev.event)}</span>
+            <span class="text-muted">${MC._escHtml(ev.detail)}</span>
+          </li>`).join('');
+      }
+      tmList?.classList.remove('d-none');
+    }
+  },
+
+  _closeDetail() {
+    document.getElementById('apexDetailPanel')?.classList.add('d-none');
+  },
+
+  async deleteLog(logId) {
+    if (!confirm('Delete this Apex log?')) return;
+    try {
+      await MC.api(`/logs/apex/${encodeURIComponent(logId)}`, 'DELETE');
+      MC.showToast('Log deleted', 'success');
+      // Remove row from table
+      const row = document.querySelector(`[data-log-id="${logId}"]`);
+      row?.remove();
+      // If detail panel is open for this log, close it
+      this._closeDetail();
+    } catch (err) {
+      MC.showToast(`Delete failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async loadFlowErrors() {
+    const flowsLoading = document.getElementById('flowsLoading');
+    const flowsEmpty   = document.getElementById('flowsEmpty');
+    const flowsTable   = document.getElementById('flowsTable');
+    const procExEmpty  = document.getElementById('procExEmpty');
+    const procExTable  = document.getElementById('procExTable');
+
+    flowsLoading?.classList.remove('d-none');
+    flowsEmpty?.classList.add('d-none');
+    flowsTable?.classList.add('d-none');
+
+    try {
+      const [flows, procExs] = await Promise.all([
+        MC.api('/logs/flows'),
+        MC.api('/logs/process-exceptions'),
+      ]);
+
+      // Flow interviews
+      if (!flows || flows.length === 0) {
+        flowsEmpty?.classList.remove('d-none');
+      } else {
+        this._renderFlowsTable(flows);
+        flowsTable?.classList.remove('d-none');
+      }
+
+      // Process exceptions
+      if (!procExs || procExs.length === 0) {
+        procExEmpty?.classList.remove('d-none');
+      } else {
+        this._renderProcExTable(procExs);
+        procExTable?.classList.remove('d-none');
+      }
+    } catch (err) {
+      MC.showToast(`Failed to load flow errors: ${err.message}`, 'danger');
+      flowsEmpty?.classList.remove('d-none');
+    } finally {
+      flowsLoading?.classList.add('d-none');
+    }
+  },
+
+  _renderFlowsTable(flows) {
+    const tbody = document.getElementById('flowsBody');
+    if (!tbody) return;
+    tbody.innerHTML = flows.map(f => `<tr>
+      <td><code class="small">${MC._escHtml(f.current_element)}</code></td>
+      <td class="small text-danger">${MC._escHtml(f.error_message)}</td>
+      <td class="text-muted small">${MC._fmtTime(f.start_time)}</td>
+      <td class="text-muted small">${MC._fmtTime(f.end_time)}</td>
+    </tr>`).join('');
+  },
+
+  _renderProcExTable(exceptions) {
+    const tbody = document.getElementById('procExBody');
+    if (!tbody) return;
+    tbody.innerHTML = exceptions.map(ex => `<tr>
+      <td><span class="badge badge-red">${MC._escHtml(ex.exception_type)}</span></td>
+      <td class="small">${MC._escHtml(ex.message)}</td>
+      <td class="small text-muted">${MC._escHtml(ex.source_object)}</td>
+      <td>${MC.statusBadge(ex.status)}</td>
+      <td class="small text-muted">${MC._fmtTime(ex.created_date)}</td>
+    </tr>`).join('');
+  },
+};
+'use strict';
+
+MC.observe = {
+  _trendsChart: null,
+
+  init() {
+    document.getElementById('btnRefreshLimits')?.addEventListener('click', () => {
+      const org = document.getElementById('limitsOrgSelect')?.value || MC.activeOrg();
+      this.loadLimits(org);
+    });
+
+    document.getElementById('btnRefreshTrends')?.addEventListener('click', () => {
+      const org = document.getElementById('trendsOrgSelect')?.value || MC.activeOrg();
+      const days = document.getElementById('trendsDaysSelect')?.value || 30;
+      this.loadTrends(org, parseInt(days, 10));
+    });
+
+    document.getElementById('trendsDaysSelect')?.addEventListener('change', () => {
+      const org = document.getElementById('trendsOrgSelect')?.value || MC.activeOrg();
+      const days = document.getElementById('trendsDaysSelect')?.value || 30;
+      this.loadTrends(org, parseInt(days, 10));
+    });
+
+    document.getElementById('trendsOrgSelect')?.addEventListener('change', () => {
+      const org = document.getElementById('trendsOrgSelect')?.value || MC.activeOrg();
+      const days = document.getElementById('trendsDaysSelect')?.value || 30;
+      this.loadTrends(org, parseInt(days, 10));
+    });
+
+    document.getElementById('btnRunCrossOrg')?.addEventListener('click', () => {
+      const orgs = Array.from(document.querySelectorAll('.cross-org-check:checked'))
+        .map(el => el.value);
+      if (orgs.length === 0) {
+        MC.showToast('Select at least one org', 'warning');
+        return;
+      }
+      this.loadCrossOrg(orgs);
+    });
+
+    // Auto-load on page open
+    this.loadLimits(MC.activeOrg());
+    this.loadTrends(MC.activeOrg(), 30);
+  },
+
+  async loadLimits(org) {
+    const loadingEl = document.getElementById('limitsLoading');
+    const emptyEl = document.getElementById('limitsEmpty');
+    const gridEl = document.getElementById('limitsGrid');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (gridEl) gridEl.classList.add('d-none');
+    try {
+      const data = await MC.api(`/observe/limits?org=${encodeURIComponent(org)}`);
+      this.renderLimitCards(data.limits || []);
+    } catch (err) {
+      MC.showToast(`Failed to load limits: ${err.message}`, 'danger');
+      if (emptyEl) {
+        emptyEl.textContent = `Failed to load limits: ${err.message}`;
+        emptyEl.classList.remove('d-none');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('d-none');
+    }
+  },
+
+  renderLimitCards(limits) {
+    const gridEl = document.getElementById('limitsGrid');
+    const emptyEl = document.getElementById('limitsEmpty');
+    if (!gridEl) return;
+    if (!limits || limits.length === 0) {
+      if (emptyEl) {
+        emptyEl.textContent = 'No limit data returned.';
+        emptyEl.classList.remove('d-none');
+      }
+      return;
+    }
+    gridEl.innerHTML = limits.map(lim => {
+      const pct = Math.min(lim.pct, 100);
+      const barCls =
+        lim.status === 'green' ? 'bg-success' :
+        lim.status === 'amber' ? 'bg-warning' : 'bg-danger';
+      const badgeCls =
+        lim.status === 'green' ? 'badge-green' :
+        lim.status === 'amber' ? 'badge-amber' : 'badge-red';
+      const usedFmt = (lim.used || 0).toLocaleString();
+      const maxFmt = (lim.max || 0).toLocaleString();
+      const remainFmt = (lim.remaining || 0).toLocaleString();
+      return `<div class="col-sm-6 col-lg-4 col-xl-3">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body py-3 px-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <span class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(lim.name)}</span>
+              <span class="badge ${badgeCls}">${pct.toFixed(1)}%</span>
+            </div>
+            <div class="progress mb-2" style="height:8px;" title="${usedFmt} used of ${maxFmt}">
+              <div class="progress-bar ${barCls}"
+                   role="progressbar"
+                   style="width:${pct}%"
+                   aria-valuenow="${pct}"
+                   aria-valuemin="0"
+                   aria-valuemax="100"></div>
+            </div>
+            <div class="d-flex justify-content-between small text-muted">
+              <span>${usedFmt} used</span>
+              <span>${remainFmt} left / ${maxFmt}</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    gridEl.classList.remove('d-none');
+    const emptyEl = document.getElementById('limitsEmpty');
+    if (emptyEl) emptyEl.classList.add('d-none');
+  },
+
+  async loadTrends(org, days) {
+    const loadingEl = document.getElementById('trendsLoading');
+    const emptyEl = document.getElementById('trendsEmpty');
+    const wrapEl = document.getElementById('trendsChartWrap');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (wrapEl) wrapEl.style.opacity = '0.4';
+    try {
+      const data = await MC.api(`/observe/trends?org=${encodeURIComponent(org)}&days=${days}`);
+      this.renderTrendsChart(data);
+    } catch (err) {
+      MC.showToast(`Failed to load trends: ${err.message}`, 'danger');
+      if (emptyEl) {
+        emptyEl.textContent = `Failed to load trends: ${err.message}`;
+        emptyEl.classList.remove('d-none');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('d-none');
+      if (wrapEl) wrapEl.style.opacity = '1';
+    }
+  },
+
+  renderTrendsChart(data) {
+    const emptyEl = document.getElementById('trendsEmpty');
+    const canvas = document.getElementById('trendsChart');
+    if (!canvas) return;
+
+    const labels = data.labels || [];
+    const series = data.series || [];
+
+    if (!labels.length || !series.length) {
+      if (emptyEl) emptyEl.classList.remove('d-none');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('d-none');
+
+    const palette = [
+      '#FF7900', '#1F3864', '#28a745', '#dc3545',
+      '#ffc107', '#17a2b8', '#6610f2', '#e83e8c',
+    ];
+
+    const datasets = series.map((s, i) => ({
+      label: s.name,
+      data: s.values,
+      borderColor: palette[i % palette.length],
+      backgroundColor: palette[i % palette.length] + '22',
+      tension: 0.3,
+      pointRadius: labels.length > 14 ? 2 : 4,
+      fill: false,
+    }));
+
+    if (this._trendsChart) {
+      this._trendsChart.destroy();
+      this._trendsChart = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    this._trendsChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { maxTicksLimit: 10, font: { size: 10 } },
+            grid: { display: false },
+          },
+          y: {
+            min: 0,
+            max: 100,
+            ticks: { callback: (v) => v + '%', font: { size: 10 } },
+            grid: { color: '#e9ecef' },
+          },
+        },
+      },
+    });
+  },
+
+  async loadCrossOrg(orgs) {
+    const loadingEl = document.getElementById('crossOrgLoading');
+    const emptyEl = document.getElementById('crossOrgEmpty');
+    const tableWrap = document.getElementById('crossOrgTableWrap');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (tableWrap) tableWrap.classList.add('d-none');
+    try {
+      const params = orgs.map(o => `orgs=${encodeURIComponent(o)}`).join('&');
+      const data = await MC.api(`/observe/cross-org?${params}`);
+      this.renderCrossOrgTable(data);
+    } catch (err) {
+      MC.showToast(`Comparison failed: ${err.message}`, 'danger');
+      if (emptyEl) {
+        emptyEl.textContent = `Comparison failed: ${err.message}`;
+        emptyEl.classList.remove('d-none');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('d-none');
+    }
+  },
+
+  renderCrossOrgTable(data) {
+    const headEl = document.getElementById('crossOrgTableHead');
+    const bodyEl = document.getElementById('crossOrgTableBody');
+    const tableWrap = document.getElementById('crossOrgTableWrap');
+    const emptyEl = document.getElementById('crossOrgEmpty');
+    if (!headEl || !bodyEl) return;
+
+    const queries = data.queries || [];
+    const orgs = data.orgs || [];
+    const counts = data.counts || {};
+
+    if (!queries.length || !orgs.length) {
+      if (emptyEl) {
+        emptyEl.textContent = 'No data returned.';
+        emptyEl.classList.remove('d-none');
+      }
+      return;
+    }
+
+    headEl.innerHTML = `<tr>
+      <th style="background:var(--doane-navy);color:#fff;">Query</th>
+      ${orgs.map(o => `<th style="background:var(--doane-navy);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
+    </tr>`;
+
+    bodyEl.innerHTML = queries.map(label => {
+      const values = orgs.map(o => {
+        const v = counts[o] ? counts[o][label] : null;
+        return v == null ? null : parseInt(v, 10);
+      });
+      const baseline = values.find(v => v != null);
+
+      const cells = values.map(v => {
+        if (v == null) return `<td class="text-muted small text-center">—</td>`;
+        const fmt = v.toLocaleString();
+        if (baseline == null || baseline === 0) {
+          return `<td class="text-center">${fmt}</td>`;
+        }
+        const diffPct = Math.abs((v - baseline) / baseline) * 100;
+        let cellCls = '';
+        if (v !== baseline) {
+          cellCls = diffPct > 25 ? 'table-danger' : diffPct > 10 ? 'table-warning' : '';
+        }
+        return `<td class="text-center ${cellCls}">${fmt}</td>`;
+      }).join('');
+
+      return `<tr>
+        <td class="small fw-semibold" style="color:var(--doane-navy);">${MC._escHtml(label)}</td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    if (tableWrap) tableWrap.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+  },
+};
+'use strict';
+
+MC.impact = {
+  _assertionIdx: 0,
+
+  init() {
+    document.getElementById('btnFieldScan')?.addEventListener('click', () => this.scanField());
+    document.getElementById('btnPermAudit')?.addEventListener('click', () => this.loadPermissions());
+    document.getElementById('btnNewSuite')?.addEventListener('click', () => this.showNewSuiteModal());
+    document.getElementById('btnAddAssertion')?.addEventListener('click', () => this.addAssertion());
+    document.getElementById('btnSaveSuite')?.addEventListener('click', () => this.saveSuite());
+
+    document.getElementById('permFilter')?.addEventListener('input', (e) => {
+      this._filterPermTable(e.target.value);
+    });
+
+    // Load regression suites on tab activate
+    document.getElementById('tab-regression-btn')?.addEventListener('shown.bs.tab', () => {
+      this.listSuites();
+    });
+
+    this.listSuites();
+  },
+
+  // ── Field Impact ───────────────────────────────────────────────────────────
+
+  async scanField() {
+    const object = document.getElementById('fieldScanObject')?.value.trim();
+    const field = document.getElementById('fieldScanField')?.value.trim();
+    if (!object || !field) {
+      MC.showToast('Enter both Object and Field name', 'warning');
+      return;
+    }
+
+    document.getElementById('fieldScanEmpty')?.classList.add('d-none');
+    document.getElementById('fieldScanResults')?.classList.add('d-none');
+    document.getElementById('fieldScanLoading')?.classList.remove('d-none');
+
+    try {
+      const data = await MC.api(`/impact/field-scan?object=${encodeURIComponent(object)}&field=${encodeURIComponent(field)}`);
+      this._renderFieldScan(data, field);
+    } catch (err) {
+      MC.showToast(`Scan failed: ${err.message}`, 'danger');
+      document.getElementById('fieldScanEmpty')?.classList.remove('d-none');
+    } finally {
+      document.getElementById('fieldScanLoading')?.classList.add('d-none');
+    }
+  },
+
+  _renderFieldScan(data, field) {
+    const vr = data.validation_rules || [];
+    const flows = data.flows || [];
+    const reportsCount = data.reports_count || 0;
+
+    document.getElementById('fieldScanSummary').textContent = data.summary || '';
+    document.getElementById('vrCount').textContent = vr.length;
+    document.getElementById('flowCount').textContent = flows.length;
+    document.getElementById('reportCount').textContent = reportsCount;
+    const flowRef = document.getElementById('flowFieldRef');
+    if (flowRef) flowRef.textContent = field;
+
+    // Validation rules table
+    const vrBody = document.getElementById('vrTableBody');
+    if (vrBody) {
+      if (vr.length) {
+        document.getElementById('vrEmpty')?.classList.add('d-none');
+        vrBody.innerHTML = vr.map(r => `
+          <tr>
+            <td class="font-monospace small">${MC._escHtml(r.EntityDefinition?.QualifiedApiName || '')}</td>
+            <td class="small">${MC._escHtml(r.ValidationName || '')}</td>
+            <td class="small">${MC._escHtml(r.Description || '')}</td>
+            <td class="small">${MC._escHtml(r.ErrorMessage || '')}</td>
+          </tr>`).join('');
+      } else {
+        vrBody.innerHTML = '';
+        document.getElementById('vrEmpty')?.classList.remove('d-none');
+      }
+    }
+
+    // Flows table
+    const flowBody = document.getElementById('flowTableBody');
+    if (flowBody) {
+      if (flows.length) {
+        document.getElementById('flowEmpty')?.classList.add('d-none');
+        flowBody.innerHTML = flows.map(f => `
+          <tr>
+            <td class="small">${MC._escHtml(f.MasterLabel || '')}</td>
+            <td class="small">${MC._escHtml(f.ProcessType || '')}</td>
+            <td class="small">${MC._escHtml(f.Description || '')}</td>
+          </tr>`).join('');
+      } else {
+        flowBody.innerHTML = '';
+        document.getElementById('flowEmpty')?.classList.remove('d-none');
+      }
+    }
+
+    document.getElementById('fieldScanResults')?.classList.remove('d-none');
+  },
+
+  // ── Permission Audit ───────────────────────────────────────────────────────
+
+  async loadPermissions() {
+    const object = document.getElementById('permObject')?.value.trim();
+    const field = document.getElementById('permField')?.value.trim();
+    if (!object) {
+      MC.showToast('Enter an object name', 'warning');
+      return;
+    }
+
+    document.getElementById('permEmpty')?.classList.add('d-none');
+    document.getElementById('permResults')?.classList.add('d-none');
+    document.getElementById('permFieldResults')?.classList.add('d-none');
+    document.getElementById('permLoading')?.classList.remove('d-none');
+
+    try {
+      const data = await MC.api(`/impact/permissions?object=${encodeURIComponent(object)}`);
+      this._renderPermissions(data);
+
+      if (field) {
+        await this.loadFieldAccess(object, field);
+      }
+    } catch (err) {
+      MC.showToast(`Audit failed: ${err.message}`, 'danger');
+      document.getElementById('permEmpty')?.classList.remove('d-none');
+    } finally {
+      document.getElementById('permLoading')?.classList.add('d-none');
+    }
+  },
+
+  _renderPermissions(data) {
+    const raw = data.raw_records || [];
+    const grouped = {};
+    for (const rec of raw) {
+      const field = rec.Field || '';
+      if (!grouped[field]) grouped[field] = { read: [], edit: [] };
+      if (rec.PermissionsRead) grouped[field].read.push(rec.Id);
+      if (rec.PermissionsEdit) grouped[field].edit.push(rec.Id);
+    }
+
+    const rows = Object.entries(grouped);
+    const body = document.getElementById('permTableBody');
+    if (body) {
+      body.innerHTML = rows.map(([field, perms]) => `
+        <tr data-field="${MC._escHtml(field)}">
+          <td class="font-monospace small">${MC._escHtml(field)}</td>
+          <td class="small">${perms.read.length > 0 ? perms.read.length + ' pset(s)' : '<span class="text-muted">None</span>'}</td>
+          <td class="small">${perms.edit.length > 0 ? perms.edit.length + ' pset(s)' : '<span class="text-muted">None</span>'}</td>
+        </tr>`).join('');
+    }
+
+    const countEl = document.getElementById('permResultCount');
+    if (countEl) countEl.textContent = `${rows.length} field(s)`;
+
+    document.getElementById('permResults')?.classList.remove('d-none');
+  },
+
+  _filterPermTable(term) {
+    const lower = term.toLowerCase();
+    document.querySelectorAll('#permTableBody tr').forEach(row => {
+      const field = (row.dataset.field || '').toLowerCase();
+      row.style.display = field.includes(lower) ? '' : 'none';
+    });
+  },
+
+  async loadFieldAccess(object, field) {
+    try {
+      const data = await MC.api(
+        `/impact/permissions/field?object=${encodeURIComponent(object)}&field=${encodeURIComponent(field)}`
+      );
+      this._renderFieldAccess(data, field);
+    } catch (err) {
+      MC.showToast(`Field access lookup failed: ${err.message}`, 'danger');
+    }
+  },
+
+  _renderFieldAccess(data, field) {
+    const label = document.getElementById('permFieldLabel');
+    if (label) label.textContent = field;
+
+    const body = document.getElementById('permFieldTableBody');
+    const access = data.access || [];
+    if (body) {
+      if (access.length) {
+        body.innerHTML = access.map(a => {
+          const users = (a.users || []).map(u => MC._escHtml(u.username || u.name || '')).join(', ') || '—';
+          return `
+            <tr>
+              <td class="small font-monospace">${MC._escHtml(a.pset_name || a.pset_id || '')}</td>
+              <td class="text-center">${a.can_read ? '&#10003;' : ''}</td>
+              <td class="text-center">${a.can_edit ? '&#10003;' : ''}</td>
+              <td class="small">${users}</td>
+            </tr>`;
+        }).join('');
+      } else {
+        body.innerHTML = '<tr><td colspan="4" class="text-center text-muted small py-2">No explicit field permissions found.</td></tr>';
+      }
+    }
+    document.getElementById('permFieldResults')?.classList.remove('d-none');
+  },
+
+  // ── Regression Tester ──────────────────────────────────────────────────────
+
+  async listSuites() {
+    document.getElementById('regLoading')?.classList.remove('d-none');
+    document.getElementById('regEmpty')?.classList.add('d-none');
+    document.getElementById('regSuiteList')?.classList.add('d-none');
+
+    try {
+      const suites = await MC.api('/impact/regression');
+      this._renderSuiteList(suites || []);
+    } catch (_) {
+      // DB may not be available in dev — show empty state
+      this._renderSuiteList([]);
+    } finally {
+      document.getElementById('regLoading')?.classList.add('d-none');
+    }
+  },
+
+  _renderSuiteList(suites) {
+    const body = document.getElementById('regSuiteTable');
+    if (!body) return;
+
+    if (!suites || suites.length === 0) {
+      document.getElementById('regEmpty')?.classList.remove('d-none');
+      return;
+    }
+
+    body.innerHTML = suites.map(s => {
+      const assertions = Array.isArray(s.assertions) ? s.assertions : [];
+      const hasBaseline = s.baseline && Object.keys(s.baseline).length > 0;
+      return `
+        <tr>
+          <td class="small fw-semibold">${MC._escHtml(s.name)}</td>
+          <td class="small text-center">${assertions.length}</td>
+          <td class="small">${MC._fmtTime(s.created_at)}</td>
+          <td class="small">${hasBaseline ? '<span class="badge badge-green">Set</span>' : '<span class="badge badge-amber">None</span>'}</td>
+          <td class="no-print">
+            <button class="btn btn-outline-secondary btn-sm me-1"
+                    onclick="MC.impact.runSuite(${s.id})">Run</button>
+            <button class="btn btn-outline-secondary btn-sm"
+                    onclick="MC.impact.setBaseline(${s.id}, '${MC._escHtml(s.name)}')">Set Baseline</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    document.getElementById('regSuiteList')?.classList.remove('d-none');
+  },
+
+  async runSuite(id) {
+    MC.showSpinner();
+    document.getElementById('regRunResults')?.classList.add('d-none');
+    try {
+      const data = await MC.api(`/impact/regression/${id}/run`, 'POST');
+      this._renderRunResults(data);
+      MC.showToast(`Suite run complete: ${data.summary?.pass}/${data.summary?.total} passed`, 'info');
+    } catch (err) {
+      MC.showToast(`Run failed: ${err.message}`, 'danger');
+    } finally {
+      MC.hideSpinner();
+    }
+  },
+
+  _renderRunResults(data) {
+    const nameEl = document.getElementById('regRunSuiteName');
+    if (nameEl) nameEl.textContent = data.suite_name || '';
+
+    const summaryEl = document.getElementById('regRunSummary');
+    if (summaryEl) {
+      const s = data.summary || {};
+      summaryEl.innerHTML = `${s.pass ?? 0} pass / ${s.fail ?? 0} fail / ${s.error ?? 0} error`;
+    }
+
+    const body = document.getElementById('regRunTable');
+    if (body) {
+      const results = data.results || [];
+      body.innerHTML = results.map(r => {
+        const statusBadge = MC.statusBadge(r.status);
+        const baseline = r.baseline_count != null ? r.baseline_count : '—';
+        const actual = r.actual_count != null ? r.actual_count : r.error || '—';
+        return `
+          <tr>
+            <td class="small fw-semibold">${MC._escHtml(r.label)}</td>
+            <td class="font-monospace small" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                title="${MC._escHtml(r.soql)}">${MC._escHtml(r.soql)}</td>
+            <td class="small text-center">${baseline}</td>
+            <td class="small text-center">${MC._escHtml(String(actual))}</td>
+            <td>${statusBadge}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // Switch to regression tab and show results
+    const tabEl = document.getElementById('tab-regression-btn');
+    if (tabEl) bootstrap.Tab.getOrCreateInstance(tabEl).show();
+    document.getElementById('regRunResults')?.classList.remove('d-none');
+    document.getElementById('regRunResults')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  },
+
+  async setBaseline(id, name) {
+    if (!confirm(`Set current query counts as baseline for suite "${name}"?`)) return;
+    MC.showSpinner();
+    try {
+      await MC.api(`/impact/regression/${id}/baseline`, 'POST');
+      MC.showToast('Baseline saved', 'success');
+      this.listSuites();
+    } catch (err) {
+      MC.showToast(`Baseline failed: ${err.message}`, 'danger');
+    } finally {
+      MC.hideSpinner();
+    }
+  },
+
+  showNewSuiteModal() {
+    this._assertionIdx = 0;
+    const list = document.getElementById('assertionList');
+    if (list) list.innerHTML = '';
+    const nameInput = document.getElementById('newSuiteName');
+    if (nameInput) nameInput.value = '';
+    this.addAssertion();
+    const modal = document.getElementById('newSuiteModal');
+    if (modal) bootstrap.Modal.getOrCreateInstance(modal).show();
+  },
+
+  addAssertion() {
+    const idx = this._assertionIdx++;
+    const list = document.getElementById('assertionList');
+    if (!list) return;
+    const div = document.createElement('div');
+    div.className = 'border rounded p-2 mb-2 position-relative';
+    div.dataset.idx = idx;
+    div.innerHTML = `
+      <button type="button" class="btn-close position-absolute top-0 end-0 m-1"
+              onclick="this.closest('[data-idx]').remove()" aria-label="Remove"></button>
+      <div class="row g-2">
+        <div class="col-sm-4">
+          <label class="form-label small fw-semibold">Label</label>
+          <input type="text" class="form-control form-control-sm assertion-label"
+                 placeholder="e.g. PersonAccount count">
+        </div>
+        <div class="col-sm-5">
+          <label class="form-label small fw-semibold">SOQL (COUNT query)</label>
+          <input type="text" class="form-control form-control-sm assertion-soql font-monospace"
+                 placeholder="SELECT COUNT() FROM Account WHERE IsPersonAccount = true">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label small fw-semibold">Expected Count <span class="text-muted">(opt)</span></label>
+          <input type="number" class="form-control form-control-sm assertion-expected"
+                 placeholder="Leave blank to use baseline">
+        </div>
+      </div>`;
+    list.appendChild(div);
+  },
+
+  async saveSuite() {
+    const name = document.getElementById('newSuiteName')?.value.trim();
+    if (!name) {
+      MC.showToast('Suite name is required', 'warning');
+      return;
+    }
+    const assertions = [];
+    document.querySelectorAll('#assertionList [data-idx]').forEach(row => {
+      const label = row.querySelector('.assertion-label')?.value.trim();
+      const soql = row.querySelector('.assertion-soql')?.value.trim();
+      const expectedRaw = row.querySelector('.assertion-expected')?.value.trim();
+      if (label && soql) {
+        assertions.push({
+          label,
+          soql,
+          expected_count: expectedRaw !== '' ? parseInt(expectedRaw, 10) : null,
+        });
+      }
+    });
+    if (!assertions.length) {
+      MC.showToast('Add at least one assertion', 'warning');
+      return;
+    }
+    try {
+      await MC.api('/impact/regression', 'POST', { name, assertions });
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('newSuiteModal')).hide();
+      MC.showToast('Suite saved', 'success');
+      this.listSuites();
+    } catch (err) {
+      MC.showToast(`Save failed: ${err.message}`, 'danger');
+    }
+  },
+};

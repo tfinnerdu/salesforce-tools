@@ -42,6 +42,7 @@ def api_org_test(name):
         result = sf.query('SELECT Id FROM Account LIMIT 1')
         record_count = result.get('totalSize', 0)
         instance_url = getattr(sf, 'sf_instance', '')
+        session[f'sf_instance_{name}'] = instance_url
         return jsonify({'success': True, 'org': name, 'record_count': record_count,
                         'instance_url': instance_url})
     except Exception as exc:
