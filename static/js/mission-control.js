@@ -856,6 +856,8 @@ MC.soql = {
   _pageSize: 200,
   _currentObject: null,
   _selectedSavedId: null,
+  _historyLoaded: false,
+  _historyVisible: false,
 
   init() {
     document.getElementById('btnRun')?.addEventListener('click', () => this.run(false));
@@ -948,6 +950,7 @@ MC.soql = {
     try {
       const data = await MC.api('/soql/run', 'POST', { soql, all_pages: allPages });
       this.renderResults(data.data || data);
+      this._historyLoaded = false;
     } catch (err) {
       MC.showToast(`Query failed: ${err.message}`, 'danger');
       if (emptyEl) {
@@ -1221,6 +1224,60 @@ MC.soql = {
       MC.showToast(`Updated ${fieldName}`, 'success');
     } catch (err) {
       MC.showToast(`Update failed: ${err.message}`, 'danger');
+    }
+  },
+
+  toggleHistory() {
+    this._historyVisible = !this._historyVisible;
+    document.getElementById('historyPanelBody')?.classList.toggle('d-none', !this._historyVisible);
+    document.getElementById('historyToggleIcon').textContent = this._historyVisible ? '▲' : '▼';
+    if (this._historyVisible && !this._historyLoaded) this.loadHistory();
+  },
+
+  async loadHistory() {
+    const loading = document.getElementById('historyLoading');
+    const empty   = document.getElementById('historyEmpty');
+    const list    = document.getElementById('historyList');
+    loading?.classList.remove('d-none');
+    list?.classList.add('d-none');
+    empty?.classList.add('d-none');
+    try {
+      const items = await MC.api('/soql/history');
+      loading?.classList.add('d-none');
+      if (!items || items.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      list.innerHTML = items.map(h => `
+        <li class="list-group-item list-group-item-action py-2 px-3 d-flex justify-content-between align-items-start"
+            style="cursor:pointer" onclick="MC.soql._loadFromHistory(${MC._escHtml(JSON.stringify(h.query))})">
+          <div class="font-monospace small text-truncate me-2" style="max-width:80%;"
+               title="${MC._escHtml(h.query)}">${MC._escHtml(h.query)}</div>
+          <div class="text-end text-muted" style="white-space:nowrap;font-size:0.75rem;">
+            <span class="badge badge-navy me-1">${h.row_count ?? '?'} rows</span>
+            <button class="btn btn-sm p-0 text-muted" style="font-size:0.75rem;"
+                    onclick="event.stopPropagation(); MC.soql._deleteHistory(${h.id}, this)">✕</button>
+          </div>
+        </li>`).join('');
+      list?.classList.remove('d-none');
+      this._historyLoaded = true;
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load history', 'danger');
+    }
+  },
+
+  _loadFromHistory(query) {
+    const editor = document.getElementById('soqlEditor');
+    if (editor) { editor.value = query; editor.focus(); }
+  },
+
+  async _deleteHistory(id, btn) {
+    try {
+      await MC.api(`/soql/history/${id}`, 'DELETE');
+      btn.closest('li')?.remove();
+    } catch (err) {
+      MC.showToast('Delete failed', 'danger');
     }
   },
 };

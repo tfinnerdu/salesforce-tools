@@ -105,6 +105,29 @@
           </div>
         </div>
       </div>
+
+      <!-- Recent Queries Panel -->
+      <div class="card shadow-sm mt-3" id="historyPanel">
+        <div class="card-header d-flex align-items-center justify-content-between"
+             style="cursor:pointer" onclick="MC.soql.toggleHistory()">
+          <span class="fw-semibold small" style="color:var(--doane-navy);">
+            &#128336; Recent Queries
+            <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                  data-bs-title="Query History"
+                  data-bs-content="The last 25 queries you ran in this org, stored in PostgreSQL. Click any query to load it into the editor. History is per-org and per-session key.">ⓘ</span>
+          </span>
+          <span id="historyToggleIcon">&#9660;</span>
+        </div>
+        <div id="historyPanelBody" class="d-none">
+          <div class="card-body p-0">
+            <div id="historyLoading" class="text-center py-3 d-none">
+              <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+            </div>
+            <div id="historyEmpty" class="text-center py-3 text-muted small d-none">No history yet.</div>
+            <ul class="list-group list-group-flush" id="historyList"></ul>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

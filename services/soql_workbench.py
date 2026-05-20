@@ -116,6 +116,36 @@ def delete_saved_query(user_key: str, query_id: int) -> None:
         logger.error("delete_saved_query failed id=%s: %s", query_id, exc)
 
 
+def get_query_history(user_key: str, org: str, limit: int = 25) -> list:
+    """Return the most recent queries for this user+org combo."""
+    from db import get_cursor, db_available
+    if not db_available():
+        return []
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT id, query, org, ran_at, row_count "
+                "FROM query_history "
+                "WHERE user_key = %s AND org = %s "
+                "ORDER BY ran_at DESC LIMIT %s",
+                (user_key, org, limit)
+            )
+            rows = cur.fetchall()
+        return [
+            {
+                'id': r['id'],
+                'query': r['query'],
+                'org': r['org'],
+                'ran_at': r['ran_at'].isoformat() if r['ran_at'] else None,
+                'row_count': r['row_count'],
+            }
+            for r in (rows or [])
+        ]
+    except Exception as exc:
+        logger.error('get_query_history failed: %s', exc)
+        return []
+
+
 def update_record(org: str, object_name: str, record_id: str, field_name: str, value,
                   bypass: bool = False) -> dict:
     """Update a single field on a record and return a confirmation dict."""

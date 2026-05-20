@@ -101,6 +101,31 @@ def api_saved_delete(query_id):
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@soql_bp.route('/history', methods=['GET'])
+def api_query_history():
+    org = session.get('active_org', 'dev')
+    user_key = session.get('user_key', 'default')
+    try:
+        data = soql_workbench.get_query_history(user_key=user_key, org=org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('query history failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+@soql_bp.route('/history/<int:history_id>', methods=['DELETE'])
+def api_delete_history(history_id):
+    from db import get_cursor, db_available
+    if not db_available():
+        return jsonify({'success': True, 'data': {'deleted': False}})
+    try:
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM query_history WHERE id = %s", (history_id,))
+        return jsonify({'success': True, 'data': {'deleted': True}})
+    except Exception as exc:
+        logger.exception('delete history failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @soql_bp.route('/update', methods=['POST'])
 def api_update():
     org = session.get('active_org', 'dev')
