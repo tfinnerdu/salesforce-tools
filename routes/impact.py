@@ -129,3 +129,36 @@ def api_regression_baseline(suite_id: int):
     except Exception as exc:
         logger.exception('regression baseline failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+# ── Permission Set Gap Analysis ───────────────────────────────────────────────
+
+@impact_bp.route('/perm-gap/list')
+def api_perm_gap_list():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import perm_gap_analyzer
+        data = perm_gap_analyzer.list_permission_sets(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm gap list failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@impact_bp.route('/perm-gap/compare', methods=['POST'])
+def api_perm_gap_compare():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    ps_a = body.get('ps_a', '').strip()
+    ps_b = body.get('ps_b', '').strip()
+    if not ps_a or not ps_b:
+        return jsonify({'success': False, 'data': None, 'error': 'ps_a and ps_b required'}), 400
+    if ps_a == ps_b:
+        return jsonify({'success': False, 'data': None, 'error': 'Select two different permission sets'}), 400
+    try:
+        from services import perm_gap_analyzer
+        data = perm_gap_analyzer.compare(org=org, ps_id_a=ps_a, ps_id_b=ps_b)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm gap compare failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

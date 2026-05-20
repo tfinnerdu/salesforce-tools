@@ -87,6 +87,28 @@ def api_platform_events():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/record-types')
+def api_record_types():
+    org = session.get('active_org', 'dev')
+    try:
+        data = admin_service.get_record_types(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('record types failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/email-templates')
+def api_email_templates():
+    org = session.get('active_org', 'dev')
+    try:
+        data = admin_service.get_email_templates(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('email templates failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:

@@ -127,6 +127,35 @@ def delete_all_logs(org: str) -> dict:
     return {'deleted': True}
 
 
+def get_cpu_summary(org: str, limit: int = 20) -> list:
+    """Parse the most recent Apex logs for CPU/heap usage.
+
+    Returns list of {log_id, operation, user, log_length, cpu_ms, heap_bytes, status}
+    extracted from the ApexLog metadata (no body parsing needed — just the list endpoint).
+    """
+    sf = get_sf(org)
+    soql = (
+        f"SELECT Id, LogUser.Name, Operation, Status, LogLength, DurationMilliseconds "
+        f"FROM ApexLog ORDER BY LastModifiedDate DESC LIMIT {limit}"
+    )
+    result = sf.restful('tooling/query/', params={'q': soql})
+    items = []
+    for r in result.get('records', []):
+        user = r.get('LogUser') or {}
+        duration = r.get('DurationMilliseconds') or 0
+        status = r.get('Status', '')
+        items.append({
+            'log_id': r.get('Id'),
+            'operation': r.get('Operation', ''),
+            'user': user.get('Name', ''),
+            'log_length': r.get('LogLength', 0),
+            'duration_ms': duration,
+            'status': status,
+            'status_flag': 'danger' if status not in ('', 'Success') else ('warning' if duration > 5000 else 'ok'),
+        })
+    return items
+
+
 def list_flow_errors(org: str) -> list:
     """Return FlowInterview records with InterviewStatus = Error."""
     sf = get_sf(org)

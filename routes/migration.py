@@ -114,6 +114,21 @@ def api_reconciler_errors():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@migration_bp.route('/errors/requeue', methods=['POST'])
+def api_requeue_batch():
+    body = request.get_json(silent=True) or {}
+    batch_id = body.get('batch_id', '').strip()
+    if not batch_id:
+        return jsonify({'success': False, 'data': None, 'error': 'batch_id required'}), 400
+    org = session.get('active_org', 'dev')
+    try:
+        result = error_reconciler.requeue_batch(batch_id=batch_id, org=org)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('requeue failed for batch %s', batch_id)
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @migration_bp.route('/reconciler/rerun', methods=['POST'])
 def api_reconciler_rerun():
     body = request.get_json(silent=True) or {}

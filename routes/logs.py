@@ -65,6 +65,17 @@ def api_apex_delete(log_id):
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@logs_bp.route('/apex/cpu-summary')
+def api_apex_cpu_summary():
+    org = session.get('active_org', 'dev')
+    try:
+        data = apex_log_reader.get_cpu_summary(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('cpu summary failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @logs_bp.route('/stream/subscribe', methods=['POST'])
 def api_stream_subscribe():
     """Stub for future Salesforce Streaming API / CometD bridge."""

@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
+from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -205,3 +206,101 @@ def get_user_audit(org: str) -> dict:
         'sysadmins': sysadmins,
     }
     return {'users': users, 'summary': summary}
+
+
+# ── Record Types ───────────────────────────────────────────────────────────────
+
+def _mock_record_types():
+    return [
+        {'id': '012000000000001', 'name': 'Person Account',      'developer_name': 'PersonAccount',      'sobject_type': 'Account',     'is_active': True,  'description': 'Person Account record type', 'record_count': 4312},
+        {'id': '012000000000002', 'name': 'Household Account',   'developer_name': 'HouseholdAccount',   'sobject_type': 'Account',     'is_active': True,  'description': 'Household/family account',   'record_count': 87},
+        {'id': '012000000000003', 'name': 'Standard Opportunity', 'developer_name': 'Standard',           'sobject_type': 'Opportunity', 'is_active': True,  'description': '',                           'record_count': None},
+        {'id': '012000000000004', 'name': 'Standard Case',       'developer_name': 'Standard',           'sobject_type': 'Case',        'is_active': True,  'description': '',                           'record_count': None},
+        {'id': '012000000000005', 'name': 'EDC Case',            'developer_name': 'EDC_Case',           'sobject_type': 'Case',        'is_active': True,  'description': 'Education Cloud Case',       'record_count': None},
+        {'id': '012000000000006', 'name': 'Standard Campaign',   'developer_name': 'Standard',           'sobject_type': 'Campaign',    'is_active': False, 'description': '',                           'record_count': None},
+    ]
+
+
+def get_record_types(org: str) -> list:
+    """Query RecordType with record count per type."""
+    if Config.SF_MOCK:
+        return _mock_record_types()
+
+    sf = get_sf(org)
+    rt_soql = (
+        "SELECT Id, Name, DeveloperName, SobjectType, IsActive, Description "
+        "FROM RecordType ORDER BY SobjectType, Name"
+    )
+    result = sf.query(rt_soql)
+    record_types = []
+    for r in result.get('records', []):
+        record_types.append({
+            'id': r.get('Id'),
+            'name': r.get('Name', ''),
+            'developer_name': r.get('DeveloperName', ''),
+            'sobject_type': r.get('SobjectType', ''),
+            'is_active': r.get('IsActive', False),
+            'description': r.get('Description') or '',
+            'record_count': None,  # populated below where feasible
+        })
+
+    # Step 2: for common objects, get count by RecordTypeId
+    COUNTABLE = {'Account', 'Opportunity', 'Case', 'Campaign', 'Contact'}
+    by_obj = {}
+    for rt in record_types:
+        by_obj.setdefault(rt['sobject_type'], []).append(rt)
+
+    for sobject, rts in by_obj.items():
+        if sobject not in COUNTABLE:
+            continue
+        try:
+            count_soql = f"SELECT RecordTypeId, COUNT(Id) cnt FROM {sobject} GROUP BY RecordTypeId"
+            count_result = sf.query(count_soql)
+            counts = {r.get('RecordTypeId'): r.get('cnt', 0) for r in count_result.get('records', [])}
+            for rt in rts:
+                rt['record_count'] = counts.get(rt['id'], 0)
+        except Exception:
+            pass  # counts remain None
+
+    return record_types
+
+
+# ── Email Templates ────────────────────────────────────────────────────────────
+
+def _mock_email_templates():
+    return [
+        {'id': '00X01', 'name': 'Welcome Email',         'developer_name': 'Welcome_Email',         'folder_name': 'Student Communications', 'subject': 'Welcome to Doane University!',       'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-08-15T10:00:00.000Z', 'last_modified_by': 'Admin User'},
+        {'id': '00X02', 'name': 'Application Received',  'developer_name': 'Application_Received',  'folder_name': 'Student Communications', 'subject': 'We received your application',       'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-09-01T14:00:00.000Z', 'last_modified_by': 'Admin User'},
+        {'id': '00X03', 'name': 'Migration Batch Alert', 'developer_name': 'Migration_Batch_Alert', 'folder_name': 'IT Internal',            'subject': 'Migration batch completed: {batch}', 'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-10-20T09:00:00.000Z', 'last_modified_by': 'SF Admin'},
+        {'id': '00X04', 'name': 'Financial Aid Update',  'developer_name': 'FinAid_Update',         'folder_name': 'Financial Aid',          'subject': 'Update on your financial aid',       'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-07-01T12:00:00.000Z', 'last_modified_by': 'FinAid Team'},
+        {'id': '00X05', 'name': 'Legacy Welcome (OLD)',  'developer_name': 'Legacy_Welcome',        'folder_name': 'Unfiled Public',         'subject': 'Welcome (deprecated)',               'encoding': 'ISO-8859-1',  'is_active': False, 'last_modified_date': '2024-01-10T08:00:00.000Z', 'last_modified_by': 'Admin User'},
+    ]
+
+
+def get_email_templates(org: str) -> list:
+    """Query EmailTemplate via standard API."""
+    if Config.SF_MOCK:
+        return _mock_email_templates()
+
+    sf = get_sf(org)
+    soql = (
+        "SELECT Id, Name, DeveloperName, FolderId, FolderName, Subject, "
+        "Encoding, IsActive, LastModifiedDate, LastModifiedBy.Name "
+        "FROM EmailTemplate ORDER BY FolderName, Name LIMIT 200"
+    )
+    result = sf.query(soql)
+    templates = []
+    for r in result.get('records', []):
+        modifier = r.get('LastModifiedBy') or {}
+        templates.append({
+            'id': r.get('Id'),
+            'name': r.get('Name', ''),
+            'developer_name': r.get('DeveloperName', ''),
+            'folder_name': r.get('FolderName', ''),
+            'subject': r.get('Subject', ''),
+            'encoding': r.get('Encoding', ''),
+            'is_active': r.get('IsActive', True),
+            'last_modified_date': r.get('LastModifiedDate'),
+            'last_modified_by': modifier.get('Name', ''),
+        })
+    return templates

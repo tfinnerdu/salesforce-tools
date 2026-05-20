@@ -434,11 +434,21 @@ MC.reconciler = {
     const fix = MC._escHtml(cat.suggested_fix || cat.fix || 'Review the affected records manually.');
     const severity = (cat.severity || 'medium').toLowerCase();
     const sisIds = cat.sis_ids || cat.sample_sis_ids || [];
+    const wfIds = cat.workflow_ids || [];
     const sisHtml = sisIds.length > 0
       ? sisIds.map(id => `<div>${MC._escHtml(String(id))}</div>`).join('')
       : '<div class="text-muted">No sample IDs available.</div>';
     const escapedCode = MC._escHtml(code);
     const jsonCode = JSON.stringify(code);
+
+    // Build requeue buttons for each workflow_id in this category
+    const requeueBtns = wfIds.length > 0
+      ? wfIds.slice(0, 5).map(batchId => `
+          <button class="btn btn-sm btn-outline-warning no-print"
+                  onclick="MC.reconciler.requeueBatch('${MC._escHtml(String(batchId))}')">
+            &#8634; Requeue ${MC._escHtml(String(batchId))}
+          </button>`).join('')
+      : '';
 
     return `<div class="error-card severity-${severity}">
       <div class="card-body">
@@ -452,10 +462,12 @@ MC.reconciler = {
               ? '<span class="badge badge-amber">MEDIUM</span>'
               : '<span class="badge badge-green">LOW</span>'}
           </div>
-          <button class="btn btn-sm btn-outline-warning no-print"
-                  onclick="MC.reconciler.rerunCategory(${jsonCode})">
-            Re-run
-          </button>
+          <div class="d-flex gap-1 flex-wrap">
+            <button class="btn btn-sm btn-outline-warning no-print"
+                    onclick="MC.reconciler.rerunCategory(${jsonCode})">
+              Re-run
+            </button>
+          </div>
         </div>
         <div class="error-card-cause"><strong>Cause:</strong> ${cause}</div>
         <div class="error-card-fix"><strong>Suggested fix:</strong> ${fix}</div>
@@ -501,6 +513,16 @@ MC.reconciler = {
       MC.showToast(`Re-run failed: ${err.message}`, 'danger');
     } finally {
       MC.hideSpinner();
+    }
+  },
+
+  async requeueBatch(batchId) {
+    if (!confirm(`Requeue batch ${batchId}?`)) return;
+    try {
+      const data = await MC.api('/migration/errors/requeue', 'POST', {batch_id: batchId});
+      MC.showToast(`Batch ${batchId}: ${data.message || data.status}`, 'success');
+    } catch (err) {
+      MC.showToast(`Requeue failed: ${err.message}`, 'danger');
     }
   },
 };

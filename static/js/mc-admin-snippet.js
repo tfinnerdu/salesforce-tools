@@ -47,6 +47,13 @@ MC.admin = {
     document.getElementById('btnRefreshPlatformEvents')?.addEventListener('click', () => {
       this.loadPlatformEvents();
     });
+    document.getElementById('tab-record-types-btn')?.addEventListener('shown.bs.tab', () => this.loadRecordTypes());
+    document.getElementById('tab-email-templates-btn')?.addEventListener('shown.bs.tab', () => this.loadEmailTemplates());
+    document.getElementById('btnRefreshRecordTypes')?.addEventListener('click', () => this.loadRecordTypes());
+    document.getElementById('btnRefreshEmailTemplates')?.addEventListener('click', () => this.loadEmailTemplates());
+    document.getElementById('emailTemplateSearch')?.addEventListener('input', (e) => {
+      this._filterEmailTemplates(e.target.value.trim().toLowerCase());
+    });
 
     // Wire all Refresh buttons inside the integrations tab
     document.querySelectorAll('.integ-refresh-btn').forEach(btn => {
@@ -576,5 +583,117 @@ MC.admin = {
       t === 'WorkflowAlert' ? 'badge-amber' :
       'badge-secondary';
     return `<span class="badge ${cls}">${MC._escHtml(t || '—')}</span>`;
+  },
+
+  // ── Record Types ────────────────────────────────────────────────────────────
+
+  async loadRecordTypes() {
+    const loading = document.getElementById('recordTypesLoading');
+    const empty   = document.getElementById('recordTypesEmpty');
+    const card    = document.getElementById('recordTypesCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const data = await MC.api('/admin/record-types');
+      if (!data || data.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderRecordTypesTable(data);
+      card?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load record types: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderRecordTypesTable(recordTypes) {
+    const tbody = document.getElementById('recordTypesTbody');
+    if (!tbody) return;
+    tbody.innerHTML = recordTypes.map(rt => {
+      const activeBadge = rt.is_active
+        ? '<span class="badge badge-green">ACTIVE</span>'
+        : '<span class="badge badge-amber">INACTIVE</span>';
+      const countCell = rt.record_count != null
+        ? rt.record_count.toLocaleString()
+        : '—';
+      const rowCls = rt.is_active ? '' : 'text-muted';
+      return `<tr class="${rowCls}">
+        <td class="small font-monospace fw-semibold">${MC._escHtml(rt.sobject_type)}</td>
+        <td class="small">${MC._escHtml(rt.name)}</td>
+        <td class="small font-monospace text-muted">${MC._escHtml(rt.developer_name)}</td>
+        <td>${activeBadge}</td>
+        <td class="text-end small">${countCell}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  // ── Email Templates ─────────────────────────────────────────────────────────
+
+  _emailTemplates: [],
+
+  async loadEmailTemplates() {
+    const loading = document.getElementById('emailTemplatesLoading');
+    const empty   = document.getElementById('emailTemplatesEmpty');
+    const card    = document.getElementById('emailTemplatesCard');
+    const searchEl = document.getElementById('emailTemplateSearch');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    if (searchEl) searchEl.value = '';
+    try {
+      const data = await MC.api('/admin/email-templates');
+      this._emailTemplates = data || [];
+      if (this._emailTemplates.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderEmailTemplatesTable(this._emailTemplates);
+      card?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load email templates: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderEmailTemplatesTable(templates) {
+    const tbody = document.getElementById('emailTemplatesTbody');
+    if (!tbody) return;
+    tbody.innerHTML = templates.map(t => {
+      const activeBadge = t.is_active
+        ? '<span class="badge badge-green">ACTIVE</span>'
+        : '<span class="badge badge-navy">INACTIVE</span>';
+      const encodingCell = (t.encoding || '').toUpperCase() === 'UTF-8'
+        ? `<span class="small">${MC._escHtml(t.encoding)}</span>`
+        : `<span class="badge badge-amber">${MC._escHtml(t.encoding || '—')}</span>`;
+      const rowCls = t.is_active ? '' : 'text-muted';
+      const modified = t.last_modified_date ? MC._fmtTime(t.last_modified_date) : '—';
+      return `<tr class="${rowCls}">
+        <td class="small text-muted">${MC._escHtml(t.folder_name)}</td>
+        <td class="small fw-semibold">${MC._escHtml(t.name)}</td>
+        <td class="small">${MC._escHtml(t.subject)}</td>
+        <td>${encodingCell}</td>
+        <td>${activeBadge}</td>
+        <td class="small text-muted">${modified}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  _filterEmailTemplates(query) {
+    if (!query) {
+      this._renderEmailTemplatesTable(this._emailTemplates);
+      return;
+    }
+    const filtered = this._emailTemplates.filter(t =>
+      (t.name || '').toLowerCase().includes(query) ||
+      (t.folder_name || '').toLowerCase().includes(query) ||
+      (t.subject || '').toLowerCase().includes(query)
+    );
+    this._renderEmailTemplatesTable(filtered);
   },
 };

@@ -72,6 +72,20 @@
         Platform Events
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-record-types-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-record-types" type="button" role="tab"
+              aria-controls="tab-record-types" aria-selected="false">
+        Record Types
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-email-templates-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-email-templates" type="button" role="tab"
+              aria-controls="tab-email-templates" aria-selected="false">
+        Email Templates
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -541,6 +555,87 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ── Record Types ───────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-record-types" role="tabpanel" aria-labelledby="tab-record-types-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          RecordType objects from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Record Types"
+                data-bs-content="Queries RecordType for all objects. Record counts (where shown) use GROUP BY RecordTypeId on Account/Opportunity/Case. Inactive record types are grayed out.">ⓘ</span>
+        </small>
+        <button id="btnRefreshRecordTypes" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="recordTypesLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading record types…</p>
+      </div>
+      <div id="recordTypesEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No record types found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="recordTypesCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>SObject</th>
+                <th>Name</th>
+                <th>Developer Name</th>
+                <th>Active</th>
+                <th class="text-end">Count</th>
+              </tr>
+            </thead>
+            <tbody id="recordTypesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Email Templates ────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-email-templates" role="tabpanel" aria-labelledby="tab-email-templates-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          EmailTemplate records from the active org (LIMIT 200)
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Email Templates"
+                data-bs-content="Queries EmailTemplate (LIMIT 200) sorted by folder. Inactive templates are grayed out. Encoding other than UTF-8 may need review before migration.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2">
+          <input id="emailTemplateSearch" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by name, folder, or subject…" style="width:260px">
+          <button id="btnRefreshEmailTemplates" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <div id="emailTemplatesLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading email templates…</p>
+      </div>
+      <div id="emailTemplatesEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No email templates found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="emailTemplatesCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Folder</th>
+                <th>Name</th>
+                <th>Subject</th>
+                <th>Encoding</th>
+                <th>Active</th>
+                <th>Last Modified</th>
+              </tr>
+            </thead>
+            <tbody id="emailTemplatesTbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 

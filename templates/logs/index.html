@@ -12,6 +12,9 @@
       <li class="nav-item">
         <a class="nav-link" href="#" id="tabFlowErrors" data-tab="flows">Flow Errors</a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" id="tabCpuSummary" data-tab="cpu">CPU Summary</a>
+      </li>
     </ul>
   </div>
 </nav>
@@ -172,6 +175,55 @@
       </div>
       <div id="streamFeed" class="d-none p-3 font-monospace small" style="max-height:300px;overflow-y:auto;background:#1e1e1e;color:#d4d4d4;">
         <!-- Live events will appear here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CPU Summary panel ─────────────────────────────────────────────── -->
+  <div id="panelCpuSummary" class="d-none">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Apex Execution Summary
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Apex Execution Summary"
+                data-bs-content="Shows DurationMilliseconds from the ApexLog metadata for the 20 most recent logs — no log body download needed. Logs &gt;5s are highlighted amber; non-Success status highlighted red. Use to quickly spot slow transactions without downloading full log bodies.">ⓘ</span>
+        </h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <button id="btnRefreshCpuSummary" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-body p-0">
+        <div id="cpuLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching Apex execution summary…</p>
+        </div>
+
+        <div id="cpuEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-0">No Apex log data found.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="cpuTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>User</th>
+                <th>Operation</th>
+                <th>Duration (ms)</th>
+                <th>Log Size</th>
+                <th>Status</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cpuSummaryTbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
