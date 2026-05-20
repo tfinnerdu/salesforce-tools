@@ -37,9 +37,20 @@ MC.observe = {
       this.loadCrossOrg(orgs);
     });
 
+    document.getElementById('btnRefreshRecordCounts')?.addEventListener('click', () => {
+      const org = document.getElementById('recordCountsOrgSelect')?.value || MC.activeOrg();
+      this.loadRecordCounts(org);
+    });
+
+    document.getElementById('recordCountsOrgSelect')?.addEventListener('change', () => {
+      const org = document.getElementById('recordCountsOrgSelect')?.value || MC.activeOrg();
+      this.loadRecordCounts(org);
+    });
+
     // Auto-load on page open
     this.loadLimits(MC.activeOrg());
     this.loadTrends(MC.activeOrg(), 30);
+    this.loadRecordCounts(MC.activeOrg());
   },
 
   async loadLimits(org) {
@@ -274,6 +285,57 @@ MC.observe = {
       </tr>`;
     }).join('');
 
+    if (tableWrap) tableWrap.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+  },
+
+  async loadRecordCounts(org) {
+    const loadingEl = document.getElementById('recordCountsLoading');
+    const emptyEl = document.getElementById('recordCountsEmpty');
+    const tableWrap = document.getElementById('recordCountsTableWrap');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (tableWrap) tableWrap.classList.add('d-none');
+    try {
+      const data = await MC.api(`/observe/record-counts?org=${encodeURIComponent(org)}`);
+      this.renderRecordCounts(data || []);
+    } catch (err) {
+      MC.showToast(`Failed to load record counts: ${err.message}`, 'danger');
+      if (emptyEl) {
+        emptyEl.textContent = `Failed to load record counts: ${err.message}`;
+        emptyEl.classList.remove('d-none');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('d-none');
+    }
+  },
+
+  renderRecordCounts(rows) {
+    const tbody = document.getElementById('recordCountsBody');
+    const tableWrap = document.getElementById('recordCountsTableWrap');
+    const emptyEl = document.getElementById('recordCountsEmpty');
+    if (!tbody) return;
+    if (!rows || rows.length === 0) {
+      if (emptyEl) {
+        emptyEl.textContent = 'No record count data returned.';
+        emptyEl.classList.remove('d-none');
+      }
+      return;
+    }
+    tbody.innerHTML = rows.map(row => {
+      const countFmt = row.count != null
+        ? row.count.toLocaleString()
+        : `<span class="text-danger small" title="${MC._escHtml(row.error || '')}">error</span>`;
+      const sfUrl = MC.sfUrl(null, row.object);
+      const actionCell = sfUrl
+        ? `<a href="${sfUrl}" target="_blank" rel="noopener" class="btn btn-link btn-sm p-0 small">SOQL &#8599;</a>`
+        : `<a href="/soql?object=${encodeURIComponent(row.object)}" class="btn btn-link btn-sm p-0 small text-muted">SOQL</a>`;
+      return `<tr>
+        <td class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(row.label)}</td>
+        <td class="text-end font-monospace">${countFmt}</td>
+        <td class="text-center no-print">${actionCell}</td>
+      </tr>`;
+    }).join('');
     if (tableWrap) tableWrap.classList.remove('d-none');
     if (emptyEl) emptyEl.classList.add('d-none');
   },

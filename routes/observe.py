@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, render_template, request, session
 
-from services import org_observer
+from services import org_observer, storage_breakdown
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,17 @@ def api_trends():
         return jsonify({'success': True, 'data': data})
     except Exception as exc:
         logger.exception('get_quality_trends failed for org %s', org)
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@observe_bp.route('/record-counts')
+def api_record_counts():
+    org = request.args.get('org') or session.get('active_org', 'dev')
+    try:
+        data = storage_breakdown.get_record_counts(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('get_record_counts failed for org %s', org)
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 

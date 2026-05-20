@@ -151,6 +151,54 @@
     </div>
   </div>
 
+  <!-- ── Section 4: Record Counts by Object ─────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Record Counts by Object
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Record Counts by Object"
+              data-bs-content="COUNT() queries run one per object type to give a live record count snapshot. Useful for validating sandbox refresh completeness and tracking migration volume.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <select id="recordCountsOrgSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
+          <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
+          <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+        </select>
+        <button id="btnRefreshRecordCounts" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="recordCountsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Querying record counts…</p>
+      </div>
+      <div id="recordCountsEmpty" class="text-center py-4 text-muted">
+        <p class="mb-1">No record counts loaded yet.</p>
+        <p class="small">Select an org and click <strong>Refresh</strong>.</p>
+      </div>
+      <div id="recordCountsTableWrap" class="d-none">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0" id="recordCountsTable">
+            <thead>
+              <tr>
+                <th>Object</th>
+                <th class="text-end">Count</th>
+                <th class="no-print" style="width:60px;"></th>
+              </tr>
+            </thead>
+            <tbody id="recordCountsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 

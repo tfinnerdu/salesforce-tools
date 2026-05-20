@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
-from services import duplicate_radar, external_id_coverage, contactpoint_scanner
+from services import duplicate_radar, external_id_coverage, contactpoint_scanner, field_completeness
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,11 @@ def external_ids():
 @validation_bp.route('/contactpoints')
 def contactpoints():
     return render_template('validation/contactpoint.html')
+
+
+@validation_bp.route('/completeness')
+def completeness():
+    return render_template('validation/field_completeness.html')
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -82,4 +87,15 @@ def api_contactpoints_scan():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('contactpoint scan failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@validation_bp.route('/completeness/run', methods=['GET'])
+def api_completeness_run():
+    org = session.get('active_org', 'dev')
+    try:
+        result = field_completeness.run(org=org)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('field completeness run failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
