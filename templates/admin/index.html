@@ -65,6 +65,13 @@
         Integrations
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-platform-events-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-platform-events" type="button" role="tab"
+              aria-controls="tab-platform-events" aria-selected="false">
+        Platform Events
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -451,6 +458,84 @@
                   </tr>
                 </thead>
                 <tbody id="connectedAppsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Platform Events ──────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-platform-events" role="tabpanel" aria-labelledby="tab-platform-events-btn">
+      <div class="row g-3 mt-1">
+
+        <!-- Platform Event Channels -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Platform Event Channels
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Platform Event Channels"
+                      data-bs-content="Platform Events are schema-defined Salesforce events used for real-time integration. Queried via Tooling API: SELECT DeveloperName, MasterLabel, Description FROM PlatformEventChannel. These are the event types your org has defined.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm" id="btnRefreshPlatformEvents">&#8635; Refresh</button>
+            </div>
+            <div id="eventChannelsLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading platform event channels…</p>
+            </div>
+            <div id="eventChannelsEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No platform event channels found.</p>
+            </div>
+            <div class="card-body p-0" id="eventChannelsCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Label</th>
+                    <th>API Name</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody id="eventChannelsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscriptions (Channel Members) -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Subscriptions (Channel Members)
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Subscriptions (Channel Members)"
+                      data-bs-content="PlatformEventChannelMember records show which Flows, Apex Triggers, or Process Builders are subscribed to each Platform Event. Missing subscriptions mean events are published but nobody is listening.">ⓘ</span>
+              </h6>
+            </div>
+            <div id="eventMembersLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading subscriptions…</p>
+            </div>
+            <div id="eventMembersEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No channel subscriptions found.</p>
+            </div>
+            <div class="card-body p-0" id="eventMembersCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Channel</th>
+                    <th>Subscriber Type</th>
+                  </tr>
+                </thead>
+                <tbody id="eventMembersTbody"></tbody>
               </table>
             </div>
           </div>

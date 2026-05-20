@@ -41,6 +41,12 @@ MC.admin = {
     document.getElementById('tab-integrations-btn')?.addEventListener('shown.bs.tab', () => {
       this.loadIntegrations();
     });
+    document.getElementById('tab-platform-events-btn')?.addEventListener('shown.bs.tab', () => {
+      this.loadPlatformEvents();
+    });
+    document.getElementById('btnRefreshPlatformEvents')?.addEventListener('click', () => {
+      this.loadPlatformEvents();
+    });
 
     // Wire all Refresh buttons inside the integrations tab
     document.querySelectorAll('.integ-refresh-btn').forEach(btn => {
@@ -495,5 +501,80 @@ MC.admin = {
     }).join('');
     empty?.classList.add('d-none');
     body?.classList.remove('d-none');
+  },
+
+  // ── Platform Events ─────────────────────────────────────────────────────────
+
+  async loadPlatformEvents() {
+    ['eventChannels', 'eventMembers'].forEach(key => {
+      document.getElementById(`${key}Loading`)?.classList.remove('d-none');
+      document.getElementById(`${key}Empty`)?.classList.add('d-none');
+      document.getElementById(`${key}CardBody`)?.classList.add('d-none');
+    });
+    try {
+      const data = await MC.api('/admin/platform-events');
+      this._renderEventChannels(data.events || []);
+      this._renderEventMembers(data.members || []);
+    } catch (err) {
+      MC.showToast(`Failed to load platform events: ${err.message}`, 'danger');
+      ['eventChannels', 'eventMembers'].forEach(key => {
+        document.getElementById(`${key}Empty`)?.classList.remove('d-none');
+      });
+    } finally {
+      ['eventChannels', 'eventMembers'].forEach(key => {
+        document.getElementById(`${key}Loading`)?.classList.add('d-none');
+      });
+    }
+  },
+
+  _renderEventChannels(items) {
+    const tbody = document.getElementById('eventChannelsTbody');
+    const empty = document.getElementById('eventChannelsEmpty');
+    const body  = document.getElementById('eventChannelsCardBody');
+    if (!tbody) return;
+    if (!items.length) {
+      empty?.classList.remove('d-none');
+      body?.classList.add('d-none');
+      return;
+    }
+    tbody.innerHTML = items.map(ev => `<tr>
+      <td class="fw-semibold small">${MC._escHtml(ev.label)}</td>
+      <td class="small font-monospace">${MC._escHtml(ev.developer_name)}</td>
+      <td class="small text-muted">${MC._escHtml(ev.description || '—')}</td>
+    </tr>`).join('');
+    empty?.classList.add('d-none');
+    body?.classList.remove('d-none');
+  },
+
+  _renderEventMembers(items) {
+    const tbody = document.getElementById('eventMembersTbody');
+    const empty = document.getElementById('eventMembersEmpty');
+    const body  = document.getElementById('eventMembersCardBody');
+    if (!tbody) return;
+    if (!items.length) {
+      empty?.classList.remove('d-none');
+      body?.classList.add('d-none');
+      return;
+    }
+    tbody.innerHTML = items.map(m => {
+      const typeBadge = this._eventTypeBadge(m.type);
+      return `<tr>
+        <td class="fw-semibold small font-monospace">${MC._escHtml(m.developer_name)}</td>
+        <td class="small font-monospace">${MC._escHtml(m.channel)}</td>
+        <td>${typeBadge}</td>
+      </tr>`;
+    }).join('');
+    empty?.classList.add('d-none');
+    body?.classList.remove('d-none');
+  },
+
+  _eventTypeBadge(type) {
+    const t = (type || '').trim();
+    const cls =
+      t === 'Flow'          ? 'badge-navy'  :
+      t === 'ApexTrigger'   ? 'badge-blue'  :
+      t === 'WorkflowAlert' ? 'badge-amber' :
+      'badge-secondary';
+    return `<span class="badge ${cls}">${MC._escHtml(t || '—')}</span>`;
   },
 };

@@ -75,6 +75,18 @@ def api_integrations():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/platform-events')
+def api_platform_events():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import platform_events
+        data = platform_events.get_all(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('platform events failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:
