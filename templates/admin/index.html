@@ -107,6 +107,20 @@
         Login History
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-custom-metadata" data-bs-toggle="tab"
+              data-bs-target="#panel-custom-metadata" type="button" role="tab"
+              aria-controls="panel-custom-metadata" aria-selected="false">
+        Custom Metadata
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-custom-settings" data-bs-toggle="tab"
+              data-bs-target="#panel-custom-settings" type="button" role="tab"
+              aria-controls="panel-custom-settings" aria-selected="false">
+        Custom Settings
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -819,6 +833,105 @@
             </thead>
             <tbody id="loginHistoryTbody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Custom Metadata ──────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-custom-metadata" role="tabpanel" aria-labelledby="tab-custom-metadata">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          Custom Metadata Types from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Custom Metadata Types"
+                data-bs-content="Lists Custom Metadata Types (suffix __mdt) via the Tooling API. Click a type on the left to browse its records on the right.">ⓘ</span>
+        </small>
+        <button id="btnRefreshCmdts" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="cmdtsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading Custom Metadata Types…</p>
+      </div>
+      <div id="cmdtsEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No Custom Metadata Types found.</p>
+      </div>
+      <div class="row g-3" id="cmdtsContent">
+        <!-- Left: types list -->
+        <div class="col-md-4">
+          <div class="list-group" id="cmdtTypesList"></div>
+        </div>
+        <!-- Right: records table -->
+        <div class="col-md-8 d-none" id="cmdtRecordsWrap">
+          <div class="card shadow-sm">
+            <div class="card-header py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Records — <span id="cmdtSelectedType" class="font-monospace"></span>
+              </h6>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Developer Name</th>
+                    <th>Label</th>
+                  </tr>
+                </thead>
+                <tbody id="cmdtRecordsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Custom Settings ───────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-custom-settings" role="tabpanel" aria-labelledby="tab-custom-settings">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          Custom Settings from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Custom Settings"
+                data-bs-content="Lists Custom Settings (Hierarchy and List type, suffix __c) via the Tooling API. Click a setting on the left to browse its records on the right. Owner Type indicates whether the record is the org default, a profile override, or a user override.">ⓘ</span>
+        </small>
+        <button id="btnRefreshCs" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="csLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading Custom Settings…</p>
+      </div>
+      <div id="csEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No Custom Settings found.</p>
+      </div>
+      <div class="row g-3" id="csContent">
+        <!-- Left: settings list -->
+        <div class="col-md-4">
+          <div class="list-group" id="csTypesList"></div>
+        </div>
+        <!-- Right: records table -->
+        <div class="col-md-8 d-none" id="csRecordsWrap">
+          <div class="card shadow-sm">
+            <div class="card-header py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Records — <span id="csSelectedType" class="font-monospace"></span>
+              </h6>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>SetupOwner ID</th>
+                    <th>Owner Type</th>
+                  </tr>
+                </thead>
+                <tbody id="csRecordsTbody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>

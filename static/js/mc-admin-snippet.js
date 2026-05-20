@@ -69,6 +69,9 @@ MC.admin = {
     document.getElementById('tab-login-history-btn')?.addEventListener('shown.bs.tab', () => this.loadLoginHistory());
     document.getElementById('btnRefreshJobQueue')?.addEventListener('click', () => this.loadJobQueue());
     document.getElementById('btnRefreshLoginHistory')?.addEventListener('click', () => this.loadLoginHistory());
+
+    MC.customMetadata.init();
+    MC.customSettings.init();
     document.getElementById('loginHistorySearch')?.addEventListener('input', e => this._filterTable('loginHistoryTbody', e.target.value));
     document.getElementById('jobQueueAutoRefresh')?.addEventListener('change', e => this._setJobQueueAutoRefresh(e.target.checked));
 
@@ -1001,5 +1004,178 @@ MC.admin = {
       const text = row.textContent.toLowerCase();
       row.classList.toggle('d-none', !!(q && !text.includes(q)));
     });
+  },
+};
+
+// ── Custom Metadata ───────────────────────────────────────────────────────────
+
+MC.customMetadata = {
+  _loaded: false,
+
+  init() {
+    document.getElementById('btnRefreshCmdts')?.addEventListener('click', () => {
+      this._loaded = false;
+      this.load();
+    });
+    document.getElementById('tab-custom-metadata')?.addEventListener('shown.bs.tab', () => {
+      if (!this._loaded) this.load();
+    });
+  },
+
+  async load() {
+    const loading = document.getElementById('cmdtsLoading');
+    const empty   = document.getElementById('cmdtsEmpty');
+    const content = document.getElementById('cmdtsContent');
+    const list    = document.getElementById('cmdtTypesList');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    if (content) content.style.display = 'none';
+    document.getElementById('cmdtRecordsWrap')?.classList.add('d-none');
+    try {
+      const types = await MC.api('/admin/custom-metadata');
+      if (!types || types.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      if (list) {
+        list.innerHTML = types.map(t => {
+          const name = MC._escHtml(t.QualifiedApiName || t.DeveloperName || '');
+          const label = MC._escHtml(t.Label || name);
+          return `<button type="button"
+                          class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                          data-cmdt-name="${name}">
+            <span class="fw-semibold small font-monospace">${name}</span>
+            <span class="text-muted small">${label}</span>
+          </button>`;
+        }).join('');
+        list.querySelectorAll('[data-cmdt-name]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            list.querySelectorAll('[data-cmdt-name]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            this.loadRecords(btn.dataset.cmdtName);
+          });
+        });
+      }
+      if (content) content.style.display = '';
+      this._loaded = true;
+    } catch (err) {
+      MC.showToast(`Failed to load Custom Metadata Types: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  async loadRecords(typeName) {
+    const wrap  = document.getElementById('cmdtRecordsWrap');
+    const tbody = document.getElementById('cmdtRecordsTbody');
+    const label = document.getElementById('cmdtSelectedType');
+    if (label) label.textContent = typeName;
+    wrap?.classList.remove('d-none');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="text-muted small text-center py-3">Loading…</td></tr>';
+    try {
+      const records = await MC.api(`/admin/custom-metadata/${encodeURIComponent(typeName)}/records`);
+      if (!records || records.length === 0) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="text-muted small text-center py-3">No records found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = records.map(r => `<tr>
+        <td class="small font-monospace">${MC._escHtml(r.DeveloperName || '—')}</td>
+        <td class="small">${MC._escHtml(r.Label || r.MasterLabel || '—')}</td>
+      </tr>`).join('');
+    } catch (err) {
+      MC.showToast(`Failed to load records for ${typeName}: ${err.message}`, 'danger');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="text-danger small text-center py-3">Error loading records.</td></tr>';
+    }
+  },
+};
+
+// ── Custom Settings ───────────────────────────────────────────────────────────
+
+MC.customSettings = {
+  _loaded: false,
+
+  init() {
+    document.getElementById('btnRefreshCs')?.addEventListener('click', () => {
+      this._loaded = false;
+      this.load();
+    });
+    document.getElementById('tab-custom-settings')?.addEventListener('shown.bs.tab', () => {
+      if (!this._loaded) this.load();
+    });
+  },
+
+  async load() {
+    const loading = document.getElementById('csLoading');
+    const empty   = document.getElementById('csEmpty');
+    const content = document.getElementById('csContent');
+    const list    = document.getElementById('csTypesList');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    if (content) content.style.display = 'none';
+    document.getElementById('csRecordsWrap')?.classList.add('d-none');
+    try {
+      const settings = await MC.api('/admin/custom-settings');
+      if (!settings || settings.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      if (list) {
+        list.innerHTML = settings.map(s => {
+          const name  = MC._escHtml(s.QualifiedApiName || '');
+          const label = MC._escHtml(s.Label || name);
+          return `<button type="button"
+                          class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                          data-cs-name="${name}">
+            <span class="fw-semibold small font-monospace">${name}</span>
+            <span class="text-muted small">${label}</span>
+          </button>`;
+        }).join('');
+        list.querySelectorAll('[data-cs-name]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            list.querySelectorAll('[data-cs-name]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            this.loadRecords(btn.dataset.csName);
+          });
+        });
+      }
+      if (content) content.style.display = '';
+      this._loaded = true;
+    } catch (err) {
+      MC.showToast(`Failed to load Custom Settings: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  async loadRecords(settingName) {
+    const wrap  = document.getElementById('csRecordsWrap');
+    const tbody = document.getElementById('csRecordsTbody');
+    const label = document.getElementById('csSelectedType');
+    if (label) label.textContent = settingName;
+    wrap?.classList.remove('d-none');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-muted small text-center py-3">Loading…</td></tr>';
+    try {
+      const records = await MC.api(`/admin/custom-settings/${encodeURIComponent(settingName)}/records`);
+      if (!records || records.length === 0) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-muted small text-center py-3">No records found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = records.map(r => {
+        const ownerBadgeCls =
+          r._owner_type === 'Org'     ? 'badge-navy'  :
+          r._owner_type === 'Profile' ? 'badge-blue'  :
+          'badge-secondary';
+        return `<tr>
+          <td class="small fw-semibold">${MC._escHtml(r.Name || '—')}</td>
+          <td class="small font-monospace text-muted">${MC._escHtml(r.SetupOwnerId || '—')}</td>
+          <td><span class="badge ${ownerBadgeCls}">${MC._escHtml(r._owner_type || '—')}</span></td>
+        </tr>`;
+      }).join('');
+    } catch (err) {
+      MC.showToast(`Failed to load records for ${settingName}: ${err.message}`, 'danger');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-danger small text-center py-3">Error loading records.</td></tr>';
+    }
   },
 };

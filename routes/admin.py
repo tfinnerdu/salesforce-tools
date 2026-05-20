@@ -147,6 +147,54 @@ def api_login_history():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/custom-metadata')
+def api_custom_metadata_types():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import custom_config_viewer
+        data = custom_config_viewer.get_custom_metadata_types(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('custom metadata types failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/custom-metadata/<type_name>/records')
+def api_custom_metadata_records(type_name):
+    org = session.get('active_org', 'dev')
+    try:
+        from services import custom_config_viewer
+        data = custom_config_viewer.get_custom_metadata_records(org, type_name)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('custom metadata records failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/custom-settings')
+def api_custom_settings():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import custom_config_viewer
+        data = custom_config_viewer.get_custom_settings(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('custom settings failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/custom-settings/<setting_name>/records')
+def api_custom_setting_records(setting_name):
+    org = session.get('active_org', 'dev')
+    try:
+        from services import custom_config_viewer
+        data = custom_config_viewer.get_custom_setting_records(org, setting_name)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('custom setting records failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:
