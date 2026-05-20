@@ -1940,8 +1940,11 @@ MC.sfLinkHtml = (recordId, objectType = 'Account', label = null) => {
              title="Open in Salesforce">${display} &#8599;</a>`;
 };
 
-/** Return true when running in mock mode. */
+/** Return true when Salesforce is in mock mode. */
 MC.isMock = () => document.querySelector('meta[name="sf-mock"]')?.content === 'true';
+
+/** Return true when Conductor is in mock mode. */
+MC.isConductorMock = () => document.querySelector('meta[name="conductor-mock"]')?.content === 'true';
 
 // ── Popover / Tooltip init ────────────────────────────────────────────────────
 
@@ -1957,29 +1960,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Mock-mode visual indicators ───────────────────────────────────────────────
 
+function _mcMakeChip(text, title) {
+  const chip = document.createElement('span');
+  chip.className = 'mc-mock-chip ms-2';
+  chip.title = title;
+  chip.textContent = text;
+  return chip;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  if (!MC.isMock()) return;
+  const sfMock = MC.isMock();
+  const condMock = MC.isConductorMock();
+  if (!sfMock && !condMock) return;
 
-  // Inject "MOCK DATA" chip into every card-header h5
   document.querySelectorAll('.card-header h5').forEach(h5 => {
-    const chip = document.createElement('span');
-    chip.className = 'mc-mock-chip ms-2';
-    chip.title = 'SF_MOCK=true — this data is synthetic';
-    h5.appendChild(chip);
-  });
-
-  // Disable write-action buttons tagged with data-mock-disable
-  document.querySelectorAll('[data-mock-disable]').forEach(btn => {
-    btn.classList.add('mc-mock-btn-disabled');
-    btn.setAttribute('disabled', 'disabled');
-    const original = btn.getAttribute('data-mock-disable') || 'Not available in mock mode';
-    btn.setAttribute('title', original);
-    btn.setAttribute('data-bs-toggle', 'tooltip');
-    btn.setAttribute('data-bs-placement', 'top');
-    if (typeof bootstrap !== 'undefined') {
-      new bootstrap.Tooltip(btn);
+    const card = h5.closest('[data-conductor-card]');
+    if (card) {
+      // Conductor-driven card: show conductor chip if conductor is mocked
+      if (condMock) {
+        h5.appendChild(_mcMakeChip('COND MOCK', 'CONDUCTOR_MOCK=true — workflow/batch data is synthetic'));
+      }
+    } else {
+      // SF-driven card: show SF chip if SF is mocked
+      if (sfMock) {
+        h5.appendChild(_mcMakeChip('MOCK DATA', 'SF_MOCK=true — Salesforce data is synthetic'));
+      }
     }
   });
+
+  // Disable write-action buttons (SF writes only — conductor buttons handled separately)
+  if (sfMock) {
+    document.querySelectorAll('[data-mock-disable]').forEach(btn => {
+      btn.classList.add('mc-mock-btn-disabled');
+      btn.setAttribute('disabled', 'disabled');
+      const msg = btn.getAttribute('data-mock-disable') || 'Not available in mock mode';
+      btn.setAttribute('title', msg);
+      btn.setAttribute('data-bs-toggle', 'tooltip');
+      btn.setAttribute('data-bs-placement', 'top');
+      if (typeof bootstrap !== 'undefined') new bootstrap.Tooltip(btn);
+    });
+  }
 });
 
 'use strict';

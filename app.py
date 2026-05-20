@@ -51,6 +51,7 @@ def create_app() -> Flask:
         active_org = session.get('active_org', 'dev')
         return {
             'sf_mock_mode': Config.SF_MOCK,
+            'conductor_mock_mode': Config.CONDUCTOR_MOCK,
             'sf_instance': session.get(f'sf_instance_{active_org}', ''),
         }
 
