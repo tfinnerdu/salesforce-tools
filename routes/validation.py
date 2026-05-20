@@ -115,3 +115,32 @@ def api_orphans_scan():
     except Exception as exc:
         logger.exception('orphan scan failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@validation_bp.route('/merge-history')
+def merge_history_page():
+    return render_template('validation/merge_history.html')
+
+
+@validation_bp.route('/merge-history/list', methods=['GET'])
+def api_merge_history():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import merge_history
+        data = merge_history.list_merges(org=org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('merge history failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@validation_bp.route('/merge-history/stats', methods=['GET'])
+def api_merge_stats():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import merge_history
+        data = merge_history.get_stats(org=org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('merge stats failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

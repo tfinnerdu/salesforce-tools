@@ -8,6 +8,7 @@ MC.validation = {
     if (document.getElementById('btnRunOrphanScan')) {
       this.initOrphans();
     }
+    if (document.getElementById('btnRefreshMergeHistory')) this.initMergeHistory();
   },
 
   initOrphans() {
@@ -118,6 +119,86 @@ MC.validation = {
     }).join('');
 
     resultsEl.innerHTML = cards;
+  },
+
+  initMergeHistory() {
+    this.loadMergeHistory();
+    this.loadMergeStats();
+    document.getElementById('btnRefreshMergeHistory')?.addEventListener('click', () => {
+      this.loadMergeHistory(); this.loadMergeStats();
+    });
+  },
+
+  async loadMergeStats() {
+    try {
+      const data = await MC.api('/validation/merge-history/stats');
+      if (!data) return;
+      const statTotal = document.getElementById('statTotal');
+      const statSuccessful = document.getElementById('statSuccessful');
+      const statFailed = document.getElementById('statFailed');
+      const statBypass = document.getElementById('statBypass');
+      if (statTotal) statTotal.textContent = (data.total_merges ?? '—').toLocaleString();
+      if (statSuccessful) statSuccessful.textContent = (data.successful ?? '—').toLocaleString();
+      if (statFailed) statFailed.textContent = (data.failed ?? '—').toLocaleString();
+      if (statBypass) statBypass.textContent = (data.bypass_used_count ?? '—').toLocaleString();
+    } catch (err) {
+      MC.showToast(`Could not load merge stats: ${err.message}`, 'warning');
+    }
+  },
+
+  async loadMergeHistory() {
+    const loadingEl = document.getElementById('mergeHistoryLoading');
+    const emptyEl = document.getElementById('mergeHistoryEmpty');
+    const tableWrap = document.getElementById('mergeHistoryTableWrap');
+    const tbody = document.getElementById('mergeHistoryTbody');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (tableWrap) tableWrap.classList.add('d-none');
+    try {
+      const rows = await MC.api('/validation/merge-history/list');
+      if (!rows || rows.length === 0) {
+        if (emptyEl) emptyEl.classList.remove('d-none');
+        return;
+      }
+      if (tbody) {
+        tbody.innerHTML = rows.map((m, i) => this._renderMergeRow(m, i + 1)).join('');
+      }
+      if (tableWrap) tableWrap.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load merge history: ${err.message}`, 'danger');
+      if (emptyEl) {
+        emptyEl.textContent = `Load failed: ${err.message}`;
+        emptyEl.classList.remove('d-none');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('d-none');
+    }
+  },
+
+  _renderMergeRow(m, idx) {
+    const isError = m.status === 'error';
+    const rowCls = isError ? ' class="table-danger"' : '';
+    const statusBadge = isError
+      ? '<span class="badge badge-red">ERROR</span>'
+      : '<span class="badge badge-green">SUCCESS</span>';
+    const bypassBadge = m.bypass_used
+      ? '<span class="badge badge-amber">YES</span>'
+      : '<span class="badge" style="background:#6c757d;color:#fff;">NO</span>';
+    const errorTitle = isError && m.error_msg
+      ? ` title="${MC._escHtml(m.error_msg)}"` : '';
+    const dateStr = m.merged_at
+      ? new Date(m.merged_at).toLocaleString()
+      : '—';
+    const masterLink = MC.sfLinkHtml ? MC.sfLinkHtml(m.master_id, 'Account') : MC._escHtml(m.master_id);
+    const victimLink = MC.sfLinkHtml ? MC.sfLinkHtml(m.victim_id, 'Account') : MC._escHtml(m.victim_id);
+    return `<tr${rowCls}${errorTitle}>
+      <td class="small text-muted">${idx}</td>
+      <td class="small">${MC._escHtml(dateStr)}</td>
+      <td class="small font-monospace">${masterLink}</td>
+      <td class="small font-monospace">${victimLink}</td>
+      <td>${bypassBadge}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
   },
 
   async runCompleteness() {
