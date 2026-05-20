@@ -1973,22 +1973,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const condMock = MC.isConductorMock();
   if (!sfMock && !condMock) return;
 
-  document.querySelectorAll('.card-header h5').forEach(h5 => {
-    const card = h5.closest('[data-conductor-card]');
-    if (card) {
-      // Conductor-driven card: show conductor chip if conductor is mocked
-      if (condMock) {
-        h5.appendChild(_mcMakeChip('COND MOCK', 'CONDUCTOR_MOCK=true — workflow/batch data is synthetic'));
-      }
-    } else {
-      // SF-driven card: show SF chip if SF is mocked
-      if (sfMock) {
+  // SF mock: chip on every card-header h5 that is NOT inside a conductor card
+  if (sfMock) {
+    document.querySelectorAll('.card-header h5').forEach(h5 => {
+      if (!h5.closest('[data-conductor-card]')) {
         h5.appendChild(_mcMakeChip('MOCK DATA', 'SF_MOCK=true — Salesforce data is synthetic'));
       }
-    }
-  });
+    });
+  }
 
-  // Disable write-action buttons (SF writes only — conductor buttons handled separately)
+  // Conductor mock: chip on the page title when this page has conductor-driven sections
+  if (condMock && document.querySelector('[data-conductor-card]')) {
+    const pageTitle = document.querySelector('.mc-page-title');
+    if (pageTitle) {
+      pageTitle.appendChild(_mcMakeChip('COND MOCK', 'CONDUCTOR_MOCK=true — workflow/batch data is synthetic'));
+    }
+  }
+
+  // Disable write-action buttons (SF writes only)
   if (sfMock) {
     document.querySelectorAll('[data-mock-disable]').forEach(btn => {
       btn.classList.add('mc-mock-btn-disabled');
