@@ -64,6 +64,22 @@ MC.admin = {
     document.getElementById('btnRefreshAuditTrail')?.addEventListener('click', () => this.loadAuditTrail());
     document.getElementById('auditTrailSearch')?.addEventListener('input', e => this._filterAuditTrail(e.target.value));
     document.getElementById('auditTrailDays')?.addEventListener('change', () => this.loadAuditTrail());
+
+    document.getElementById('tab-job-queue-btn')?.addEventListener('shown.bs.tab', () => this.loadJobQueue());
+    document.getElementById('tab-login-history-btn')?.addEventListener('shown.bs.tab', () => this.loadLoginHistory());
+    document.getElementById('btnRefreshJobQueue')?.addEventListener('click', () => this.loadJobQueue());
+    document.getElementById('btnRefreshLoginHistory')?.addEventListener('click', () => this.loadLoginHistory());
+    document.getElementById('loginHistorySearch')?.addEventListener('input', e => this._filterTable('loginHistoryTbody', e.target.value));
+    document.getElementById('jobQueueAutoRefresh')?.addEventListener('change', e => this._setJobQueueAutoRefresh(e.target.checked));
+
+    // Status filter pills for job queue
+    document.getElementById('jobQueueFilters')?.addEventListener('click', e => {
+      const btn = e.target.closest('[data-jq-filter]');
+      if (!btn) return;
+      document.querySelectorAll('#jobQueueFilters [data-jq-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      this._applyJobQueueFilter(btn.dataset.jqFilter);
+    });
   },
 
   // ── Scheduled Jobs ──────────────────────────────────────────────────────────
@@ -795,5 +811,195 @@ MC.admin = {
     } catch (e) {
       return isoStr;
     }
+  },
+
+  // ── Job Queue ───────────────────────────────────────────────────────────────
+
+  _jobQueueTimer: null,
+  _jobQueueData: [],
+
+  async loadJobQueue() {
+    const loading = document.getElementById('jobQueueLoading');
+    const empty   = document.getElementById('jobQueueEmpty');
+    const card    = document.getElementById('jobQueueCard');
+    const summary = document.getElementById('jobQueueSummary');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    summary?.classList.add('d-none');
+    try {
+      const data = await MC.api('/admin/job-queue');
+      this._jobQueueData = data || [];
+      if (this._jobQueueData.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderJobQueue(this._jobQueueData);
+      card?.classList.remove('d-none');
+      summary?.classList.remove('d-none');
+      this._updateJobQueueSummary(this._jobQueueData);
+    } catch (err) {
+      MC.showToast(`Failed to load job queue: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderJobQueue(jobs) {
+    const tbody = document.getElementById('jobQueueTbody');
+    if (!tbody) return;
+    tbody.innerHTML = jobs.map(j => {
+      const rowCls =
+        j.status === 'Failed'     ? 'table-danger'  :
+        j.status === 'Processing' ? 'table-primary'  :
+        '';
+      const statusBadge = j.extended_status
+        ? `<span class="badge bg-${j.status_flag}" title="${MC._escHtml(j.extended_status)}">${MC._escHtml(j.status)}</span>`
+        : `<span class="badge bg-${j.status_flag}">${MC._escHtml(j.status)}</span>`;
+      const total = j.total_items || 0;
+      const processed = j.items_processed || 0;
+      const pct = total > 0 ? Math.round(processed / total * 100) : 0;
+      const progressCell = total > 0
+        ? `<div class="d-flex align-items-center gap-1">
+             <span class="small text-nowrap">${processed.toLocaleString()} / ${total.toLocaleString()}</span>
+             <div class="progress flex-grow-1" style="height:6px;min-width:60px">
+               <div class="progress-bar bg-${j.status_flag}" style="width:${pct}%"></div>
+             </div>
+           </div>`
+        : '<span class="text-muted small">—</span>';
+      const duration = this._jobDuration(j.created_date, j.completed_date, j.status);
+      return `<tr class="${rowCls}" data-status="${MC._escHtml(j.status)}">
+        <td class="fw-semibold small">${MC._escHtml(j.class_name || '—')}</td>
+        <td class="small text-muted">${MC._escHtml(j.job_type)}</td>
+        <td>${statusBadge}</td>
+        <td>${progressCell}</td>
+        <td class="text-end small ${j.errors > 0 ? 'text-danger fw-semibold' : ''}">${j.errors}</td>
+        <td class="small text-muted">${MC._escHtml(j.created_by)}</td>
+        <td class="small text-nowrap">${this._relativeDate(j.created_date)}</td>
+        <td class="small text-nowrap">${duration}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  _jobDuration(createdDate, completedDate, status) {
+    if (!createdDate) return '—';
+    try {
+      const start = new Date(createdDate);
+      const end   = completedDate ? new Date(completedDate) : new Date();
+      const secs  = Math.round((end - start) / 1000);
+      if (secs < 60)   return `${secs}s`;
+      if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+      return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
+    } catch (e) {
+      return '—';
+    }
+  },
+
+  _updateJobQueueSummary(jobs) {
+    const running = jobs.filter(j => j.status === 'Processing' || j.status === 'Preparing' || j.status === 'Queued').length;
+    const failed  = jobs.filter(j => j.status === 'Failed').length;
+    const totalEl   = document.getElementById('jqTotal');
+    const runningEl = document.getElementById('jqRunning');
+    const failedEl  = document.getElementById('jqFailed');
+    if (totalEl)   totalEl.textContent   = jobs.length;
+    if (runningEl) runningEl.textContent = running;
+    if (failedEl)  failedEl.textContent  = failed;
+  },
+
+  _applyJobQueueFilter(filter) {
+    const tbody = document.getElementById('jobQueueTbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(row => {
+      const status = row.dataset.status || '';
+      row.classList.toggle('d-none', !!(filter && status !== filter));
+    });
+  },
+
+  _setJobQueueAutoRefresh(enabled) {
+    if (this._jobQueueTimer) {
+      clearInterval(this._jobQueueTimer);
+      this._jobQueueTimer = null;
+    }
+    if (enabled) {
+      this._jobQueueTimer = setInterval(() => this.loadJobQueue(), 10000);
+    }
+  },
+
+  // ── Login History ───────────────────────────────────────────────────────────
+
+  async loadLoginHistory() {
+    const loading = document.getElementById('loginHistoryLoading');
+    const empty   = document.getElementById('loginHistoryEmpty');
+    const card    = document.getElementById('loginHistoryCard');
+    const summary = document.getElementById('loginHistorySummary');
+    const searchEl = document.getElementById('loginHistorySearch');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    summary?.classList.add('d-none');
+    if (searchEl) searchEl.value = '';
+    try {
+      const data = await MC.api('/admin/login-history');
+      const logins = data?.logins || [];
+      if (logins.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderLoginHistory(logins);
+      this._updateLoginHistorySummary(data.summary || {});
+      card?.classList.remove('d-none');
+      summary?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load login history: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderLoginHistory(logins) {
+    const tbody = document.getElementById('loginHistoryTbody');
+    if (!tbody) return;
+    tbody.innerHTML = logins.map(l => {
+      const rowCls = l.success ? '' : 'table-danger';
+      const statusCell = l.success
+        ? '<span class="badge badge-green">Success</span>'
+        : `<span class="badge badge-red">${MC._escHtml(l.status)}</span>`;
+      return `<tr class="${rowCls}">
+        <td class="small text-nowrap">${this._relativeDate(l.login_time)}</td>
+        <td class="small font-monospace">${MC._escHtml(l.source_ip)}</td>
+        <td class="small">${MC._escHtml(l.platform)}</td>
+        <td class="small">${MC._escHtml(l.login_type)}</td>
+        <td class="small text-muted">${MC._escHtml(l.browser || '—')}</td>
+        <td>${statusCell}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  _updateLoginHistorySummary(s) {
+    const totalEl  = document.getElementById('lhTotal');
+    const failedEl = document.getElementById('lhFailed');
+    const ipsEl    = document.getElementById('lhIPs');
+    const usersEl  = document.getElementById('lhUsers');
+    if (totalEl)  totalEl.textContent  = `${s.total ?? 0} total`;
+    if (failedEl) {
+      failedEl.textContent = `${s.failed ?? 0} failed`;
+      failedEl.className = `badge fs-6 ${(s.failed ?? 0) > 0 ? 'badge-red' : 'bg-secondary'}`;
+    }
+    if (ipsEl)    ipsEl.textContent    = `${s.unique_ips ?? 0} unique IPs`;
+    if (usersEl)  usersEl.textContent  = `${s.unique_users ?? 0} unique users`;
+  },
+
+  // ── Generic table filter ────────────────────────────────────────────────────
+
+  _filterTable(tbodyId, query) {
+    const q = (query || '').toLowerCase();
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.classList.toggle('d-none', !!(q && !text.includes(q)));
+    });
   },
 };

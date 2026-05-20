@@ -93,6 +93,20 @@
         Audit Trail
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-job-queue-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-job-queue" type="button" role="tab"
+              aria-controls="tab-job-queue" aria-selected="false">
+        Job Queue
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-login-history-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-login-history" type="button" role="tab"
+              aria-controls="tab-login-history" aria-selected="false">
+        Login History
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -689,6 +703,121 @@
               </tr>
             </thead>
             <tbody id="auditTrailTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Job Queue ────────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-job-queue" role="tabpanel" aria-labelledby="tab-job-queue-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          AsyncApexJob — Batch, Queueable, Scheduled &amp; Future Apex
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Job Queue"
+                data-bs-content="Queries AsyncApexJob for Batch, Queueable, Scheduled, and Future Apex jobs. Use during migration to monitor bulk loads and catch failures. Status flags: Processing=blue, Queued=amber, Completed=green, Failed=red.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="jobQueueAutoRefresh" role="switch">
+            <label class="form-check-label small" for="jobQueueAutoRefresh">Auto-refresh (10s)</label>
+          </div>
+          <button id="btnRefreshJobQueue" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <!-- Status filter pills -->
+      <div class="d-flex gap-2 flex-wrap mb-2" id="jobQueueFilters">
+        <button class="btn btn-sm btn-outline-secondary active" data-jq-filter="">All</button>
+        <button class="btn btn-sm btn-outline-primary" data-jq-filter="Processing">Processing</button>
+        <button class="btn btn-sm btn-outline-warning" data-jq-filter="Queued">Queued</button>
+        <button class="btn btn-sm btn-outline-success" data-jq-filter="Completed">Completed</button>
+        <button class="btn btn-sm btn-outline-danger" data-jq-filter="Failed">Failed</button>
+      </div>
+      <!-- Summary counts -->
+      <div id="jobQueueSummary" class="d-none mb-2">
+        <small class="text-muted">
+          <span id="jqTotal">0</span> total &nbsp;|&nbsp;
+          <span id="jqRunning" class="text-primary fw-semibold">0</span> running &nbsp;|&nbsp;
+          <span id="jqFailed" class="text-danger fw-semibold">0</span> failed
+        </small>
+      </div>
+      <div id="jobQueueLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading job queue…</p>
+      </div>
+      <div id="jobQueueEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No Apex jobs found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="jobQueueCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="jobQueueTable">
+            <thead class="table-light">
+              <tr>
+                <th>Class</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th class="text-end">Errors</th>
+                <th>By</th>
+                <th>Started</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="jobQueueTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Login History ─────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-login-history" role="tabpanel" aria-labelledby="tab-login-history-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          LoginHistory — last 200 authentication events
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Login History"
+                data-bs-content="Queries LoginHistory (last 200 records) for authentication events. Failed logins are highlighted red. API OAuth logins show as Platform=API. Use to verify service account credentials and spot unauthorized access attempts.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2">
+          <input id="loginHistorySearch" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by IP, platform, or status…" style="width:260px">
+          <button id="btnRefreshLoginHistory" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <!-- Summary stats -->
+      <div id="loginHistorySummary" class="d-none mb-3">
+        <div class="d-flex gap-3 flex-wrap">
+          <span class="badge bg-secondary fs-6" id="lhTotal">— total</span>
+          <span class="badge badge-red fs-6" id="lhFailed">— failed</span>
+          <span class="badge badge-navy fs-6" id="lhIPs">— unique IPs</span>
+          <span class="badge badge-blue fs-6" id="lhUsers">— unique users</span>
+        </div>
+      </div>
+      <div id="loginHistoryLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading login history…</p>
+      </div>
+      <div id="loginHistoryEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No login history found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="loginHistoryCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="loginHistoryTable">
+            <thead class="table-light">
+              <tr>
+                <th>Time</th>
+                <th>IP</th>
+                <th>Platform</th>
+                <th>Login Type</th>
+                <th>Browser</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="loginHistoryTbody"></tbody>
           </table>
         </div>
       </div>

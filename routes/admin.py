@@ -124,6 +124,29 @@ def api_audit_trail():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/job-queue')
+def api_job_queue():
+    org = session.get('active_org', 'dev')
+    try:
+        limit = int(request.args.get('limit', 100))
+        data = admin_service.get_apex_job_queue(org, limit=limit)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('job queue failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/login-history')
+def api_login_history():
+    org = session.get('active_org', 'dev')
+    try:
+        data = admin_service.get_login_history(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('login history failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:

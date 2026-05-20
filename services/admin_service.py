@@ -345,3 +345,120 @@ def get_audit_trail(org: str, days: int = 7) -> list:
     if Config.SF_MOCK and not entries:
         return _mock_audit_trail()
     return entries
+
+
+# ── Apex Job Queue ─────────────────────────────────────────────────────────────
+
+def _job_status_flag(status: str) -> str:
+    return {
+        'Processing': 'primary', 'Preparing': 'info',
+        'Queued': 'warning', 'Holding': 'warning',
+        'Completed': 'success', 'Aborted': 'secondary',
+        'Failed': 'danger',
+    }.get(status, 'secondary')
+
+
+def _mock_apex_jobs():
+    now = datetime.now(timezone.utc)
+    return [
+        {'id': 'J001', 'class_name': 'MigrationBatchAccount',  'job_type': 'BatchApex',    'status': 'Completed',  'status_flag': 'success', 'created_date': (now - timedelta(hours=1)).isoformat(),               'completed_date': (now - timedelta(minutes=45)).isoformat(),              'items_processed': 4312, 'total_items': 4312, 'errors': 0, 'extended_status': '',                                            'created_by': 'Migration Service'},
+        {'id': 'J002', 'class_name': 'ContactPointSyncBatch',  'job_type': 'BatchApex',    'status': 'Processing', 'status_flag': 'primary', 'created_date': (now - timedelta(minutes=10)).isoformat(),              'completed_date': None,                                                   'items_processed': 1240, 'total_items': 3800, 'errors': 0, 'extended_status': '',                                            'created_by': 'Migration Service'},
+        {'id': 'J003', 'class_name': 'EthosGuidSyncQueueable', 'job_type': 'Queueable',    'status': 'Failed',     'status_flag': 'danger',  'created_date': (now - timedelta(hours=3)).isoformat(),                 'completed_date': (now - timedelta(hours=2, minutes=50)).isoformat(),     'items_processed': 0,    'total_items': 0,    'errors': 1, 'extended_status': 'System.LimitException: Too many SOQL queries: 101', 'created_by': 'SF Admin'},
+        {'id': 'J004', 'class_name': 'DailyReadinessCheck',    'job_type': 'ScheduledApex', 'status': 'Queued',    'status_flag': 'warning', 'created_date': (now - timedelta(minutes=2)).isoformat(),               'completed_date': None,                                                   'items_processed': 0,    'total_items': 0,    'errors': 0, 'extended_status': '',                                            'created_by': 'SF Admin'},
+    ]
+
+
+def get_apex_job_queue(org: str, limit: int = 100) -> list:
+    sf = get_sf(org)
+    soql = (
+        f"SELECT Id, ApexClass.Name, JobType, Status, CreatedDate, CompletedDate, "
+        f"NumberOfErrors, JobItemsProcessed, TotalJobItems, ExtendedStatus, "
+        f"CreatedBy.Name "
+        f"FROM AsyncApexJob "
+        f"WHERE JobType IN ('BatchApex','Queueable','ScheduledApex','Future') "
+        f"ORDER BY CreatedDate DESC LIMIT {limit}"
+    )
+    result = sf.query(soql)
+    jobs = []
+    for r in result.get('records', []):
+        cls = r.get('ApexClass') or {}
+        creator = r.get('CreatedBy') or {}
+        status = r.get('Status', '')
+        jobs.append({
+            'id': r.get('Id'),
+            'class_name': cls.get('Name', ''),
+            'job_type': r.get('JobType', ''),
+            'status': status,
+            'status_flag': _job_status_flag(status),
+            'created_date': r.get('CreatedDate'),
+            'completed_date': r.get('CompletedDate'),
+            'items_processed': r.get('JobItemsProcessed', 0),
+            'total_items': r.get('TotalJobItems', 0),
+            'errors': r.get('NumberOfErrors', 0),
+            'extended_status': r.get('ExtendedStatus') or '',
+            'created_by': creator.get('Name', ''),
+        })
+    if Config.SF_MOCK and not jobs:
+        return _mock_apex_jobs()
+    return jobs
+
+
+# ── Login History ──────────────────────────────────────────────────────────────
+
+def _mock_login_history():
+    now = datetime.now(timezone.utc)
+    logins = [
+        {'id': 'L001', 'user_id': 'U001', 'login_time': (now - timedelta(minutes=5)).isoformat(),              'source_ip': '198.51.100.10', 'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Chrome 120',  'status': 'Success',              'success': True},
+        {'id': 'L002', 'user_id': 'U002', 'login_time': (now - timedelta(hours=1)).isoformat(),                'source_ip': '198.51.100.10', 'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Chrome 120',  'status': 'Success',              'success': True},
+        {'id': 'L003', 'user_id': 'U003', 'login_time': (now - timedelta(hours=2)).isoformat(),                'source_ip': '203.0.113.55',  'platform': 'API', 'application': 'API',     'login_type': 'OAuth2',      'browser': '',            'status': 'Success',              'success': True},
+        {'id': 'L004', 'user_id': 'U002', 'login_time': (now - timedelta(hours=3)).isoformat(),                'source_ip': '10.0.0.99',     'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Firefox 121', 'status': 'Failed: Wrong Password', 'success': False},
+        {'id': 'L005', 'user_id': 'U002', 'login_time': (now - timedelta(hours=3, minutes=2)).isoformat(),     'source_ip': '10.0.0.99',     'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Firefox 121', 'status': 'Failed: Wrong Password', 'success': False},
+    ]
+    return {'logins': logins, 'summary': {'total': len(logins), 'failed': 2, 'unique_ips': 3, 'unique_users': 3}}
+
+
+def get_login_history(org: str, limit: int = 200) -> dict:
+    sf = get_sf(org)
+    soql = (
+        f"SELECT Id, UserId, LoginTime, SourceIp, Platform, Application, "
+        f"LoginType, Status, Browser "
+        f"FROM LoginHistory "
+        f"ORDER BY LoginTime DESC LIMIT {limit}"
+    )
+    result = sf.query(soql)
+    logins = []
+    failed = 0
+    unique_ips = set()
+    unique_users = set()
+    for r in result.get('records', []):
+        status = r.get('Status', '')
+        success = status == 'Success'
+        if not success:
+            failed += 1
+        ip = r.get('SourceIp', '')
+        uid = r.get('UserId', '')
+        unique_ips.add(ip)
+        unique_users.add(uid)
+        logins.append({
+            'id': r.get('Id'),
+            'user_id': uid,
+            'login_time': r.get('LoginTime'),
+            'source_ip': ip,
+            'platform': r.get('Platform', ''),
+            'application': r.get('Application', ''),
+            'login_type': r.get('LoginType', ''),
+            'browser': r.get('Browser', ''),
+            'status': status,
+            'success': success,
+        })
+    if Config.SF_MOCK and not logins:
+        return _mock_login_history()
+    return {
+        'logins': logins,
+        'summary': {
+            'total': len(logins),
+            'failed': failed,
+            'unique_ips': len(unique_ips),
+            'unique_users': len(unique_users),
+        }
+    }
