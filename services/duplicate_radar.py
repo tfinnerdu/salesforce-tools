@@ -1,7 +1,7 @@
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Optional
+from typing import Optional  # noqa: F401 — used in merge()
 
 from sf_provider import get_sf
 
@@ -173,6 +173,7 @@ def scan(org: str) -> dict:
 def merge(org: str, master_id: str, victim_id: str, bypass: bool = False) -> dict:
     from sf_provider import dml_guard
     sf = get_sf(org)
+    exc_for_log: Optional[Exception] = None
     try:
         with dml_guard(sf, bypass=bypass):
             sf.Account.merge(master_id, [victim_id])
@@ -182,7 +183,31 @@ def merge(org: str, master_id: str, victim_id: str, bypass: bool = False) -> dic
         success = True
     except Exception as exc:
         logger.error("merge failed master=%s victim=%s: %s", master_id, victim_id, exc)
+        exc_for_log = exc
         success = False
+
+    if success:
+        try:
+            from services import merge_history
+            merge_history._ensure_table()
+            merge_history.log_merge(
+                org=org, master_id=master_id, victim_id=victim_id,
+                bypass_used=bypass, status='success'
+            )
+        except Exception:
+            pass  # non-fatal
+    else:
+        try:
+            from services import merge_history
+            merge_history._ensure_table()
+            merge_history.log_merge(
+                org=org, master_id=master_id, victim_id=victim_id,
+                bypass_used=bypass, status='error',
+                error_msg=str(exc_for_log) if exc_for_log else 'unknown error'
+            )
+        except Exception:
+            pass  # non-fatal
+
     return {
         'success': success,
         'master_id': master_id,

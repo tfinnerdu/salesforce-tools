@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
-from services import readiness_validator, batch_tracker, error_reconciler
+from services import readiness_validator, batch_tracker, error_reconciler, preflight_checklist
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,13 @@ def readiness():
 
 
 @migration_bp.route('/batch')
+@migration_bp.route('/batches')
 def batch():
     return render_template('migration/batch_progress.html')
 
 
 @migration_bp.route('/reconciler')
+@migration_bp.route('/errors')
 def reconciler():
     return render_template('migration/error_reconciler.html')
 
@@ -140,4 +142,49 @@ def api_reconciler_rerun():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('reconciler rerun failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@migration_bp.route('/preflight')
+def preflight():
+    return render_template('migration/preflight.html')
+
+
+@migration_bp.route('/preflight/items', methods=['GET'])
+def api_preflight_items():
+    org = session.get('active_org', 'dev')
+    try:
+        preflight_checklist._ensure_table()
+        preflight_checklist.seed_defaults(org)
+        data = preflight_checklist.list_items(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('preflight list failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@migration_bp.route('/preflight/toggle', methods=['POST'])
+def api_preflight_toggle():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    item_id = body.get('id')
+    checked = bool(body.get('checked', False))
+    if item_id is None:
+        return jsonify({'success': False, 'data': None, 'error': 'id required'}), 400
+    try:
+        result = preflight_checklist.toggle_item(org=org, item_id=int(item_id), checked=checked)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('preflight toggle failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@migration_bp.route('/preflight/progress', methods=['GET'])
+def api_preflight_progress():
+    org = session.get('active_org', 'dev')
+    try:
+        data = preflight_checklist.get_progress(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('preflight progress failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
