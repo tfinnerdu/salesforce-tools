@@ -14,10 +14,10 @@ from unittest.mock import patch, MagicMock
 # Root and logout
 # ---------------------------------------------------------------------------
 
-def test_root_redirects_to_migration_index(client):
+def test_root_redirects_to_dashboard_index(client):
     resp = client.get('/')
     assert resp.status_code == 302
-    assert '/migration' in resp.headers['Location']
+    assert '/dashboard' in resp.headers['Location']
 
 
 def test_logout_redirects(client):

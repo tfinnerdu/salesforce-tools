@@ -35,6 +35,10 @@
         <ul class="navbar-nav me-auto mb-2 mb-lg-0 mc-tab-nav">
           {% set path = request.path %}
           <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/dashboard') or path == '/' %}mc-active{% endif %}"
+               href="/dashboard">Dashboard</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link {% if path.startswith('/migration') %}mc-active{% endif %}"
                href="/migration">Migration</a>
           </li>

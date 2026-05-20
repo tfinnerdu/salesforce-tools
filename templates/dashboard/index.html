@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+{% block title %}Mission Control Dashboard — Doane SF{% endblock %}
+
+{% block content %}
+<style>
+  .dash-widget { transition: box-shadow 0.2s; }
+  .dash-widget:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important; }
+  .dash-stat-box { text-align:center; padding:0.5rem; }
+  .dash-stat-box .dash-stat-num { font-size:1.8rem; font-weight:700; line-height:1; }
+  .dash-stat-box .dash-stat-label { font-size:0.7rem; text-transform:uppercase; color:#6c757d; }
+  .dash-score-num { font-size:3.5rem; font-weight:700; line-height:1; }
+  .dash-grade { font-size:4rem; font-weight:800; line-height:1; }
+  .dash-timeline-dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--doane-navy); display:inline-block; flex-shrink:0; margin-top:5px;
+  }
+</style>
+
+<!-- Page header -->
+<div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div class="d-flex align-items-center gap-2">
+    <h4 class="mc-page-title mb-0">Mission Control</h4>
+    <span class="badge mc-org-badge" id="dashOrgBadge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span id="dashLastUpdated" class="text-muted small"></span>
+    <button id="btnDashRefresh" class="btn btn-doane btn-sm">&#8635; Refresh All</button>
+  </div>
+</div>
+
+<!-- Widget grid -->
+<div class="row g-3" id="dashGrid">
+
+  <!-- Widget 1: Readiness Score -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Pre-Go-Live Readiness</span>
+        <span class="badge bg-secondary small" id="dashWidget1Age"></span>
+      </div>
+      <div class="card-body d-flex flex-column align-items-center justify-content-center" id="dashWidget1Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/migration/readiness" class="small text-muted">Run Check →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 2: API Limits -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small" id="dashWidget2Title">API Limits</span>
+        <span class="badge bg-secondary small" id="dashWidget2Age"></span>
+      </div>
+      <div class="card-body" id="dashWidget2Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/observe" class="small text-muted">View All →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 3: Data Validation -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Data Validation</span>
+        <span class="badge bg-secondary small" id="dashWidget3Age"></span>
+      </div>
+      <div class="card-body" id="dashWidget3Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/validation" class="small text-muted">Run All →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 4: Migration Batches -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Migration Batches</span>
+        <span class="badge bg-secondary small" id="dashWidget4Age"></span>
+      </div>
+      <div class="card-body" id="dashWidget4Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/migration/batches" class="small text-muted">View Batches →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 5: Apex Test Coverage -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Apex Test Coverage</span>
+        <span class="badge bg-secondary small" id="dashWidget5Age"></span>
+      </div>
+      <div class="card-body" id="dashWidget5Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/admin" class="small text-muted">View Details →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 6: Pre-flight Checklist -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Pre-flight Checklist</span>
+        <span class="badge bg-secondary small" id="dashWidget6Age"></span>
+      </div>
+      <div class="card-body" id="dashWidget6Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/migration/preflight" class="small text-muted">Open Checklist →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 7: Recent Activity (Audit Trail) -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Recent Changes</span>
+        <span class="badge bg-secondary small" id="dashWidget7Age"></span>
+      </div>
+      <div class="card-body" id="dashWidget7Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/admin" class="small text-muted">View Full Trail →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget 8: Org Health Score -->
+  <div class="col-xl-4 col-md-6">
+    <div class="card shadow-sm h-100 dash-widget">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:var(--doane-navy); color:#fff;">
+        <span class="fw-semibold small">Org Health</span>
+        <span class="badge bg-secondary small" id="dashWidget8Age"></span>
+      </div>
+      <div class="card-body d-flex flex-column align-items-center justify-content-center" id="dashWidget8Body">
+        <div class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-warning"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent py-1 text-end no-print">
+        <a href="/observe" class="small text-muted">View Org Details →</a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row -->
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-dashboard-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => MC.dashboard.init());
+</script>
+{% endblock %}

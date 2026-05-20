@@ -18,6 +18,7 @@ from routes.logs import logs_bp
 from routes.impact import impact_bp
 from routes.admin import admin_bp
 from routes.deploy import deploy_bp
+from routes.dashboard import dashboard_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +43,7 @@ def create_app() -> Flask:
     app.register_blueprint(impact_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(deploy_bp)
+    app.register_blueprint(dashboard_bp)
 
     @app.context_processor
     def inject_globals():
@@ -54,7 +56,7 @@ def create_app() -> Flask:
 
     @app.route('/')
     def root():
-        return redirect(url_for('migration.index'))
+        return redirect(url_for('dashboard.index'))
 
     @app.route('/logout')
     def logout():

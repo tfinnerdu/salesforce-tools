@@ -12,10 +12,10 @@ def test_health_returns_200(client):
     assert 'uptime_seconds' in data
 
 
-def test_root_redirects_to_migration(client):
+def test_root_redirects_to_dashboard(client):
     resp = client.get('/')
     assert resp.status_code == 302
-    assert '/migration' in resp.headers['Location']
+    assert '/dashboard' in resp.headers['Location']
 
 
 def test_migration_readiness_page(client):
