@@ -38,6 +38,14 @@ MC.admin = {
     document.getElementById('tab-anonymizer-btn')?.addEventListener('shown.bs.tab', () => {
       this.initAnonymizer();
     });
+    document.getElementById('tab-integrations-btn')?.addEventListener('shown.bs.tab', () => {
+      this.loadIntegrations();
+    });
+
+    // Wire all Refresh buttons inside the integrations tab
+    document.querySelectorAll('.integ-refresh-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.loadIntegrations());
+    });
   },
 
   // ── Scheduled Jobs ──────────────────────────────────────────────────────────
@@ -385,5 +393,107 @@ MC.admin = {
     } finally {
       MC.hideSpinner();
     }
+  },
+
+  // ── Integrations ────────────────────────────────────────────────────────────
+
+  async loadIntegrations() {
+    // Show spinners, hide tables and empty states
+    ['namedCreds', 'remoteSites', 'connectedApps'].forEach(key => {
+      document.getElementById(`${key}Loading`)?.classList.remove('d-none');
+      document.getElementById(`${key}Empty`)?.classList.add('d-none');
+      document.getElementById(`${key}CardBody`)?.classList.add('d-none');
+    });
+    try {
+      const data = await MC.api('/admin/integrations');
+      this._renderNamedCreds(data.named_credentials || []);
+      this._renderRemoteSites(data.remote_sites || []);
+      this._renderConnectedApps(data.connected_apps || []);
+    } catch (err) {
+      MC.showToast(`Failed to load integrations: ${err.message}`, 'danger');
+      ['namedCreds', 'remoteSites', 'connectedApps'].forEach(key => {
+        document.getElementById(`${key}Empty`)?.classList.remove('d-none');
+      });
+    } finally {
+      ['namedCreds', 'remoteSites', 'connectedApps'].forEach(key => {
+        document.getElementById(`${key}Loading`)?.classList.add('d-none');
+      });
+    }
+  },
+
+  _renderNamedCreds(items) {
+    const tbody = document.getElementById('namedCredsTbody');
+    const empty = document.getElementById('namedCredsEmpty');
+    const body  = document.getElementById('namedCredsCardBody');
+    if (!tbody) return;
+    if (!items.length) {
+      empty?.classList.remove('d-none');
+      body?.classList.add('d-none');
+      return;
+    }
+    tbody.innerHTML = items.map(nc => {
+      const endpoint = nc.endpoint || '';
+      const truncated = endpoint.length > 50 ? endpoint.slice(0, 50) + '…' : endpoint;
+      const labelCell = nc.master_label !== nc.developer_name
+        ? MC._escHtml(nc.master_label)
+        : '<span class="text-muted">—</span>';
+      return `<tr>
+        <td class="fw-semibold font-monospace small">${MC._escHtml(nc.developer_name)}</td>
+        <td class="small">${labelCell}</td>
+        <td class="small"><code title="${MC._escHtml(endpoint)}">${MC._escHtml(truncated)}</code></td>
+        <td class="small">${MC._escHtml(nc.protocol)}</td>
+      </tr>`;
+    }).join('');
+    empty?.classList.add('d-none');
+    body?.classList.remove('d-none');
+  },
+
+  _renderRemoteSites(items) {
+    const tbody = document.getElementById('remoteSitesTbody');
+    const empty = document.getElementById('remoteSitesEmpty');
+    const body  = document.getElementById('remoteSitesCardBody');
+    if (!tbody) return;
+    if (!items.length) {
+      empty?.classList.remove('d-none');
+      body?.classList.add('d-none');
+      return;
+    }
+    tbody.innerHTML = items.map(rs => {
+      const activeBadge = rs.is_active
+        ? '<span class="badge badge-green">ACTIVE</span>'
+        : '<span class="badge badge-amber">INACTIVE</span>';
+      const secProtocol = rs.disable_protocol_security
+        ? '<span class="text-warning small">Disabled</span>'
+        : '<span class="text-muted small">Enforced</span>';
+      return `<tr>
+        <td class="fw-semibold small">${MC._escHtml(rs.site_name)}</td>
+        <td class="small"><code>${MC._escHtml(rs.url)}</code></td>
+        <td>${activeBadge}</td>
+        <td>${secProtocol}</td>
+      </tr>`;
+    }).join('');
+    empty?.classList.add('d-none');
+    body?.classList.remove('d-none');
+  },
+
+  _renderConnectedApps(items) {
+    const tbody = document.getElementById('connectedAppsTbody');
+    const empty = document.getElementById('connectedAppsEmpty');
+    const body  = document.getElementById('connectedAppsCardBody');
+    if (!tbody) return;
+    if (!items.length) {
+      empty?.classList.remove('d-none');
+      body?.classList.add('d-none');
+      return;
+    }
+    tbody.innerHTML = items.map(ca => {
+      return `<tr>
+        <td class="fw-semibold small">${MC._escHtml(ca.master_label)}</td>
+        <td class="small font-monospace">${MC._escHtml(ca.developer_name)}</td>
+        <td class="small text-muted">${MC._escHtml(ca.description || '—')}</td>
+      </tr>`;
+    }).join('');
+    empty?.classList.add('d-none');
+    body?.classList.remove('d-none');
   },
 };

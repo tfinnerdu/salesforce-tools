@@ -63,6 +63,18 @@ def api_users():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/integrations')
+def api_integrations():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import integration_inventory
+        data = integration_inventory.get_all(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('integrations failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:

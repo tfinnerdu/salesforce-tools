@@ -58,6 +58,13 @@
         <span class="badge badge-amber ms-1">Stub</span>
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-integrations-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-integrations" type="button" role="tab"
+              aria-controls="tab-integrations" aria-selected="false">
+        Integrations
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -332,6 +339,123 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Integrations ──────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-integrations" role="tabpanel" aria-labelledby="tab-integrations-btn">
+      <div class="row g-3 mt-1">
+
+        <!-- Named Credentials -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Named Credentials
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Named Credentials"
+                      data-bs-content="Named Credentials store endpoint + authentication for callouts. Queried via Tooling API: SELECT DeveloperName, MasterLabel, Endpoint, Protocol FROM NamedCredential.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm integ-refresh-btn">&#8635; Refresh</button>
+            </div>
+            <div id="namedCredsLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading named credentials…</p>
+            </div>
+            <div id="namedCredsEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No named credentials found.</p>
+            </div>
+            <div class="card-body p-0" id="namedCredsCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Label</th>
+                    <th>Endpoint</th>
+                    <th>Protocol</th>
+                  </tr>
+                </thead>
+                <tbody id="namedCredsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Remote Site Settings -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Remote Site Settings
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Remote Site Settings"
+                      data-bs-content="Remote Site Settings must exist for every external domain your Apex/flows call out to. Inactive sites will cause HTTP callout failures. Queried via Tooling API: SELECT SiteName, Url, IsActive FROM RemoteSiteSetting.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm integ-refresh-btn">&#8635; Refresh</button>
+            </div>
+            <div id="remoteSitesLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading remote site settings…</p>
+            </div>
+            <div id="remoteSitesEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No remote site settings found.</p>
+            </div>
+            <div class="card-body p-0" id="remoteSitesCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Site Name</th>
+                    <th>URL</th>
+                    <th>Active</th>
+                    <th>Security Protocol</th>
+                  </tr>
+                </thead>
+                <tbody id="remoteSitesTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connected Apps -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">
+                Connected Apps
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Connected Apps"
+                      data-bs-content="Connected Apps define OAuth scopes and policies for external systems accessing this org's API. Queried via Tooling API: SELECT MasterLabel, DeveloperName, Description FROM ConnectedApplication.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm integ-refresh-btn">&#8635; Refresh</button>
+            </div>
+            <div id="connectedAppsLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading connected apps…</p>
+            </div>
+            <div id="connectedAppsEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No connected apps found.</p>
+            </div>
+            <div class="card-body p-0" id="connectedAppsCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Developer Name</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody id="connectedAppsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
