@@ -133,6 +133,62 @@ def api_apex_search_run():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@schema_bp.route('/snapshots')
+def page_snapshots():
+    return render_template('schema/snapshots.html')
+
+@schema_bp.route('/snapshots/list')
+def api_snapshots_list():
+    from services import schema_snapshot
+    org = request.args.get('org', session.get('active_org', 'dev'))
+    sobject = request.args.get('sobject', '')
+    try:
+        data = schema_snapshot.list_snapshots(org=org or None, sobject=sobject or None)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('list snapshots failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+@schema_bp.route('/snapshots/take', methods=['POST'])
+def api_snapshots_take():
+    from services import schema_snapshot
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    sobject = body.get('sobject', 'Account').strip()
+    label = body.get('label', '').strip() or None
+    try:
+        data = schema_snapshot.take_snapshot(org=org, sobject=sobject, label=label)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('take snapshot failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+@schema_bp.route('/snapshots/diff')
+def api_snapshots_diff():
+    from services import schema_snapshot
+    try:
+        snap_a = int(request.args.get('a', 0))
+        snap_b = int(request.args.get('b', 0))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'data': None, 'error': 'invalid snapshot ids'}), 400
+    try:
+        data = schema_snapshot.diff_snapshots(snap_a, snap_b)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('diff snapshots failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+@schema_bp.route('/snapshots/<int:snap_id>', methods=['DELETE'])
+def api_snapshots_delete(snap_id):
+    from services import schema_snapshot
+    try:
+        schema_snapshot.delete_snapshot(snap_id)
+        return jsonify({'success': True, 'data': None})
+    except Exception as exc:
+        logger.exception('delete snapshot failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @schema_bp.route('/org-diff/run', methods=['POST'])
 def api_org_diff_run():
     left_org = session.get('active_org', 'dev')
