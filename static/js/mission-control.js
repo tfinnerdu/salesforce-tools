@@ -1918,6 +1918,7 @@ MC.logs = {
 
     document.getElementById('btnRefreshApex')?.addEventListener('click', () => this.loadApexLogs());
     document.getElementById('btnRefreshFlows')?.addEventListener('click', () => this.loadFlowErrors());
+    document.getElementById('btnRefreshCpuSummary')?.addEventListener('click', () => this.loadCpuSummary());
     document.getElementById('btnCloseDetail')?.addEventListener('click', () => this._closeDetail());
 
     // Time-range toolbar
@@ -1942,10 +1943,15 @@ MC.logs = {
     document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
 
     const showApex = tab === 'apex';
+    const showFlows = tab === 'flows';
+    const showCpu = tab === 'cpu';
+
     document.getElementById('panelApex')?.classList.toggle('d-none', !showApex);
-    document.getElementById('panelFlows')?.classList.toggle('d-none', showApex);
+    document.getElementById('panelFlows')?.classList.toggle('d-none', !showFlows);
+    document.getElementById('panelCpuSummary')?.classList.toggle('d-none', !showCpu);
 
     if (tab === 'flows') this.loadFlowErrors();
+    if (tab === 'cpu') this.loadCpuSummary();
   },
 
   async loadApexLogs() {
@@ -2141,6 +2147,81 @@ MC.logs = {
     } catch (err) {
       MC.showToast(`Delete failed: ${err.message}`, 'danger');
     }
+  },
+
+  async loadCpuSummary() {
+    const loading = document.getElementById('cpuLoading');
+    const empty   = document.getElementById('cpuEmpty');
+    const table   = document.getElementById('cpuTable');
+
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    table?.classList.add('d-none');
+
+    try {
+      const items = await MC.api('/logs/apex/cpu-summary');
+      if (!items || items.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderCpuSummary(items);
+      table?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load CPU summary: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderCpuSummary(items) {
+    const tbody = document.getElementById('cpuSummaryTbody');
+    if (!tbody) return;
+
+    // Sort by duration_ms descending
+    const sorted = [...items].sort((a, b) => (b.duration_ms || 0) - (a.duration_ms || 0));
+
+    tbody.innerHTML = sorted.map(item => {
+      const duration = item.duration_ms || 0;
+      const kb = ((item.log_length || 0) / 1024).toFixed(1);
+      const status = item.status || '';
+
+      // Duration color coding
+      let durationCls = '';
+      if (duration > 10000) {
+        durationCls = 'text-danger fw-semibold';
+      } else if (duration > 5000) {
+        durationCls = 'text-warning fw-semibold';
+      }
+
+      // Row highlight based on status_flag
+      let rowCls = '';
+      if (item.status_flag === 'danger') {
+        rowCls = 'table-danger';
+      } else if (item.status_flag === 'warning') {
+        rowCls = 'table-warning';
+      }
+
+      const statusBadge = MC.statusBadge(status || 'Success');
+      const logId = item.log_id || '';
+
+      // View Log action — links to apex tab detail if available
+      const viewBtn = logId
+        ? `<button class="btn btn-outline-secondary btn-sm py-0"
+                   onclick="MC.logs._switchTab('apex'); MC.logs.showLogDetail('${MC._escHtml(logId)}', '${MC._escHtml(item.operation)}')">
+             View Log
+           </button>`
+        : '—';
+
+      return `<tr class="${rowCls}">
+        <td>${MC._escHtml(item.user || '—')}</td>
+        <td><code class="small">${MC._escHtml(item.operation || '—')}</code></td>
+        <td class="${durationCls}">${duration.toLocaleString()} ms</td>
+        <td class="text-muted small">${kb} KB</td>
+        <td>${statusBadge}</td>
+        <td class="no-print">${viewBtn}</td>
+      </tr>`;
+    }).join('');
   },
 
   async loadFlowErrors() {

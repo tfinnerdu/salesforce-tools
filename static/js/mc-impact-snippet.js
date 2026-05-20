@@ -19,6 +19,15 @@ MC.impact = {
       this.listSuites();
     });
 
+    // Init perm gap on tab activate
+    document.getElementById('tab-perm-gap-btn')?.addEventListener('shown.bs.tab', () => {
+      this.initPermGap();
+    });
+
+    document.getElementById('btnPermGapCompare')?.addEventListener('click', () => {
+      this.comparePermSets();
+    });
+
     this.listSuites();
   },
 
@@ -382,5 +391,127 @@ MC.impact = {
     } catch (err) {
       MC.showToast(`Save failed: ${err.message}`, 'danger');
     }
+  },
+
+  // ── Permission Set Gap Analysis ────────────────────────────────────────────
+
+  _permGapLoaded: false,
+
+  async initPermGap() {
+    if (!this._permGapLoaded) {
+      await this.loadPermSets();
+      this._permGapLoaded = true;
+    }
+  },
+
+  async loadPermSets() {
+    try {
+      const psets = await MC.api('/impact/perm-gap/list');
+      const opts = (psets || []).map(p =>
+        `<option value="${MC._escHtml(p.id)}">${MC._escHtml(p.label || p.name)}</option>`
+      ).join('');
+      ['permGapSelectA', 'permGapSelectB'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<option value="">— select —</option>' + opts;
+      });
+    } catch (err) {
+      MC.showToast(`Failed to load permission sets: ${err.message}`, 'danger');
+    }
+  },
+
+  async comparePermSets() {
+    const ps_a = document.getElementById('permGapSelectA')?.value;
+    const ps_b = document.getElementById('permGapSelectB')?.value;
+    if (!ps_a || !ps_b) {
+      MC.showToast('Select both permission sets', 'warning');
+      return;
+    }
+    if (ps_a === ps_b) {
+      MC.showToast('Select two different permission sets', 'warning');
+      return;
+    }
+
+    document.getElementById('permGapEmpty')?.classList.add('d-none');
+    document.getElementById('permGapResults')?.classList.add('d-none');
+    document.getElementById('permGapLoading')?.classList.remove('d-none');
+
+    try {
+      const data = await MC.api('/impact/perm-gap/compare', 'POST', { ps_a, ps_b });
+      this._renderGapResults(data);
+    } catch (err) {
+      MC.showToast(`Compare failed: ${err.message}`, 'danger');
+      document.getElementById('permGapEmpty')?.classList.remove('d-none');
+    } finally {
+      document.getElementById('permGapLoading')?.classList.add('d-none');
+    }
+  },
+
+  _renderGapResults(data) {
+    const summary = data.summary || {};
+    const objGaps = data.object_gaps || [];
+    const fieldGaps = data.field_gaps || [];
+    const psALabel = (data.ps_a || {}).label || 'A';
+    const psBLabel = (data.ps_b || {}).label || 'B';
+
+    // Summary badges
+    const badgeA = document.getElementById('permGapBadgeA');
+    if (badgeA) badgeA.textContent = `${summary.only_in_a ?? 0} only in ${psALabel}`;
+    const badgeB = document.getElementById('permGapBadgeB');
+    if (badgeB) badgeB.textContent = `${summary.only_in_b ?? 0} only in ${psBLabel}`;
+    const badgeTotal = document.getElementById('permGapBadgeTotal');
+    if (badgeTotal) badgeTotal.textContent = `${summary.total_gaps ?? 0} total gaps`;
+
+    // Counts on pills
+    const objCountEl = document.getElementById('permGapObjCount');
+    if (objCountEl) objCountEl.textContent = objGaps.length;
+    const fieldCountEl = document.getElementById('permGapFieldCount');
+    if (fieldCountEl) fieldCountEl.textContent = fieldGaps.length;
+
+    // Object gaps table
+    const objBody = document.getElementById('permGapObjTbody');
+    const objEmpty = document.getElementById('permGapObjEmpty');
+    if (objBody) {
+      if (objGaps.length) {
+        objEmpty?.classList.add('d-none');
+        objBody.innerHTML = objGaps.map(g => {
+          const rowClass = g.in_a && !g.in_b ? 'table-warning' : 'table-primary';
+          return `
+            <tr class="${rowClass}">
+              <td class="font-monospace small">${MC._escHtml(g.object)}</td>
+              <td class="small">${MC._escHtml(g.permission)}</td>
+              <td class="text-center">${g.in_a ? '&#10003;' : ''}</td>
+              <td class="text-center">${g.in_b ? '&#10003;' : ''}</td>
+            </tr>`;
+        }).join('');
+      } else {
+        objBody.innerHTML = '';
+        objEmpty?.classList.remove('d-none');
+      }
+    }
+
+    // Field gaps table
+    const fieldBody = document.getElementById('permGapFieldTbody');
+    const fieldEmpty = document.getElementById('permGapFieldEmpty');
+    if (fieldBody) {
+      if (fieldGaps.length) {
+        fieldEmpty?.classList.add('d-none');
+        fieldBody.innerHTML = fieldGaps.map(g => {
+          const rowClass = g.in_a && !g.in_b ? 'table-warning' : 'table-primary';
+          return `
+            <tr class="${rowClass}">
+              <td class="font-monospace small">${MC._escHtml(g.object)}</td>
+              <td class="font-monospace small">${MC._escHtml(g.field)}</td>
+              <td class="small">${MC._escHtml(g.permission)}</td>
+              <td class="text-center">${g.in_a ? '&#10003;' : ''}</td>
+              <td class="text-center">${g.in_b ? '&#10003;' : ''}</td>
+            </tr>`;
+        }).join('');
+      } else {
+        fieldBody.innerHTML = '';
+        fieldEmpty?.classList.remove('d-none');
+      }
+    }
+
+    document.getElementById('permGapResults')?.classList.remove('d-none');
   },
 };

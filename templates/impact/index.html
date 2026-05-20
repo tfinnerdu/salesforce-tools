@@ -298,6 +298,117 @@
       </div>
     </div><!-- /tab-regression -->
 
+
+    <!-- ── Permission Set Gap Analysis ─────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-perm-gap" role="tabpanel" aria-labelledby="tab-perm-gap-btn">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="card-title fw-semibold mb-3">Permission Set Gap Analysis
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Permission Set Gap Analysis"
+                  data-bs-content="Compares ObjectPermissions and FieldPermissions between two permission sets using SOQL on ObjectPermissions/FieldPermissions objects. Gaps are permissions present in one PS but not the other — useful for verifying migration-related permission sets are consistent.">ⓘ</span>
+          </h6>
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-4">
+              <label for="permGapSelectA" class="form-label small fw-semibold">Permission Set A</label>
+              <select id="permGapSelectA" class="form-select form-select-sm">
+                <option value="">— select —</option>
+              </select>
+            </div>
+            <div class="col-sm-4">
+              <label for="permGapSelectB" class="form-label small fw-semibold">Permission Set B</label>
+              <select id="permGapSelectB" class="form-select form-select-sm">
+                <option value="">— select —</option>
+              </select>
+            </div>
+            <div class="col-sm-auto">
+              <button id="btnPermGapCompare" class="btn btn-doane btn-sm">Compare</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="permGapEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0 small">Select two permission sets and click <strong>Compare</strong>.</p>
+      </div>
+      <div id="permGapLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mt-2 text-muted small">Comparing permission sets…</p>
+      </div>
+
+      <div id="permGapResults" class="d-none">
+        <!-- Summary badges -->
+        <div class="d-flex flex-wrap gap-3 mb-3 align-items-center">
+          <span class="fw-semibold small">Summary:</span>
+          <span class="badge bg-warning text-dark fs-6" id="permGapBadgeA">0 only in A</span>
+          <span class="badge badge-navy fs-6" id="permGapBadgeB">0 only in B</span>
+          <span class="badge bg-secondary fs-6" id="permGapBadgeTotal">0 total gaps</span>
+        </div>
+
+        <!-- Inner pill nav -->
+        <ul class="nav nav-pills mb-3" id="permGapPills" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pill-obj-btn" data-bs-toggle="pill"
+                    data-bs-target="#pill-obj" type="button" role="tab">
+              Object Permissions
+              <span id="permGapObjCount" class="badge bg-secondary ms-1">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pill-field-btn" data-bs-toggle="pill"
+                    data-bs-target="#pill-field" type="button" role="tab">
+              Field Permissions
+              <span id="permGapFieldCount" class="badge bg-secondary ms-1">0</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="permGapPillContent">
+
+          <!-- Object gaps table -->
+          <div class="tab-pane fade show active" id="pill-obj" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                  <tr>
+                    <th>Object</th>
+                    <th>Permission</th>
+                    <th class="text-center">In A</th>
+                    <th class="text-center">In B</th>
+                  </tr>
+                </thead>
+                <tbody id="permGapObjTbody"></tbody>
+              </table>
+            </div>
+            <p id="permGapObjEmpty" class="text-muted text-center py-2 small d-none">No object permission gaps found.</p>
+          </div>
+
+          <!-- Field gaps table -->
+          <div class="tab-pane fade" id="pill-field" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                  <tr>
+                    <th>Object</th>
+                    <th>Field</th>
+                    <th>Permission</th>
+                    <th class="text-center">In A</th>
+                    <th class="text-center">In B</th>
+                  </tr>
+                </thead>
+                <tbody id="permGapFieldTbody"></tbody>
+              </table>
+            </div>
+            <p id="permGapFieldEmpty" class="text-muted text-center py-2 small d-none">No field permission gaps found.</p>
+          </div>
+
+        </div><!-- /permGapPillContent -->
+      </div><!-- /permGapResults -->
+    </div><!-- /tab-perm-gap -->
+
   </div><!-- /tab-content -->
 </div>
 
