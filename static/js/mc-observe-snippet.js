@@ -93,7 +93,6 @@ MC.observe = {
     }
     gridEl.innerHTML = limits.map(lim => this._renderLimitCard(lim)).join('');
     gridEl.classList.remove('d-none');
-    const emptyEl = document.getElementById('limitsEmpty');
     if (emptyEl) emptyEl.classList.add('d-none');
   },
 

@@ -2455,7 +2455,6 @@ MC.observe = {
       </div>`;
     }).join('');
     gridEl.classList.remove('d-none');
-    const emptyEl = document.getElementById('limitsEmpty');
     if (emptyEl) emptyEl.classList.add('d-none');
   },
 
