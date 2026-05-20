@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}Bulk Job History - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Sub-nav: Data Ops pages -->
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item">
+          <a class="nav-link" href="/data-ops/join">Join Builder</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/data-ops/record-locks">Record Locks</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link active" href="/data-ops/bulk-jobs">Bulk Jobs</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Bulk API Job History
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Bulk API Job History"
+            data-bs-content="Lists recent Bulk API v2 ingest jobs. Monitor job state, records processed/failed, and processing time.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Controls -->
+  <div class="d-flex flex-wrap gap-3 align-items-center mb-3 no-print">
+    <button id="btnRefreshBulkJobs" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    <div class="form-check mb-0">
+      <input class="form-check-input" type="checkbox" id="bulkJobsAutoRefresh">
+      <label class="form-check-label small" for="bulkJobsAutoRefresh">
+        Auto-refresh <span class="text-muted">(15s)</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Summary row -->
+  <div id="bulkJobsSummary" class="d-none mb-3">
+    <div class="row g-2">
+      <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-2">
+          <div class="fs-4 fw-bold" id="bjTotalJobs">&mdash;</div>
+          <div class="text-muted small">Total Jobs</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-2">
+          <div class="fs-4 fw-bold text-success" id="bjTotalProcessed">&mdash;</div>
+          <div class="text-muted small">Records Processed</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-2">
+          <div class="fs-4 fw-bold text-danger" id="bjTotalFailed">&mdash;</div>
+          <div class="text-muted small">Records Failed</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card shadow-sm text-center py-2">
+          <div class="fs-4 fw-bold text-warning" id="bjInProgress">&mdash;</div>
+          <div class="text-muted small">In Progress</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading spinner -->
+  <div id="bulkJobsLoading" class="text-center py-3 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Loading&hellip;</span>
+    </div>
+    <p class="mt-2 text-muted small">Fetching bulk job history&hellip;</p>
+  </div>
+
+  <!-- Jobs table -->
+  <div id="bulkJobsTableWrap" class="card shadow-sm d-none">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Recent Bulk API v2 Jobs</span>
+      <small class="text-muted" id="bulkJobsCount"></small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+        <table class="table table-sm table-striped results-table mb-0">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Operation</th>
+              <th>Object</th>
+              <th>State</th>
+              <th>Processed</th>
+              <th>Failed</th>
+              <th>Processing Time</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="bulkJobsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="bulkJobsEmpty" class="d-none text-center py-5">
+    <p class="text-muted">No bulk jobs found.</p>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.bulkJobs.init();
+  });
+</script>
+{% endblock %}

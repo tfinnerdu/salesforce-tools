@@ -162,3 +162,218 @@ MC.bulkDml = {
     }
   },
 };
+
+// ── Record Locks module ───────────────────────────────────────────────────────
+
+MC.recordLocks = {
+
+  init() {
+    document.getElementById('btnRefreshLocks')?.addEventListener('click', () => this.load());
+    document.getElementById('lockObjectFilter')?.addEventListener('change', () => this.load());
+    this.load();
+  },
+
+  async load() {
+    const filter = document.getElementById('lockObjectFilter')?.value || '';
+    const url = '/data-ops/api/record-locks' + (filter ? `?object=${encodeURIComponent(filter)}` : '');
+
+    const loading = document.getElementById('lockLoading');
+    const resultsWrap = document.getElementById('lockResultsWrap');
+    const emptyState = document.getElementById('lockEmptyState');
+    const summary = document.getElementById('lockSummary');
+
+    loading?.classList.remove('d-none');
+    resultsWrap?.classList.add('d-none');
+    emptyState?.classList.add('d-none');
+    summary?.classList.add('d-none');
+
+    try {
+      const resp = await MC.api(url, 'GET');
+      const data = resp;
+
+      // Summary
+      const total = data.total_locked ?? 0;
+      const objCount = (data.objects_checked ?? []).length;
+      const summaryText = document.getElementById('lockSummaryText');
+      if (summaryText) {
+        summaryText.textContent = `${total.toLocaleString()} record${total !== 1 ? 's' : ''} locked across ${objCount} object${objCount !== 1 ? 's' : ''} checked.`;
+      }
+      summary?.classList.remove('d-none');
+
+      if (total === 0) {
+        emptyState?.classList.remove('d-none');
+        loading?.classList.add('d-none');
+        return;
+      }
+
+      // Build per-object tables
+      resultsWrap.innerHTML = '';
+      const byObj = data.by_object ?? {};
+      const now = Date.now();
+
+      for (const [obj, records] of Object.entries(byObj)) {
+        if (!records || records.length === 0) continue;
+
+        const tableHtml = `
+          <div class="card shadow-sm mb-3">
+            <div class="card-header fw-semibold" style="background-color: var(--doane-navy); color:#fff;">
+              ${MC._escHtml(obj)} <span class="badge bg-light text-dark ms-1">${records.length}</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-striped results-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>ProcessInstance ID</th>
+                      <th>Target Record ID</th>
+                      <th>Created Date</th>
+                      <th>Days Pending</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${records.map(r => {
+                      const created = r.CreatedDate ? new Date(r.CreatedDate) : null;
+                      const daysPending = created ? Math.floor((now - created.getTime()) / 86400000) : '—';
+                      const createdStr = created ? created.toLocaleDateString() : '—';
+                      const sfLink = r.TargetObjectId
+                        ? MC.sfLinkHtml(r.TargetObjectId, obj)
+                        : MC._escHtml(r.TargetObjectId || '');
+                      return `<tr>
+                        <td><code class="small">${MC._escHtml(r.Id || '')}</code></td>
+                        <td>${sfLink}</td>
+                        <td>${createdStr}</td>
+                        <td>${typeof daysPending === 'number' ? daysPending : daysPending}</td>
+                        <td><span class="badge bg-warning text-dark">${MC._escHtml(r.Status || '')}</span></td>
+                      </tr>`;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>`;
+        resultsWrap.insertAdjacentHTML('beforeend', tableHtml);
+      }
+
+      resultsWrap?.classList.remove('d-none');
+
+    } catch (err) {
+      MC.showToast(`Record locks failed: ${err.message}`, 'danger');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+};
+
+// ── Bulk Jobs module ──────────────────────────────────────────────────────────
+
+MC.bulkJobs = {
+  _timer: null,
+
+  init() {
+    document.getElementById('btnRefreshBulkJobs')?.addEventListener('click', () => this.load());
+    document.getElementById('bulkJobsAutoRefresh')?.addEventListener('change', (e) => {
+      this._setAutoRefresh(e.target.checked);
+    });
+    this.load();
+  },
+
+  async load() {
+    const loading = document.getElementById('bulkJobsLoading');
+    const tableWrap = document.getElementById('bulkJobsTableWrap');
+    const emptyState = document.getElementById('bulkJobsEmpty');
+    const summary = document.getElementById('bulkJobsSummary');
+
+    loading?.classList.remove('d-none');
+    tableWrap?.classList.add('d-none');
+    emptyState?.classList.add('d-none');
+
+    try {
+      const resp = await MC.api('/data-ops/api/bulk-jobs', 'GET');
+      const jobs = resp;
+
+      // Summary stats
+      const totalJobs = jobs.length;
+      const totalProcessed = jobs.reduce((s, j) => s + (j.numberRecordsProcessed ?? 0), 0);
+      const totalFailed = jobs.reduce((s, j) => s + (j.numberRecordsFailed ?? 0), 0);
+      const inProgress = jobs.filter(j => j.state === 'InProgress').length;
+
+      const bjTotalJobs = document.getElementById('bjTotalJobs');
+      const bjTotalProcessed = document.getElementById('bjTotalProcessed');
+      const bjTotalFailed = document.getElementById('bjTotalFailed');
+      const bjInProgress = document.getElementById('bjInProgress');
+
+      if (bjTotalJobs) bjTotalJobs.textContent = totalJobs.toLocaleString();
+      if (bjTotalProcessed) bjTotalProcessed.textContent = totalProcessed.toLocaleString();
+      if (bjTotalFailed) bjTotalFailed.textContent = totalFailed.toLocaleString();
+      if (bjInProgress) bjInProgress.textContent = inProgress.toLocaleString();
+      summary?.classList.remove('d-none');
+
+      const countEl = document.getElementById('bulkJobsCount');
+      if (countEl) countEl.textContent = `${totalJobs} job${totalJobs !== 1 ? 's' : ''}`;
+
+      if (totalJobs === 0) {
+        emptyState?.classList.remove('d-none');
+        loading?.classList.add('d-none');
+        return;
+      }
+
+      const tbody = document.getElementById('bulkJobsBody');
+      if (tbody) {
+        tbody.innerHTML = jobs.map(j => {
+          const stateBadge = MC.bulkJobs._stateBadge(j.state);
+          const opBadge = `<span class="badge bg-secondary">${MC._escHtml(j.operation || '')}</span>`;
+          const failedCell = (j.numberRecordsFailed > 0)
+            ? `<td class="text-danger fw-semibold">${(j.numberRecordsFailed ?? 0).toLocaleString()}</td>`
+            : `<td>${(j.numberRecordsFailed ?? 0).toLocaleString()}</td>`;
+          const procTime = j.totalProcessingTime != null
+            ? MC.bulkJobs._fmtMs(j.totalProcessingTime)
+            : '—';
+          const created = j.createdDate ? new Date(j.createdDate).toLocaleString() : '—';
+          return `<tr>
+            <td><code class="small">${MC._escHtml(j.id || '')}</code></td>
+            <td>${opBadge}</td>
+            <td>${MC._escHtml(j.object || '')}</td>
+            <td>${stateBadge}</td>
+            <td>${(j.numberRecordsProcessed ?? 0).toLocaleString()}</td>
+            ${failedCell}
+            <td>${procTime}</td>
+            <td><small>${created}</small></td>
+          </tr>`;
+        }).join('');
+      }
+
+      tableWrap?.classList.remove('d-none');
+
+    } catch (err) {
+      MC.showToast(`Bulk jobs failed: ${err.message}`, 'danger');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _stateBadge(state) {
+    const s = state || '';
+    if (s === 'JobComplete') return `<span class="badge bg-success">${MC._escHtml(s)}</span>`;
+    if (s === 'InProgress') return `<span class="badge bg-warning text-dark">${MC._escHtml(s)}</span>`;
+    if (s === 'Failed') return `<span class="badge bg-danger">${MC._escHtml(s)}</span>`;
+    return `<span class="badge bg-secondary">${MC._escHtml(s)}</span>`;
+  },
+
+  _fmtMs(ms) {
+    if (ms == null) return '—';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60000).toFixed(1)}m`;
+  },
+
+  _setAutoRefresh(checked) {
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
+    if (checked) {
+      this._timer = setInterval(() => this.load(), 15000);
+    }
+  },
+};
