@@ -109,6 +109,21 @@ def api_email_templates():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/audit-trail')
+def api_audit_trail():
+    org = session.get('active_org', 'dev')
+    try:
+        days = int(request.args.get('days', 7))
+    except (ValueError, TypeError):
+        days = 7
+    try:
+        data = admin_service.get_audit_trail(org, days=days)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('audit trail failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:

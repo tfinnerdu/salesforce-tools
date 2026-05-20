@@ -59,6 +59,11 @@ MC.admin = {
     document.querySelectorAll('.integ-refresh-btn').forEach(btn => {
       btn.addEventListener('click', () => this.loadIntegrations());
     });
+
+    document.getElementById('tab-audit-trail-btn')?.addEventListener('shown.bs.tab', () => this.loadAuditTrail());
+    document.getElementById('btnRefreshAuditTrail')?.addEventListener('click', () => this.loadAuditTrail());
+    document.getElementById('auditTrailSearch')?.addEventListener('input', e => this._filterAuditTrail(e.target.value));
+    document.getElementById('auditTrailDays')?.addEventListener('change', () => this.loadAuditTrail());
   },
 
   // ── Scheduled Jobs ──────────────────────────────────────────────────────────
@@ -695,5 +700,100 @@ MC.admin = {
       (t.subject || '').toLowerCase().includes(query)
     );
     this._renderEmailTemplatesTable(filtered);
+  },
+
+  // ── Setup Audit Trail ───────────────────────────────────────────────────────
+
+  _auditTrailEntries: [],
+
+  async loadAuditTrail() {
+    const loading = document.getElementById('auditTrailLoading');
+    const empty   = document.getElementById('auditTrailEmpty');
+    const card    = document.getElementById('auditTrailCard');
+    const searchEl = document.getElementById('auditTrailSearch');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    if (searchEl) searchEl.value = '';
+    const days = document.getElementById('auditTrailDays')?.value || 7;
+    try {
+      const data = await MC.api(`/admin/audit-trail?days=${days}`);
+      this._auditTrailEntries = data || [];
+      if (this._auditTrailEntries.length === 0) {
+        empty?.classList.remove('d-none');
+        return;
+      }
+      this._renderAuditTrail(this._auditTrailEntries);
+      card?.classList.remove('d-none');
+    } catch (err) {
+      MC.showToast(`Failed to load audit trail: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderAuditTrail(entries) {
+    const tbody = document.getElementById('auditTrailTbody');
+    if (!tbody) return;
+    tbody.innerHTML = entries.map(e => {
+      const dateCell = this._relativeDate(e.created_date);
+      const sectionBadge = `<span class="badge bg-secondary bg-opacity-25 text-secondary small">${MC._escHtml(e.section)}</span>`;
+      const actionBadge = this._auditActionBadge(e.action);
+      return `<tr data-section="${MC._escHtml((e.section || '').toLowerCase())}"
+                  data-by="${MC._escHtml((e.created_by || '').toLowerCase())}"
+                  data-display="${MC._escHtml((e.display || '').toLowerCase())}">
+        <td class="small text-nowrap" title="${MC._escHtml(e.created_date || '')}">${dateCell}</td>
+        <td class="small">${MC._escHtml(e.created_by)}</td>
+        <td>${sectionBadge}</td>
+        <td>${actionBadge}</td>
+        <td class="small text-muted">${MC._escHtml(e.display)}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  _auditActionBadge(action) {
+    const a = (action || '').trim();
+    const cls =
+      a === 'Created'   ? 'badge-green'  :
+      a === 'Changed'   ? 'badge-amber'  :
+      a === 'Deleted'   ? 'badge-red'    :
+      a === 'Installed' ? 'badge-navy'   :
+      a === 'Activated' ? 'badge-blue'   :
+      'badge-secondary';
+    return `<span class="badge ${cls}">${MC._escHtml(a || '—')}</span>`;
+  },
+
+  _filterAuditTrail(query) {
+    const q = (query || '').toLowerCase();
+    const tbody = document.getElementById('auditTrailTbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(row => {
+      if (!q) {
+        row.classList.remove('d-none');
+        return;
+      }
+      const section = row.dataset.section || '';
+      const by      = row.dataset.by || '';
+      const display = row.dataset.display || '';
+      const match = section.includes(q) || by.includes(q) || display.includes(q);
+      row.classList.toggle('d-none', !match);
+    });
+  },
+
+  _relativeDate(isoStr) {
+    if (!isoStr) return '—';
+    try {
+      const dt = new Date(isoStr);
+      const diffMs = Date.now() - dt.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 60) return `${diffMins}m ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    } catch (e) {
+      return isoStr;
+    }
   },
 };

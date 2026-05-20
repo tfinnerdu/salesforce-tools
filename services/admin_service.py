@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from config import Config
 from sf_provider import get_sf
@@ -304,3 +304,44 @@ def get_email_templates(org: str) -> list:
             'last_modified_by': modifier.get('Name', ''),
         })
     return templates
+
+
+# ── Setup Audit Trail ──────────────────────────────────────────────────────────
+
+def _mock_audit_trail():
+    now = datetime.now(timezone.utc)
+    return [
+        {'id': 'SAT01', 'action': 'Changed',   'section': 'Permission Sets',       'created_date': (now - timedelta(hours=2)).isoformat(),  'created_by': 'SF Admin', 'display': 'Changed permission set Migration Admin: added Create on Account'},
+        {'id': 'SAT02', 'action': 'Created',   'section': 'Custom Fields',         'created_date': (now - timedelta(hours=5)).isoformat(),  'created_by': 'SF Admin', 'display': 'Created custom field Account.SIS_ID__c'},
+        {'id': 'SAT03', 'action': 'Activated', 'section': 'Flows',                 'created_date': (now - timedelta(days=1)).isoformat(),   'created_by': 'SF Admin', 'display': 'Activated Flow: Student_Update_Handler version 3'},
+        {'id': 'SAT04', 'action': 'Changed',   'section': 'Named Credentials',     'created_date': (now - timedelta(days=2)).isoformat(),   'created_by': 'SF Admin', 'display': 'Changed Named Credential: Conductor API endpoint'},
+        {'id': 'SAT05', 'action': 'Changed',   'section': 'Remote Site Settings',  'created_date': (now - timedelta(days=3)).isoformat(),   'created_by': 'SF Admin', 'display': 'Changed Remote Site Setting: Ethos — enabled'},
+        {'id': 'SAT06', 'action': 'Installed', 'section': 'Packages',              'created_date': (now - timedelta(days=5)).isoformat(),   'created_by': 'SF Admin', 'display': 'Installed package: Education Data Architecture v2.4'},
+    ]
+
+
+def get_audit_trail(org: str, days: int = 7) -> list:
+    """Query SetupAuditTrail for recent org config changes."""
+    sf = get_sf(org)
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    soql = (
+        f"SELECT Id, Action, Section, CreatedDate, CreatedBy.Name, Display "
+        f"FROM SetupAuditTrail "
+        f"WHERE CreatedDate >= {since} "
+        f"ORDER BY CreatedDate DESC LIMIT 200"
+    )
+    result = sf.query(soql)
+    entries = []
+    for r in result.get('records', []):
+        creator = r.get('CreatedBy') or {}
+        entries.append({
+            'id': r.get('Id'),
+            'action': r.get('Action', ''),
+            'section': r.get('Section', ''),
+            'created_date': r.get('CreatedDate'),
+            'created_by': creator.get('Name', ''),
+            'display': r.get('Display', ''),
+        })
+    if Config.SF_MOCK and not entries:
+        return _mock_audit_trail()
+    return entries

@@ -86,6 +86,13 @@
         Email Templates
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-audit-trail-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-audit-trail" type="button" role="tab"
+              aria-controls="tab-audit-trail" aria-selected="false">
+        Audit Trail
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -634,6 +641,54 @@
               </tr>
             </thead>
             <tbody id="emailTemplatesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Setup Audit Trail ─────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-audit-trail" role="tabpanel" aria-labelledby="tab-audit-trail-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          SetupAuditTrail — recent org configuration changes
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Setup Audit Trail"
+                data-bs-content="Queries SetupAuditTrail (standard SF object) for recent org configuration changes. Useful for tracking who changed a permission set, activated a Flow, or modified an integration setting before a go-live. Limited to last N days and 200 records.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2 align-items-center">
+          <select id="auditTrailDays" class="form-select form-select-sm" style="width:auto">
+            <option value="1">Last 1 day</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+          <input id="auditTrailSearch" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by section, user, or detail…" style="width:260px">
+          <button id="btnRefreshAuditTrail" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <div id="auditTrailLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading audit trail…</p>
+      </div>
+      <div id="auditTrailEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No audit trail entries found for the selected period.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="auditTrailCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="auditTrailTable">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>By</th>
+                <th>Section</th>
+                <th>Action</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="auditTrailTbody"></tbody>
           </table>
         </div>
       </div>

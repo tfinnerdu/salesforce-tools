@@ -27,6 +27,11 @@ def org_diff():
     return render_template('schema/org_diff.html')
 
 
+@schema_bp.route('/field-usage')
+def field_usage():
+    return render_template('schema/field_usage.html')
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 
 @schema_bp.route('/crosswalk/upload', methods=['POST'])
@@ -55,6 +60,23 @@ def api_crosswalk_run():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('crosswalk run failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@schema_bp.route('/field-usage/run', methods=['POST'])
+def api_field_usage_run():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    sobject = body.get('sobject', '').strip()
+    if not sobject:
+        return jsonify({'success': False, 'data': None, 'error': 'sobject required'}), 400
+    fields = body.get('fields')  # optional list of field names
+    try:
+        from services import field_usage
+        result = field_usage.run(org=org, sobject=sobject, fields=fields)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('field usage run failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
