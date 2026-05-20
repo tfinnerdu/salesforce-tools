@@ -27,6 +27,16 @@ def bulk_update_page():
     return render_template('data_ops/bulk_update.html')
 
 
+@data_ops_bp.route('/record-locks')
+def record_locks_page():
+    return render_template('data_ops/record_locks.html')
+
+
+@data_ops_bp.route('/bulk-jobs')
+def bulk_jobs_page():
+    return render_template('data_ops/bulk_jobs.html')
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 
 @data_ops_bp.route('/join/build', methods=['POST'])
@@ -131,4 +141,30 @@ def api_bulk_execute():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 400
     except Exception as exc:
         logger.exception('bulk execute failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/api/record-locks')
+def api_record_locks():
+    org = session.get('active_org', 'dev')
+    sobject = request.args.get('object', '')
+    try:
+        from services import record_lock_detector
+        data = record_lock_detector.get_locked_records(org=org, sobject=sobject or None)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('record locks failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/api/bulk-jobs')
+def api_bulk_jobs():
+    org = session.get('active_org', 'dev')
+    try:
+        limit = int(request.args.get('limit', 50))
+        from services import bulk_job_history
+        data = bulk_job_history.get_bulk_jobs(org=org, limit=limit)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('bulk job history failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

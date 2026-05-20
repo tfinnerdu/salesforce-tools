@@ -145,6 +145,27 @@ def api_reconciler_rerun():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@migration_bp.route('/velocity')
+def page_velocity():
+    return render_template('migration/velocity.html')
+
+
+@migration_bp.route('/velocity/data')
+def api_velocity_data():
+    org = session.get('active_org', 'dev')
+    try:
+        days = int(request.args.get('days', 30))
+    except (ValueError, TypeError):
+        days = 30
+    try:
+        from services import migration_velocity
+        data = migration_velocity.get_velocity_data(org=org, days=days)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('velocity data failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @migration_bp.route('/preflight')
 def preflight():
     return render_template('migration/preflight.html')

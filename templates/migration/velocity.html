@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}Migration Velocity & ETA - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/readiness">Readiness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/errors">Error Reconciler</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/batches">Batch Progress</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/preflight">Pre-flight</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/migration/velocity">Velocity &amp; ETA</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Migration Velocity &amp; ETA
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Migration Velocity & ETA"
+              data-bs-content="Shows daily and cumulative records migrated over time. Average velocity is computed from the last 7 days with data. ETA is projected from current velocity against the total target of 4,312 PersonAccounts.">ⓘ</span>
+      </h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Summary stats row -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Records Migrated</div>
+          <div class="fw-bold fs-5" id="statMigrated">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">% Complete</div>
+          <div id="statPct">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Avg Velocity (last 7 days)</div>
+          <div class="fw-bold fs-5" id="statVelocity">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Projected ETA</div>
+          <div class="fw-bold fs-5" id="statEta">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Burn-down chart card -->
+  <div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="fw-semibold">Migration Burn-Down</span>
+      <div class="d-flex gap-2 align-items-center no-print">
+        <label for="velocityDaysSelect" class="form-label small mb-0">Days:</label>
+        <select id="velocityDaysSelect" class="form-select form-select-sm" style="width:auto">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="60">Last 60 days</option>
+        </select>
+        <button id="btnRefreshVelocity" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="velocityLoading" class="text-center py-4">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading velocity data…</p>
+      </div>
+      <div id="velocityChartWrap" class="d-none" style="position:relative; height:300px">
+        <canvas id="velocityChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.velocity.init();
+  });
+</script>
+{% endblock %}
