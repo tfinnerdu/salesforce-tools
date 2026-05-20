@@ -1955,6 +1955,33 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ── Mock-mode visual indicators ───────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!MC.isMock()) return;
+
+  // Inject "MOCK DATA" chip into every card-header h5
+  document.querySelectorAll('.card-header h5').forEach(h5 => {
+    const chip = document.createElement('span');
+    chip.className = 'mc-mock-chip ms-2';
+    chip.title = 'SF_MOCK=true — this data is synthetic';
+    h5.appendChild(chip);
+  });
+
+  // Disable write-action buttons tagged with data-mock-disable
+  document.querySelectorAll('[data-mock-disable]').forEach(btn => {
+    btn.classList.add('mc-mock-btn-disabled');
+    btn.setAttribute('disabled', 'disabled');
+    const original = btn.getAttribute('data-mock-disable') || 'Not available in mock mode';
+    btn.setAttribute('title', original);
+    btn.setAttribute('data-bs-toggle', 'tooltip');
+    btn.setAttribute('data-bs-placement', 'top');
+    if (typeof bootstrap !== 'undefined') {
+      new bootstrap.Tooltip(btn);
+    }
+  });
+});
+
 'use strict';
 
 // ── Logs ──────────────────────────────────────────────────────────────────────

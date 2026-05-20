@@ -59,7 +59,8 @@
         <input class="form-check-input" type="checkbox" id="autoRefreshToggle" role="switch">
         <label class="form-check-label small" for="autoRefreshToggle">Auto-refresh (10s)</label>
       </div>
-      <button class="btn btn-outline-danger btn-sm ms-auto" id="btnDeleteAllLogs">
+      <button class="btn btn-outline-danger btn-sm ms-auto" id="btnDeleteAllLogs"
+              data-mock-disable="Cannot delete logs in mock mode">
         Delete All Logs
       </button>
     </div>
@@ -246,7 +247,8 @@
         <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
       </div>
       <div class="d-flex gap-2">
-        <button id="btnDeleteExpired" class="btn btn-outline-secondary btn-sm">Delete Expired</button>
+        <button id="btnDeleteExpired" class="btn btn-outline-secondary btn-sm"
+                data-mock-disable="Cannot delete trace flags in mock mode">Delete Expired</button>
         <button id="btnRefreshTraceFlags" class="btn btn-doane btn-sm">&#8635; Refresh</button>
       </div>
     </div>
@@ -325,8 +327,10 @@
           </div>
         </div>
         <div class="mt-3 d-flex gap-2 flex-wrap">
-          <button id="btnCreateTraceFlag" class="btn btn-doane btn-sm">Create Trace Flag</button>
-          <button class="btn btn-outline-warning btn-sm" onclick="MC.logs.traceMe()">&#9889; Trace Me (30 min)</button>
+          <button id="btnCreateTraceFlag" class="btn btn-doane btn-sm"
+                  data-mock-disable="Cannot create trace flags in mock mode">Create Trace Flag</button>
+          <button class="btn btn-outline-warning btn-sm" onclick="MC.logs.traceMe()"
+                  data-mock-disable="Cannot create trace flags in mock mode">&#9889; Trace Me (30 min)</button>
         </div>
       </div>
     </div>

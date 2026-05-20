@@ -133,7 +133,8 @@
               data-bs-content="Groups failed workflows by their last error message. Use this to identify systemic issues (all failures sharing the same SOQL error) vs. record-specific problems. Fix the root cause before re-running.">ⓘ</span>
       </span>
       <div class="d-flex gap-2 no-print">
-        <button id="btnRerunAll" class="btn btn-sm btn-danger">Re-run All Failures
+        <button id="btnRerunAll" class="btn btn-sm btn-danger"
+                data-mock-disable="Cannot requeue batches in mock mode">Re-run All Failures
           <span class="mc-info-icon"
                 data-bs-toggle="popover"
                 data-bs-trigger="focus"

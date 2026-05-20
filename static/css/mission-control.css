@@ -103,6 +103,35 @@
   height: 3rem;
 }
 
+/* ── Mock-mode indicators ────────────────────────────────────────────────── */
+.mc-mock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #856404;
+  background: #fff8e1;
+  border: 1px dashed #ffc107;
+  border-radius: 0.3rem;
+  padding: 0.15em 0.5em;
+  vertical-align: middle;
+  letter-spacing: 0.03em;
+  user-select: none;
+}
+
+.mc-mock-chip::before {
+  content: '⚠';
+  font-size: 0.75em;
+}
+
+/* Write-action buttons disabled in mock mode */
+.mc-mock-btn-disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
 /* ── Badges ──────────────────────────────────────────────────────────────── */
 .badge-green {
   background-color: #28a745;
