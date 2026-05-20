@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
-from services import join_builder
+from services import join_builder, bulk_dml
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,11 @@ def index():
 @data_ops_bp.route('/join')
 def join():
     return render_template('data_ops/join_builder.html')
+
+
+@data_ops_bp.route('/bulk-update')
+def bulk_update_page():
+    return render_template('data_ops/bulk_update.html')
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -88,4 +93,42 @@ def api_join_run():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('join run failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/bulk-update/preview', methods=['POST'])
+def api_bulk_preview():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    sobject = body.get('sobject', '').strip()
+    where_clause = body.get('where_clause', '').strip()
+    if not sobject or not where_clause:
+        return jsonify({'success': False, 'data': None, 'error': 'sobject and where_clause required'}), 400
+    try:
+        result = bulk_dml.preview(org=org, sobject=sobject, where_clause=where_clause)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('bulk preview failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/bulk-update/execute', methods=['POST'])
+def api_bulk_execute():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    sobject = body.get('sobject', '').strip()
+    where_clause = body.get('where_clause', '').strip()
+    field = body.get('field', '').strip()
+    value = body.get('value')
+    dry_run = bool(body.get('dry_run', True))
+    if not sobject or not where_clause or not field:
+        return jsonify({'success': False, 'data': None, 'error': 'sobject, where_clause, and field required'}), 400
+    try:
+        result = bulk_dml.bulk_update(org=org, sobject=sobject, where_clause=where_clause,
+                                      field=field, value=value, dry_run=dry_run)
+        return jsonify({'success': True, 'data': result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.exception('bulk execute failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

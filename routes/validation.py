@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
-from services import duplicate_radar, external_id_coverage, contactpoint_scanner, field_completeness
+from services import duplicate_radar, external_id_coverage, contactpoint_scanner, field_completeness, orphan_scanner
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,11 @@ def contactpoints():
 @validation_bp.route('/completeness')
 def completeness():
     return render_template('validation/field_completeness.html')
+
+
+@validation_bp.route('/orphans')
+def orphans():
+    return render_template('validation/orphan_scanner.html')
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -98,4 +103,15 @@ def api_completeness_run():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('field completeness run failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@validation_bp.route('/orphans/scan', methods=['GET'])
+def api_orphans_scan():
+    org = session.get('active_org', 'dev')
+    try:
+        result = orphan_scanner.scan(org=org)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('orphan scan failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

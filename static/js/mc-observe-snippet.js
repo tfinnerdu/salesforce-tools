@@ -47,6 +47,8 @@ MC.observe = {
       this.loadRecordCounts(org);
     });
 
+    this._initDrift();
+
     // Auto-load on page open
     this.loadLimits(MC.activeOrg());
     this.loadTrends(MC.activeOrg(), 30);
@@ -336,6 +338,101 @@ MC.observe = {
         <td class="text-center no-print">${actionCell}</td>
       </tr>`;
     }).join('');
+    if (tableWrap) tableWrap.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+  },
+
+  _initDrift() {
+    document.getElementById('btnRunDrift')?.addEventListener('click', () => this.runDrift());
+  },
+
+  async runDrift() {
+    const baseline = document.getElementById('driftBaselineOrg')?.value || 'prod';
+    const target = document.getElementById('driftTargetOrg')?.value || 'sandbox';
+    const loadingEl = document.getElementById('driftLoading');
+    const emptyEl = document.getElementById('driftEmpty');
+    const summaryEl = document.getElementById('driftSummary');
+    const tableWrap = document.getElementById('driftTableWrap');
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (summaryEl) summaryEl.classList.add('d-none');
+    if (tableWrap) tableWrap.classList.add('d-none');
+    try {
+      const data = await MC.api(`/observe/sandbox-drift?baseline=${encodeURIComponent(baseline)}&target=${encodeURIComponent(target)}`);
+      this._renderDrift(data);
+    } catch (err) {
+      MC.showToast(`Drift check failed: ${err.message}`, 'danger');
+      if (emptyEl) {
+        emptyEl.textContent = `Drift check failed: ${err.message}`;
+        emptyEl.classList.remove('d-none');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('d-none');
+    }
+  },
+
+  _renderDrift(data) {
+    const summaryEl = document.getElementById('driftSummary');
+    const tableWrap = document.getElementById('driftTableWrap');
+    const tbody = document.getElementById('driftTableBody');
+    const emptyEl = document.getElementById('driftEmpty');
+    if (!tbody) return;
+
+    const checks = data.checks || [];
+    if (!checks.length) {
+      if (emptyEl) {
+        emptyEl.textContent = 'No checks returned.';
+        emptyEl.classList.remove('d-none');
+      }
+      return;
+    }
+
+    // Summary badges
+    const okCount = checks.filter(c => c.status === 'ok').length;
+    const total = checks.length;
+    const summaryBadgeCls = okCount === total ? 'badge-green' : okCount >= total * 0.8 ? 'badge-amber' : 'badge-red';
+    if (summaryEl) {
+      summaryEl.innerHTML = `<span class="badge ${summaryBadgeCls} fs-6">${okCount} of ${total} checks within tolerance</span>
+        <span class="small text-muted ms-2">${MC._escHtml(data.baseline_org || '')} → ${MC._escHtml(data.target_org || '')}</span>`;
+      summaryEl.classList.remove('d-none');
+    }
+
+    // Status badge map
+    const statusBadge = {
+      ok:       '<span class="badge badge-green">OK</span>',
+      warning:  '<span class="badge badge-amber">WARNING</span>',
+      critical: '<span class="badge badge-red">CRITICAL</span>',
+      error:    '<span class="badge bg-secondary">ERROR</span>',
+    };
+
+    tbody.innerHTML = checks.map(c => {
+      const baseFmt = c.baseline_count != null ? c.baseline_count.toLocaleString() : '—';
+      const tgtFmt  = c.target_count  != null ? c.target_count.toLocaleString()  : '—';
+
+      let deltaFmt = '—';
+      if (c.delta != null) {
+        const sign = c.delta > 0 ? '+' : '';
+        const colorCls = c.delta > 0 ? 'text-success' : c.delta < 0 ? 'text-danger' : '';
+        deltaFmt = `<span class="${colorCls}">${sign}${c.delta.toLocaleString()}</span>`;
+      }
+
+      const deltaPctFmt = (c.delta_pct != null && c.baseline_count !== 0)
+        ? `${c.delta_pct > 0 ? '+' : ''}${c.delta_pct}%`
+        : '';
+
+      const badge = statusBadge[c.status] || `<span class="badge bg-secondary">${MC._escHtml(c.status || '')}</span>`;
+      const title = c.error ? ` title="${MC._escHtml(c.error)}"` : '';
+
+      return `<tr${title}>
+        <td class="small fw-semibold" style="color:var(--doane-navy);">${MC._escHtml(c.label)}</td>
+        <td class="text-end font-monospace">${baseFmt}</td>
+        <td class="text-end font-monospace">${tgtFmt}</td>
+        <td class="text-end font-monospace">${deltaFmt}</td>
+        <td class="text-end font-monospace">${MC._escHtml(deltaPctFmt)}</td>
+        <td class="text-center">${badge}</td>
+      </tr>`;
+    }).join('');
+
     if (tableWrap) tableWrap.classList.remove('d-none');
     if (emptyEl) emptyEl.classList.add('d-none');
   },

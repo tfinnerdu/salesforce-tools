@@ -199,6 +199,65 @@
     </div>
   </div>
 
+
+  <!-- ── Section 5: Sandbox Drift Detector ──────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h5 class="mb-0" style="color:var(--doane-navy);font-weight:700;">Sandbox Drift Detector
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Sandbox Drift Detector"
+              data-bs-content="Runs identical COUNT() queries against two orgs and computes the delta. Use after a sandbox refresh to verify the sandbox matches prod. Green = &lt;5% drift, amber = 5–20%, red = &gt;20% or object wiped entirely.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print flex-wrap">
+        <label class="small text-muted mb-0" for="driftBaselineOrg">Baseline:</label>
+        <select id="driftBaselineOrg" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev">dev</option>
+          <option value="prod" selected>prod</option>
+          <option value="sandbox">sandbox</option>
+        </select>
+        <label class="small text-muted mb-0" for="driftTargetOrg">Target:</label>
+        <select id="driftTargetOrg" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev">dev</option>
+          <option value="prod">prod</option>
+          <option value="sandbox" selected>sandbox</option>
+        </select>
+        <button id="btnRunDrift" class="btn btn-doane btn-sm">&#9654; Run</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="driftLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Querying both orgs…</p>
+      </div>
+      <div id="driftEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0">Select baseline + target orgs and click <strong>Run</strong>.</p>
+      </div>
+      <div id="driftSummary" class="mb-3 d-none"></div>
+      <div id="driftTableWrap" class="d-none">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered results-table mb-0" id="driftTable">
+            <thead>
+              <tr style="background:var(--doane-navy);color:#fff;">
+                <th>Metric</th>
+                <th class="text-end">Baseline</th>
+                <th class="text-end">Target</th>
+                <th class="text-end">Delta</th>
+                <th class="text-end">Δ%</th>
+                <th class="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody id="driftTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 

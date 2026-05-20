@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Orphaned Records - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/duplicates">Duplicate Radar</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/external-ids">External ID Coverage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/contactpoints">ContactPoint Integrity</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/completeness">Field Completeness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/validation/orphans">Orphaned Records</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h4 class="mc-page-title">Orphaned Record Scanner
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Orphaned Record Scanner"
+            data-bs-content="Checks for ContactPoint and Account records with broken parent links. These orphans indicate data gaps in the migration: ContactPointEmail/Phone/Address must have a valid ParentId pointing to the Account, and IndividualId for consent. Person Accounts should link to an Individual.">ⓘ</span>
+    </h4>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+      <button id="btnRunOrphanScan" class="btn btn-doane btn-sm">&#128269; Run Scan</button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="orphanLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Scanning…</span>
+    </div>
+    <p class="mt-2 text-muted small">Scanning for orphaned records…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="orphanEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No scan results yet.</p>
+    <p class="small">Click <strong>Run Scan</strong> to check for orphaned ContactPoint and Account records.</p>
+  </div>
+
+  <!-- Summary row -->
+  <div id="orphanSummaryRow" class="d-flex gap-3 align-items-center mb-3 d-none">
+    <span class="fw-semibold small text-muted">Summary:</span>
+    <span id="orphanSummaryOk" class="badge badge-green">0 checks clean</span>
+    <span id="orphanSummaryWarn" class="badge badge-amber">0 checks with orphans</span>
+  </div>
+
+  <!-- Results cards -->
+  <div id="orphanResults"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-validation-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.validation.init();
+  });
+</script>
+{% endblock %}

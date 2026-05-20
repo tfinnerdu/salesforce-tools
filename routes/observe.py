@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, render_template, request, session
 
-from services import org_observer, storage_breakdown
+from services import org_observer, storage_breakdown, sandbox_drift
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,18 @@ def api_record_counts():
         return jsonify({'success': True, 'data': data})
     except Exception as exc:
         logger.exception('get_record_counts failed for org %s', org)
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@observe_bp.route('/sandbox-drift')
+def api_sandbox_drift():
+    baseline = request.args.get('baseline', 'prod')
+    target = request.args.get('target', 'sandbox')
+    try:
+        data = sandbox_drift.run(baseline_org=baseline, target_org=target)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('sandbox drift failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
