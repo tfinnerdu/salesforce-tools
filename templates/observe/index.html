@@ -31,6 +31,7 @@
           <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
           <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
         </select>
+        <button id="btnToggleThresholds" class="btn btn-outline-secondary btn-sm">&#9881; Thresholds</button>
         <button id="btnRefreshLimits" class="btn btn-doane btn-sm">&#8635; Refresh</button>
       </div>
     </div>
@@ -51,6 +52,41 @@
                 data-bs-title="DailyApiRequests"
                 data-bs-content="Total REST/SOAP API calls allowed per 24-hour period. Resets at midnight GMT. If this approaches 0, integrations start returning REQUEST_LIMIT_EXCEEDED.">ⓘ</span>
         </p>
+      </div>
+      <div id="thresholdEditorWrap" class="d-none border-top pt-3 mt-2">
+        <p class="small text-muted mb-2">
+          Override the default 50%/80% amber/red thresholds for any limit.
+          Changes persist to the database.
+        </p>
+        <div class="row g-2 align-items-end mb-2">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Limit</label>
+            <select id="thresholdLimitSelect" class="form-select form-select-sm">
+              <option value="">— select —</option>
+              <option value="DailyApiRequests">Daily API Requests</option>
+              <option value="DataStorageMB">Data Storage (MB)</option>
+              <option value="FileStorageMB">File Storage (MB)</option>
+              <option value="DailyBulkApiRequests">Daily Bulk API Requests</option>
+              <option value="DailyAsyncApexExecutions">Daily Async Apex</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Amber %</label>
+            <input type="number" id="thresholdAmber" class="form-control form-control-sm" value="50" min="1" max="99">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Red %</label>
+            <input type="number" id="thresholdRed" class="form-control form-control-sm" value="80" min="1" max="100">
+          </div>
+          <div class="col-md-2">
+            <button id="btnSaveThreshold" class="btn btn-doane btn-sm">Save</button>
+          </div>
+          <div class="col-md-2">
+            <button id="btnResetThreshold" class="btn btn-outline-secondary btn-sm">Reset to Default</button>
+          </div>
+        </div>
+        <div id="thresholdSaveMsg" class="small"></div>
+        <div id="currentThresholdsList" class="mt-2 small text-muted"></div>
       </div>
       <div id="limitsGrid" class="row g-3 d-none"></div>
     </div>

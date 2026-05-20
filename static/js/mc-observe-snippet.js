@@ -47,6 +47,10 @@ MC.observe = {
       this.loadRecordCounts(org);
     });
 
+    document.getElementById('btnToggleThresholds')?.addEventListener('click', () => this._toggleThresholdEditor());
+    document.getElementById('btnSaveThreshold')?.addEventListener('click', () => this._saveThreshold());
+    document.getElementById('btnResetThreshold')?.addEventListener('click', () => this._resetThreshold());
+
     this._initDrift();
 
     // Auto-load on page open
@@ -87,40 +91,7 @@ MC.observe = {
       }
       return;
     }
-    gridEl.innerHTML = limits.map(lim => {
-      const pct = Math.min(lim.pct, 100);
-      const barCls =
-        lim.status === 'green' ? 'bg-success' :
-        lim.status === 'amber' ? 'bg-warning' : 'bg-danger';
-      const badgeCls =
-        lim.status === 'green' ? 'badge-green' :
-        lim.status === 'amber' ? 'badge-amber' : 'badge-red';
-      const usedFmt = (lim.used || 0).toLocaleString();
-      const maxFmt = (lim.max || 0).toLocaleString();
-      const remainFmt = (lim.remaining || 0).toLocaleString();
-      return `<div class="col-sm-6 col-lg-4 col-xl-3">
-        <div class="card h-100 border-0 shadow-sm">
-          <div class="card-body py-3 px-3">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <span class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(lim.name)}</span>
-              <span class="badge ${badgeCls}">${pct.toFixed(1)}%</span>
-            </div>
-            <div class="progress mb-2" style="height:8px;" title="${usedFmt} used of ${maxFmt}">
-              <div class="progress-bar ${barCls}"
-                   role="progressbar"
-                   style="width:${pct}%"
-                   aria-valuenow="${pct}"
-                   aria-valuemin="0"
-                   aria-valuemax="100"></div>
-            </div>
-            <div class="d-flex justify-content-between small text-muted">
-              <span>${usedFmt} used</span>
-              <span>${remainFmt} left / ${maxFmt}</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
+    gridEl.innerHTML = limits.map(lim => this._renderLimitCard(lim)).join('');
     gridEl.classList.remove('d-none');
     const emptyEl = document.getElementById('limitsEmpty');
     if (emptyEl) emptyEl.classList.add('d-none');
@@ -340,6 +311,115 @@ MC.observe = {
     }).join('');
     if (tableWrap) tableWrap.classList.remove('d-none');
     if (emptyEl) emptyEl.classList.add('d-none');
+  },
+
+  _renderLimitCard(lim) {
+    const pct = Math.min(lim.pct, 100);
+    const barCls =
+      lim.status === 'green' ? 'bg-success' :
+      lim.status === 'amber' ? 'bg-warning' : 'bg-danger';
+    const badgeCls =
+      lim.status === 'green' ? 'badge-green' :
+      lim.status === 'amber' ? 'badge-amber' : 'badge-red';
+    const usedFmt = (lim.used || 0).toLocaleString();
+    const maxFmt = (lim.max || 0).toLocaleString();
+    const remainFmt = (lim.remaining || 0).toLocaleString();
+    const customBadge = lim.custom_threshold
+      ? `<span class="badge badge-amber ms-1" title="Custom threshold">&#9881;</span>`
+      : '';
+    return `<div class="col-sm-6 col-lg-4 col-xl-3">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body py-3 px-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <span class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(lim.name)}${customBadge}</span>
+            <span class="badge ${badgeCls}">${pct.toFixed(1)}%</span>
+          </div>
+          <div class="progress mb-2" style="height:8px;" title="${usedFmt} used of ${maxFmt}">
+            <div class="progress-bar ${barCls}"
+                 role="progressbar"
+                 style="width:${pct}%"
+                 aria-valuenow="${pct}"
+                 aria-valuemin="0"
+                 aria-valuemax="100"></div>
+          </div>
+          <div class="d-flex justify-content-between small text-muted">
+            <span>${usedFmt} used</span>
+            <span>${remainFmt} left / ${maxFmt}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  },
+
+  _toggleThresholdEditor() {
+    const wrap = document.getElementById('thresholdEditorWrap');
+    if (!wrap) return;
+    const isHidden = wrap.classList.contains('d-none');
+    wrap.classList.toggle('d-none', !isHidden);
+    if (isHidden) {
+      this._loadCurrentThresholds();
+    }
+  },
+
+  async _saveThreshold() {
+    const limitName = document.getElementById('thresholdLimitSelect')?.value || '';
+    const amber = parseFloat(document.getElementById('thresholdAmber')?.value || '50');
+    const red = parseFloat(document.getElementById('thresholdRed')?.value || '80');
+    const msgEl = document.getElementById('thresholdSaveMsg');
+    if (!limitName) {
+      if (msgEl) { msgEl.className = 'small text-danger'; msgEl.textContent = 'Please select a limit.'; }
+      return;
+    }
+    try {
+      await MC.api('/observe/thresholds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit_name: limitName, amber_pct: amber, red_pct: red }),
+      });
+      if (msgEl) { msgEl.className = 'small text-success'; msgEl.textContent = 'Threshold saved.'; }
+      await this._loadCurrentThresholds();
+      const org = document.getElementById('limitsOrgSelect')?.value || MC.activeOrg();
+      this.loadLimits(org);
+    } catch (err) {
+      if (msgEl) { msgEl.className = 'small text-danger'; msgEl.textContent = `Save failed: ${err.message}`; }
+    }
+  },
+
+  async _resetThreshold() {
+    const limitName = document.getElementById('thresholdLimitSelect')?.value || '';
+    const msgEl = document.getElementById('thresholdSaveMsg');
+    if (!limitName) {
+      if (msgEl) { msgEl.className = 'small text-danger'; msgEl.textContent = 'Please select a limit.'; }
+      return;
+    }
+    try {
+      await MC.api(`/observe/thresholds/${encodeURIComponent(limitName)}`, { method: 'DELETE' });
+      if (msgEl) { msgEl.className = 'small text-success'; msgEl.textContent = 'Threshold reset to default.'; }
+      await this._loadCurrentThresholds();
+      const org = document.getElementById('limitsOrgSelect')?.value || MC.activeOrg();
+      this.loadLimits(org);
+    } catch (err) {
+      if (msgEl) { msgEl.className = 'small text-danger'; msgEl.textContent = `Reset failed: ${err.message}`; }
+    }
+  },
+
+  async _loadCurrentThresholds() {
+    const listEl = document.getElementById('currentThresholdsList');
+    if (!listEl) return;
+    try {
+      const data = await MC.api('/observe/thresholds');
+      const entries = Object.entries(data || {});
+      if (!entries.length) {
+        listEl.textContent = 'No custom thresholds set — all limits use defaults (50% amber / 80% red).';
+        return;
+      }
+      listEl.innerHTML = '<strong>Active overrides:</strong> ' +
+        entries.map(([name, t]) =>
+          `${MC._escHtml(name)}: amber=${t.amber_pct}%, red=${t.red_pct}%`
+        ).join(' &nbsp;|&nbsp; ');
+    } catch (_) {
+      listEl.textContent = 'Could not load current thresholds.';
+    }
   },
 
   _initDrift() {

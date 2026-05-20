@@ -6,6 +6,69 @@ from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
 
+_ENSURE_THRESHOLDS_SQL = """
+CREATE TABLE IF NOT EXISTS limit_thresholds (
+    id          SERIAL PRIMARY KEY,
+    limit_name  VARCHAR(100) NOT NULL,
+    amber_pct   FLOAT NOT NULL DEFAULT 50.0,
+    red_pct     FLOAT NOT NULL DEFAULT 80.0,
+    updated_at  TIMESTAMP DEFAULT NOW(),
+    UNIQUE(limit_name)
+);
+"""
+
+
+def _ensure_thresholds_table():
+    from db import get_cursor, db_available
+    if not db_available():
+        return
+    with get_cursor() as cur:
+        cur.execute(_ENSURE_THRESHOLDS_SQL)
+
+
+def get_thresholds() -> dict:
+    """Return {limit_name: {amber_pct, red_pct}} for all configured limits.
+    Falls back to empty dict if DB unavailable."""
+    from db import get_cursor, db_available
+    if not db_available():
+        return {}
+    try:
+        with get_cursor() as cur:
+            cur.execute("SELECT limit_name, amber_pct, red_pct FROM limit_thresholds")
+            rows = cur.fetchall() or []
+        return {r['limit_name']: {'amber_pct': r['amber_pct'], 'red_pct': r['red_pct']} for r in rows}
+    except Exception as exc:
+        logger.error('get_thresholds failed: %s', exc)
+        return {}
+
+
+def set_threshold(limit_name: str, amber_pct: float, red_pct: float) -> dict:
+    """Upsert a threshold for a specific limit."""
+    from db import get_cursor, db_available
+    if not db_available():
+        return {'limit_name': limit_name, 'amber_pct': amber_pct, 'red_pct': red_pct, 'saved': False}
+    _ensure_thresholds_table()
+    with get_cursor() as cur:
+        cur.execute(
+            """INSERT INTO limit_thresholds (limit_name, amber_pct, red_pct)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (limit_name) DO UPDATE
+               SET amber_pct = EXCLUDED.amber_pct, red_pct = EXCLUDED.red_pct,
+                   updated_at = NOW()""",
+            (limit_name, amber_pct, red_pct)
+        )
+    return {'limit_name': limit_name, 'amber_pct': amber_pct, 'red_pct': red_pct, 'saved': True}
+
+
+def delete_threshold(limit_name: str) -> bool:
+    """Remove a custom threshold (revert to defaults)."""
+    from db import get_cursor, db_available
+    if not db_available():
+        return False
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM limit_thresholds WHERE limit_name = %s", (limit_name,))
+    return True
+
 _CROSS_ORG_QUERIES = [
     ('PersonAccounts (total)', 'SELECT COUNT() FROM Account WHERE IsPersonAccount = true'),
     ('PersonAccounts w/ SIS ID', 'SELECT COUNT() FROM Account WHERE IsPersonAccount = true AND SIS_ID__c != null'),
@@ -42,6 +105,7 @@ def get_limits(org: str) -> dict:
     sf = get_sf(org)
     version = getattr(sf, 'sf_version', None) or '59.0'
     raw = sf.restful(f'limits/', method='GET')
+    thresholds = get_thresholds()
     limits = []
     for key, vals in raw.items():
         if not isinstance(vals, dict) or 'Max' not in vals or 'Remaining' not in vals:
@@ -50,6 +114,12 @@ def get_limits(org: str) -> dict:
         remaining = vals['Remaining']
         used = max_val - remaining
         pct = round(100 * used / max_val, 1) if max_val else 0.0
+        # Use custom threshold if set, else defaults
+        if key in thresholds:
+            t = thresholds[key]
+            status = 'red' if pct >= t['red_pct'] else ('amber' if pct >= t['amber_pct'] else 'green')
+        else:
+            status = _limit_status(pct)
         limits.append({
             'key': key,
             'name': _LIMIT_DISPLAY_NAMES.get(key, key),
@@ -57,7 +127,8 @@ def get_limits(org: str) -> dict:
             'remaining': remaining,
             'used': used,
             'pct': pct,
-            'status': _limit_status(pct),
+            'status': status,
+            'custom_threshold': thresholds.get(key),  # None or {amber_pct, red_pct}
         })
     limits.sort(key=lambda x: x['name'])
     return {'org': org, 'limits': limits}
