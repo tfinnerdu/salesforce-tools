@@ -108,3 +108,80 @@ def api_process_exceptions():
     except Exception as exc:
         logger.exception('process exceptions failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@logs_bp.route('/trace-flags', methods=['GET'])
+def api_trace_flags_list():
+    org = session.get('active_org', 'dev')
+    try:
+        data = apex_log_reader.list_trace_flags(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('trace flags list failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@logs_bp.route('/trace-flags/debug-levels', methods=['GET'])
+def api_debug_levels():
+    org = session.get('active_org', 'dev')
+    try:
+        data = apex_log_reader.list_debug_levels(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('debug levels failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@logs_bp.route('/trace-flags/users', methods=['GET'])
+def api_trace_users():
+    org = session.get('active_org', 'dev')
+    search = request.args.get('q', '')
+    try:
+        data = apex_log_reader.list_users_for_tracing(org, search=search)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('trace users failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@logs_bp.route('/trace-flags', methods=['POST'])
+def api_trace_flags_create():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    entity_id = body.get('entity_id', '').strip()
+    entity_type = body.get('entity_type', 'User')
+    debug_level_id = body.get('debug_level_id', '').strip()
+    duration = int(body.get('duration_minutes', 30))
+    if not entity_id or not debug_level_id:
+        return jsonify({'success': False, 'data': None, 'error': 'entity_id and debug_level_id required'}), 400
+    try:
+        data = apex_log_reader.create_trace_flag(org=org, entity_id=entity_id,
+                                                  entity_type=entity_type,
+                                                  debug_level_id=debug_level_id,
+                                                  duration_minutes=duration)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('create trace flag failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@logs_bp.route('/trace-flags/delete-expired', methods=['DELETE'])
+def api_trace_flags_delete_expired():
+    org = session.get('active_org', 'dev')
+    try:
+        data = apex_log_reader.delete_expired_trace_flags(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('delete expired flags failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@logs_bp.route('/trace-flags/<flag_id>', methods=['DELETE'])
+def api_trace_flags_delete(flag_id):
+    org = session.get('active_org', 'dev')
+    try:
+        data = apex_log_reader.delete_trace_flag(org, flag_id)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('delete trace flag failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

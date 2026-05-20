@@ -1,6 +1,8 @@
 import logging
 import re
+from datetime import datetime, timezone
 
+from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -206,3 +208,149 @@ def list_process_exceptions(org: str) -> list:
         }
         for r in records
     ]
+
+
+# ── Trace Flags ──────────────────────────────────────────────────────────────
+
+DEBUG_LEVELS = {
+    'SFDC_DevConsole': 'Dev Console defaults (Apex DEBUG, Callout INFO)',
+    'SF_ApexDebug':    'Apex-focused (Apex FINEST, DB FINE)',
+    'SF_ApexUnit':     'Unit test level (Apex FINEST, all others FINE)',
+    'AllFine':         'Everything FINEST — verbose, noisy',
+}
+
+
+def list_trace_flags(org: str) -> list:
+    """Return active TraceFlag records via Tooling API."""
+    sf = get_sf(org)
+    soql = (
+        "SELECT Id, LogType, StartDate, ExpirationDate, "
+        "DebugLevel.DeveloperName, DebugLevel.Id, "
+        "TracedEntityId, TracedEntityType "
+        "FROM TraceFlag ORDER BY ExpirationDate DESC LIMIT 50"
+    )
+    result = sf.restful('tooling/query/', params={'q': soql})
+    flags = []
+    for r in result.get('records', []):
+        dl = r.get('DebugLevel') or {}
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
+        exp_str = r.get('ExpirationDate', '')
+        try:
+            exp = datetime.fromisoformat(exp_str.replace('Z', '+00:00').replace('+0000', '+00:00'))
+            expired = exp < now
+            expires_in = None if expired else int((exp - now).total_seconds() / 60)
+        except Exception:
+            expired = False
+            expires_in = None
+        flags.append({
+            'id': r.get('Id'),
+            'log_type': r.get('LogType', ''),
+            'start_date': r.get('StartDate'),
+            'expiration_date': exp_str,
+            'debug_level_name': dl.get('DeveloperName', ''),
+            'debug_level_id': dl.get('Id', ''),
+            'traced_entity_id': r.get('TracedEntityId', ''),
+            'traced_entity_type': r.get('TracedEntityType', ''),
+            'expired': expired,
+            'expires_in_minutes': expires_in,
+        })
+    # Mock fallback
+    if Config.SF_MOCK and not flags:
+        return _mock_trace_flags()
+    return flags
+
+
+def _mock_trace_flags():
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    return [
+        {
+            'id': 'TF001', 'log_type': 'USER_DEBUG', 'debug_level_name': 'SFDC_DevConsole',
+            'debug_level_id': 'DL001', 'traced_entity_id': 'U001', 'traced_entity_type': 'User',
+            'start_date': now.isoformat(), 'expiration_date': (now + timedelta(minutes=25)).isoformat(),
+            'expired': False, 'expires_in_minutes': 25,
+        },
+        {
+            'id': 'TF002', 'log_type': 'CLASS_TRACING', 'debug_level_name': 'SF_ApexDebug',
+            'debug_level_id': 'DL002', 'traced_entity_id': 'CL001', 'traced_entity_type': 'ApexClass',
+            'start_date': (now - timedelta(hours=2)).isoformat(),
+            'expiration_date': (now - timedelta(minutes=5)).isoformat(),
+            'expired': True, 'expires_in_minutes': None,
+        },
+    ]
+
+
+def list_debug_levels(org: str) -> list:
+    """Return available DebugLevel records."""
+    sf = get_sf(org)
+    soql = "SELECT Id, DeveloperName, MasterLabel FROM DebugLevel ORDER BY MasterLabel"
+    try:
+        result = sf.restful('tooling/query/', params={'q': soql})
+        levels = [{'id': r['Id'], 'name': r.get('DeveloperName', ''), 'label': r.get('MasterLabel', '')}
+                  for r in result.get('records', [])]
+        if Config.SF_MOCK and not levels:
+            return [{'id': 'DL001', 'name': n, 'label': n} for n in DEBUG_LEVELS]
+        return levels
+    except Exception:
+        return [{'id': n, 'name': n, 'label': n} for n in DEBUG_LEVELS]
+
+
+def list_users_for_tracing(org: str, search: str = '') -> list:
+    """Return users for the trace target picker (top 20 active users)."""
+    sf = get_sf(org)
+    where = f"AND (Name LIKE '%{search}%' OR Username LIKE '%{search}%')" if search else ''
+    soql = f"SELECT Id, Name, Username FROM User WHERE IsActive = true {where} ORDER BY Name LIMIT 20"
+    result = sf.query(soql)
+    users = [{'id': r['Id'], 'name': r.get('Name', ''), 'username': r.get('Username', '')}
+             for r in result.get('records', [])]
+    if Config.SF_MOCK and not users:
+        return [
+            {'id': 'U001', 'name': 'Migration Service', 'username': 'migrate@doane.edu'},
+            {'id': 'U002', 'name': 'SF Admin',          'username': 'admin@doane.edu'},
+        ]
+    return users
+
+
+def create_trace_flag(org: str, entity_id: str, entity_type: str,
+                      debug_level_id: str, duration_minutes: int = 30) -> dict:
+    """Create a new TraceFlag. Returns the created record ID."""
+    sf = get_sf(org)
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(minutes=duration_minutes)
+    # Determine log_type from entity_type
+    log_type = 'CLASS_TRACING' if entity_type == 'ApexClass' else 'USER_DEBUG'
+    body = {
+        'StartDate': now.strftime('%Y-%m-%dT%H:%M:%S.000+0000'),
+        'ExpirationDate': exp.strftime('%Y-%m-%dT%H:%M:%S.000+0000'),
+        'LogType': log_type,
+        'DebugLevelId': debug_level_id,
+        'TracedEntityId': entity_id,
+    }
+    if Config.SF_MOCK:
+        return {'id': 'TF_MOCK', 'created': True, 'mock': True}
+    result = sf.restful('tooling/sobjects/TraceFlag/', method='POST', json=body)
+    return {'id': result.get('id', ''), 'created': True}
+
+
+def delete_trace_flag(org: str, flag_id: str) -> dict:
+    """Delete a TraceFlag by ID."""
+    sf = get_sf(org)
+    if Config.SF_MOCK:
+        return {'deleted': True, 'mock': True}
+    sf.restful(f'tooling/sobjects/TraceFlag/{flag_id}', method='DELETE')
+    return {'deleted': True}
+
+
+def delete_expired_trace_flags(org: str) -> dict:
+    """Delete all expired TraceFlag records."""
+    flags = list_trace_flags(org)
+    expired = [f for f in flags if f['expired']]
+    count = 0
+    for f in expired:
+        try:
+            delete_trace_flag(org, f['id'])
+            count += 1
+        except Exception:
+            pass
+    return {'deleted_count': count}

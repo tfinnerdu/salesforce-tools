@@ -15,6 +15,9 @@
       <li class="nav-item">
         <a class="nav-link" href="#" id="tabCpuSummary" data-tab="cpu">CPU Summary</a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" id="tabTraceFlags" data-tab="trace">Trace Flags</a>
+      </li>
     </ul>
   </div>
 </nav>
@@ -223,6 +226,107 @@
             </thead>
             <tbody id="cpuSummaryTbody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Trace Flags panel ─────────────────────────────────────────────── -->
+  <div id="panelTrace" class="d-none">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Trace Flag Manager
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Trace Flag Manager"
+                data-bs-content="TraceFlags tell Salesforce to generate Apex debug logs for a specific user or class. Without a TraceFlag, no logs are generated. Managed via Tooling API: SELECT Id, LogType, ExpirationDate, DebugLevel.DeveloperName FROM TraceFlag.">ⓘ</span>
+        </h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button id="btnDeleteExpired" class="btn btn-outline-secondary btn-sm">Delete Expired</button>
+        <button id="btnRefreshTraceFlags" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+
+    <!-- Current Flags table -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Current Trace Flags</div>
+      <div class="card-body p-0">
+        <div id="traceFlagsLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching trace flags…</p>
+        </div>
+
+        <div id="traceFlagsEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-1">No trace flags found.</p>
+          <p class="small">Create one below to start capturing Apex debug logs.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="traceFlagsTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>Entity ID</th>
+                <th>Entity Type</th>
+                <th>Debug Level</th>
+                <th>Log Type</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody id="traceFlagsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create New Flag form -->
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Create New Trace Flag</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">Entity Type</label>
+            <select id="traceFlagEntityType" class="form-select form-select-sm">
+              <option value="User">User</option>
+              <option value="ApexClass">ApexClass</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">User / Class</label>
+            <input type="text" id="traceFlagEntitySearch" class="form-control form-control-sm"
+                   placeholder="Type to search…" autocomplete="off" list="traceFlagUserList">
+            <datalist id="traceFlagUserList"></datalist>
+            <input type="hidden" id="traceFlagEntityId">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Debug Level</label>
+            <select id="traceFlagDebugLevel" class="form-select form-select-sm">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Duration</label>
+            <select id="traceFlagDuration" class="form-select form-select-sm">
+              <option value="15">15 minutes</option>
+              <option value="30" selected>30 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="120">2 hours</option>
+              <option value="until_midnight" data-dynamic="true">Until midnight</option>
+            </select>
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+          </div>
+        </div>
+        <div class="mt-3 d-flex gap-2 flex-wrap">
+          <button id="btnCreateTraceFlag" class="btn btn-doane btn-sm">Create Trace Flag</button>
+          <button class="btn btn-outline-warning btn-sm" onclick="MC.logs.traceMe()">&#9889; Trace Me (30 min)</button>
         </div>
       </div>
     </div>
