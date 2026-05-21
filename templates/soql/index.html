@@ -76,6 +76,25 @@
         <button id="btnDeleteSaved" class="btn btn-outline-danger btn-sm d-none">Delete</button>
       </div>
 
+      <!-- Field & Operator Helper -->
+      <div class="card shadow-sm mb-3 no-print" id="soqlHelper">
+        <div class="card-header py-1 d-flex justify-content-between align-items-center"
+             style="cursor:pointer" onclick="MC.soql.toggleHelper()">
+          <small class="fw-semibold" style="color:var(--doane-slate)">Field &amp; Operator Helper</small>
+          <small class="text-muted" id="soqlHelperToggle">&#9650;</small>
+        </div>
+        <div class="card-body py-2" id="soqlHelperBody">
+          <div class="mb-2">
+            <small class="text-muted d-block mb-1">Operators &amp; keywords &mdash; click to insert at cursor</small>
+            <div id="soqlOperators" class="d-flex flex-wrap gap-1"></div>
+          </div>
+          <div>
+            <small class="text-muted d-block mb-1" id="soqlHelperFieldsLabel">Fields &mdash; select an object in the explorer</small>
+            <div id="soqlHelperFields" class="d-flex flex-wrap gap-1" style="max-height:150px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Results area -->
       <div id="resultsArea">
         <!-- Empty state -->

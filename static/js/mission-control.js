@@ -975,8 +975,60 @@ MC.soql = {
       }
     });
 
+    this._renderOperators();
     this.loadObjects();
     this.loadSavedQueries();
+  },
+
+  // ── Field & Operator Helper ─────────────────────────────────────────────────
+
+  _OPERATORS: [
+    '=', '!=', '<', '>', '<=', '>=', 'LIKE', 'IN (', 'NOT IN (', 'INCLUDES (',
+    'AND', 'OR', 'NOT', 'NULL', 'TRUE', 'FALSE',
+    'WHERE', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET',
+    'ASC', 'DESC', 'NULLS LAST', 'COUNT()', 'TODAY', 'LAST_N_DAYS:',
+  ],
+
+  _renderOperators() {
+    const el = document.getElementById('soqlOperators');
+    if (!el) return;
+    el.innerHTML = this._OPERATORS.map(op =>
+      `<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 font-monospace"
+               style="font-size:0.72rem"
+               onclick="MC.soql._insertText(' ${MC._escHtml(op)} ')">${MC._escHtml(op)}</button>`
+    ).join('');
+  },
+
+  _insertText(text) {
+    const editor = document.getElementById('soqlEditor');
+    if (!editor) return;
+    const start = editor.selectionStart ?? editor.value.length;
+    const end = editor.selectionEnd ?? editor.value.length;
+    editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
+    const pos = start + text.length;
+    editor.focus();
+    editor.setSelectionRange(pos, pos);
+  },
+
+  toggleHelper() {
+    const body = document.getElementById('soqlHelperBody');
+    const toggle = document.getElementById('soqlHelperToggle');
+    if (!body) return;
+    const hidden = body.classList.toggle('d-none');
+    if (toggle) toggle.innerHTML = hidden ? '&#9660;' : '&#9650;';
+  },
+
+  _renderHelperFields(objectName, fields) {
+    const el = document.getElementById('soqlHelperFields');
+    const label = document.getElementById('soqlHelperFieldsLabel');
+    if (label) label.textContent = `Fields on ${objectName} — click to add to SELECT`;
+    if (!el) return;
+    el.innerHTML = fields.map(f => {
+      const name = f.name || f;
+      return `<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 font-monospace"
+               style="font-size:0.72rem"
+               onclick="MC.soql._insertField('${MC._escHtml(name)}')">${MC._escHtml(name)}</button>`;
+    }).join('');
   },
 
   async run(allPages = false) {
@@ -1159,6 +1211,7 @@ MC.soql = {
     try {
       const data = await MC.api(`/soql/objects/${encodeURIComponent(objectName)}/fields`);
       const fields = data.fields || data || [];
+      this._renderHelperFields(objectName, fields);
       if (fieldsEl) {
         fieldsEl.innerHTML = fields.map(f => {
           const name = f.name || f;
