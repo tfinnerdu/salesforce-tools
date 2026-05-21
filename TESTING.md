@@ -99,6 +99,55 @@ in the **Manual Test Procedures** section below.
 | `requirements.txt` | — | Compile-verified | — | `pip install -r requirements.txt` validates |
 | `k8s/manifest.yaml` | — | Compile-verified | — | `kubectl apply --dry-run` validates; Traefik enforces IngressRoute |
 
+### May 2026 Expansion — Data Ops Tools, Permissions Audit, Automation & Sharing
+
+New and modified files from the DemandTools-equivalent Data Ops tooling, the
+Permissions Audit tab, the Automation & Sharing tab, and the Tooling API
+bug-fix sweep. Every file below has a bucket assignment per the Four-Bucket Rule.
+
+| File | Stmts | Category | Coverage | Notes |
+|---|---|---|---|---|
+| `services/data_importer.py` | 172 | Unit-tested + Contract-pinned | 94% | `test_data_importer.py` (validation logic) + `test_bulk_api_paths.py` (real Bulk API path) + route-contract characterization. Uncovered: 2 defensive branches |
+| `services/bulk_ops.py` | 116 | Unit-tested | 90% | `test_bulk_ops.py` (mock paths) + `test_bulk_api_paths.py` (real Bulk API delete/modify/reassign) |
+| `services/org_automation.py` | 88 | Unit-tested | 91% | `test_org_automation.py` — happy path, mock fallback, error re-raise, empty-result fallback for all 4 query types |
+| `services/perm_auditor.py` | 131 | Unit-tested | 87% | `test_perm_auditor.py` — perm sets, users, drill-downs, matrices, legacy helpers, lookup-miss paths |
+| `services/platform_events.py` | 41 | Unit-tested + Contract-pinned | 68%* | `test_platform_events.py` + characterization pins the `PlatformEventChannel` query (no `Description` field) |
+| `services/integration_inventory.py` | 57 | Unit-tested + Contract-pinned | 68%* | `test_integration_inventory.py` + characterization pins `RemoteSiteSetting` → `EndpointUrl` field |
+| `services/apex_log_reader.py` | — | Unit-tested + Contract-pinned | — | `test_apex_cpu_summary.py`, `test_trace_flags.py` + characterization pins `ProcessException` queried via Data API, not Tooling |
+| `services/merge_history.py` | 58 | Unit-tested | 67%* | `test_merge_history.py` — incl. regression test: no mock leak when `SF_MOCK=false` |
+| `routes/data_ops.py` | 313 | Unit-tested | 86%** | `test_data_ops_tools.py` — every new tool route, all 400/500 branches; pre-existing join/bulk routes covered by `test_routes_extended.py` |
+| `routes/admin.py` | — | Unit-tested | — | Permission + automation routes covered by `test_perm_auditor.py` / `test_org_automation.py` (200/400/500) |
+| `tests/characterization/test_tooling_api_contracts_characterization.py` | — | Contract-pinned (test) | — | Pins the 3 Tooling API bug fixes so they cannot silently regress |
+| `tests/characterization/test_route_contracts_characterization.py` | — | Contract-pinned (test) | — | Pins new route paths, methods, response envelope shapes |
+| `templates/data_ops/import.html` | — | Manual-procedure-documented | — | Import wizard — see Procedure 10 |
+| `templates/data_ops/export.html` | — | Manual-procedure-documented | — | Export tool — see Procedure 11 |
+| `templates/data_ops/delete.html` | — | Manual-procedure-documented | — | Bulk Delete — see Procedure 12 |
+| `templates/data_ops/modify.html` | — | Manual-procedure-documented | — | Bulk Modify — see Procedure 13 |
+| `templates/data_ops/reassign.html` | — | Manual-procedure-documented | — | Bulk Reassign — see Procedure 14 |
+| `templates/admin/index.html` | — | Unit-tested + Manual-procedure-documented | — | Permissions Audit + Automation & Sharing tabs — see Procedures 15–16 |
+| `templates/migration/velocity.html` | — | Unit-tested + Manual-procedure-documented | — | Fixed missing script include — see Procedure 17 |
+| `static/js/mc-data-ops-snippet.js` | — | Manual-procedure-documented | — | Import wizard, delete/modify/reassign/export — Procedures 10–14 |
+| `static/js/mc-admin-snippet.js` | — | Manual-procedure-documented | — | Permissions Audit + Automation & Sharing JS — Procedures 15–16 |
+| `static/js/mc-migration-snippet.js` | — | Manual-procedure-documented | — | `MC.velocity` chart — Procedure 17 |
+| `static/js/mission-control.js` | — | Manual-procedure-documented | — | `MC.sfLink` / `MC.sfLinkTag` deep-link helpers |
+| `static/css/mission-control.css` | — | Compile-verified | — | Added import-wizard step nav + `badge-blue`/`badge-secondary`/`badge-purple` |
+
+\* These percentages reflect pre-existing untested branches (mock fallbacks and
+exception handlers that predate the May 2026 work). The lines *modified* in this
+expansion are fully covered; the legacy gaps are tracked for a future reconciliation pass.
+
+\*\* `routes/data_ops.py` — all 17 new tool routes (import/export/delete/modify/
+reassign) are fully covered including 400/500 branches. The residual ~14% is
+pre-existing error branches in the legacy join/bulk-update/record-locks/bulk-jobs
+routes, covered for the happy path by `test_routes_extended.py`,
+`test_join_builder.py`, and `test_record_locks_bulk_jobs.py`.
+
+> **Matrix drift note:** the matrix above the May 2026 section predates several
+> feature additions (Observe, Logs, Impact, Deploy tabs and ~35 service modules).
+> A full reconciliation pass to list every pre-existing production file is tracked
+> as outstanding tech debt. All files touched by the May 2026 work ARE accounted
+> for in the section above, per the Four-Bucket Rule.
+
 ---
 
 ## Running the Test Suite
@@ -295,14 +344,178 @@ without errors. Delete removes the entry without page reload.
 
 ---
 
+### Procedure 10 — Data Ops: Data Import Wizard (Validate → Import)
+
+**Goal:** Verify the four-step import wizard validates a CSV and imports it.
+
+Preconditions: app running, `SF_MOCK=true`. Prepare a CSV file `students.csv`:
+
+```
+Name,SIS_ID__c,PersonEmail
+Alice Test,STU90001,alice@doane.edu
+Bob Test,STU90002,bob@doane.edu
+Bad Row,,notanemail
+```
+
+1. Navigate to `/data-ops/import`. Confirm the step nav shows steps 1–4 with step 1
+   highlighted.
+2. **Step 1 — Configure:** enter `Account` as the object, leave operation `Insert`,
+   upload `students.csv`. Confirm the CSV preview panel renders the three rows.
+3. Click **Next: Map Fields →**. Confirm the wizard advances to step 2.
+4. **Step 2 — Map Fields:** confirm a mapping table lists the three CSV columns.
+   Click **Auto-Map** — confirm `Name`, `SIS_ID__c`, `PersonEmail` each auto-select
+   their matching SF field.
+5. Click **Next: Validate →**.
+6. **Step 3 — Validate:** click **Run Validation**. Confirm four stat cards appear
+   (Total / Clean / Warnings / Errors) and that the "Bad Row" produces an **error**
+   for the invalid email `notanemail`.
+7. Confirm the validation issues table lists the email error with row number 3.
+8. Fix the CSV (use a valid email), re-upload, re-validate — confirm 0 errors and the
+   **Next: Import →** button appears.
+9. **Step 4 — Import:** click **Execute Import**. Confirm the result cards show
+   Total / Succeeded / Failed counts. In mock mode ~10% of rows report a mock failure.
+10. Confirm the **Download Error CSV** button appears when failures exist and that
+    clicking it downloads a CSV containing a `_sf_error` column.
+
+**Expected:** Wizard advances cleanly through all four steps. Invalid email is caught
+at step 3. Import returns counts and a downloadable error file.
+
+---
+
+### Procedure 11 — Data Ops: Export to CSV
+
+**Goal:** Verify a SOQL query exports as a downloadable CSV.
+
+1. Navigate to `/data-ops/export`.
+2. Enter `SELECT Id, Name, SIS_ID__c FROM Account LIMIT 10` in the query box.
+3. Set the filename to `accounts.csv`, leave **All pages** checked.
+4. Click **Download CSV**.
+5. Confirm the browser downloads `accounts.csv` and that it opens with a header row
+   plus data rows (no `attributes` column).
+
+**Expected:** CSV downloads immediately. Header matches the SELECT field list.
+
+---
+
+### Procedure 12 — Data Ops: Bulk Delete (Preview → Execute)
+
+**Goal:** Verify the bulk delete preview and execute flow.
+
+1. Navigate to `/data-ops/delete`. Confirm the red destructive-operation warning banner.
+2. Enter `Account` as the object and `SIS_ID__c = null` as the WHERE clause.
+3. Click **Preview**. Confirm the preview panel shows matching records and a total count.
+4. Confirm the **Delete Records** button appears only after a successful preview.
+5. Click **Delete Records** — confirm the browser confirmation dialog appears.
+6. Confirm — observe the result alert reporting deleted count and errors.
+
+**Expected:** Preview must run before execute is possible. Execute reports a count.
+
+---
+
+### Procedure 13 — Data Ops: Bulk Modify
+
+**Goal:** Verify multi-field bulk update.
+
+1. Navigate to `/data-ops/modify`.
+2. Enter `Account` and a WHERE clause `Id != null`.
+3. In **Fields to Update**, enter a field API name and a new value. Click **+ Add Field**
+   and confirm a second field row appears; remove it with the ✕ button.
+4. Click **Preview** — confirm matching records render.
+5. Click **Update Records** — confirm the result alert reports an updated count.
+
+**Expected:** Add/remove field rows work. Preview gates execute. Result reports a count.
+
+---
+
+### Procedure 14 — Data Ops: Bulk Reassign
+
+**Goal:** Verify ownership reassignment with the user picker.
+
+1. Navigate to `/data-ops/reassign`.
+2. Enter `Account` and WHERE clause `Id != null`.
+3. In **New Owner**, type a search term and click **Search** — confirm a user result
+   list appears.
+4. Click a user — confirm a green badge shows the selected owner's name.
+5. Click **Preview**, then **Reassign Records** — confirm the result alert reports a count.
+
+**Expected:** User search returns results; selecting one sets the owner. Preview gates execute.
+
+---
+
+### Procedure 15 — Admin: Permissions Audit Tab
+
+**Goal:** Verify the Permissions Audit drill-downs.
+
+1. Navigate to `/admin/`, click the **Permissions Audit** tab.
+2. **Permission Sets** sub-tab: confirm a list of permission sets loads with user-count
+   badges. Click one — confirm the right panel shows Users / Object Perms / Field Perms
+   sub-tabs populated.
+3. **By User** sub-tab: type a search term, click **Search**, select a user — confirm
+   the detail panel shows their profile, permission sets, and aggregated object access.
+4. **Object Matrix** sub-tab: enter `Account`, click **Load Matrix** — confirm a table
+   of permission sets with R/C/E/D/View-All/Modify-All check columns.
+5. **Field Coverage** sub-tab: enter `Account`, click **Load Field Coverage** — confirm
+   a per-field read/edit table.
+6. Where an SF instance is connected (live mode), confirm permission-set and user names
+   render as "↗ Open in Salesforce" deep links.
+
+**Expected:** All four sub-tabs load. Drill-downs render without errors. Deep links
+appear in live mode and are absent in mock mode.
+
+---
+
+### Procedure 16 — Admin: Automation & Sharing Tab
+
+**Goal:** Verify the read-only org config explorer.
+
+1. Navigate to `/admin/`, click the **Automation & Sharing** tab.
+2. **Validation Rules** sub-tab loads by default — confirm a table of rules with object,
+   status, error field, and error message columns.
+3. Click the **Flows** sub-tab — confirm a table of flows with type and status badges
+   lazy-loads on first view.
+4. Click **Apex Triggers** — confirm a table of triggers with their objects.
+5. Click **Sharing Model** — confirm a table of org-wide defaults with internal/external
+   access badges (Private rendered red).
+6. Use the filter box on any sub-tab — confirm rows filter live.
+
+**Expected:** Each sub-tab lazy-loads on first view. Filters work. No console errors.
+
+---
+
+### Procedure 17 — Migration: Velocity & ETA Chart
+
+**Goal:** Verify the velocity chart renders (regression — the page previously spun
+forever because `mc-migration-snippet.js` was not loaded).
+
+1. Navigate to `/migration/velocity`.
+2. Confirm the loading spinner disappears within ~3 seconds and is replaced by the
+   burn-down chart (it must NOT spin indefinitely).
+3. Confirm the four summary cards populate: Records Migrated, % Complete, Avg Velocity,
+   Projected ETA.
+4. Change the **Days** selector — confirm the chart reloads.
+
+**Expected:** Chart renders. Spinner resolves. No `MC.velocity is undefined` console error.
+
+---
+
 ## Coverage Summary
 
 | Category | Files | Lines |
 |---|---|---|
-| Unit-tested (100%) | 22 Python files | All executable lines |
-| Contract-pinned | 8 Python files | Key invariants in `test_contracts.py` |
-| Compile-verified | 5 files | `routes/__init__.py`, `services/__init__.py`, `static/css/`, `Dockerfile`, `requirements.txt`, `k8s/manifest.yaml` |
-| Manual-procedure-documented | 13 template/JS files | JS event handlers, fetch calls, browser rendering |
+| Unit-tested | 30+ Python files | Core service + route logic, all error paths for May 2026 work |
+| Contract-pinned | `test_contracts.py` + `tests/characterization/` | Mock-data invariants + Tooling API contracts + route contracts |
+| Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/`, `Dockerfile`, `requirements.txt`, `k8s/manifest.yaml` | Declarative — toolchain validates |
+| Manual-procedure-documented | 25+ template/JS files | 17 procedures covering every JS-driven UI flow |
 | Structurally exempt | 1 line | `app.py:63` (`__main__` guard) |
 
-**Effective coverage: 99%+ measured, 100% justified.**
+**Test suite: 937 tests passing.** The May 2026 expansion added 160 tests
+(unit, route-contract, real-Bulk-API-path, and characterization).
+
+**Characterization layer:** `tests/characterization/` pins the three Tooling API
+bug fixes (RemoteSiteSetting `EndpointUrl`, PlatformEventChannel no `Description`,
+ProcessException via Data API) and the new route contracts. These run in CI by
+default and fail loudly if a contract assumption regresses.
+
+> **Known debt:** the File Classification Matrix predates the Observe/Logs/Impact/
+> Deploy tabs and ~35 service modules. The May 2026 expansion files are fully
+> accounted for; a full reconciliation of the older sections is outstanding.

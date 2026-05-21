@@ -79,6 +79,30 @@ def test_mock_returns_three_items_when_db_unavailable():
     assert len(mocks) == 3
 
 
+def test_list_merges_returns_empty_when_mock_disabled_and_no_db(monkeypatch):
+    """Regression: mock merge data must NOT leak onto a real org.
+
+    Before the fix, list_merges() fell back to _mock_merges() unconditionally
+    when the DB was unavailable — so a real sandbox (SF_MOCK=false) with no
+    Postgres showed three fake merges. With SF_MOCK off, it must return [].
+    """
+    from services import merge_history
+    import config
+    monkeypatch.setattr(config.Config, 'SF_MOCK', False)
+    # DB is unavailable in the test env (DATABASE_URL='')
+    result = merge_history.list_merges('dev')
+    assert result == []
+
+
+def test_get_stats_returns_zeros_when_mock_disabled_and_no_db(monkeypatch):
+    """With SF_MOCK off and no DB, get_stats() returns all-zero counts, not mock stats."""
+    from services import merge_history
+    import config
+    monkeypatch.setattr(config.Config, 'SF_MOCK', False)
+    stats = merge_history.get_stats('dev')
+    assert stats == {'total_merges': 0, 'successful': 0, 'failed': 0, 'bypass_used_count': 0}
+
+
 # ── Route-level tests ──────────────────────────────────────────────────────────
 
 def test_merge_history_page_returns_200(session_client):

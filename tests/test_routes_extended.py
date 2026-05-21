@@ -619,7 +619,7 @@ def test_soql_update_exception_returns_500(client):
 def test_data_ops_index_redirects(client):
     resp = client.get('/data-ops/')
     assert resp.status_code == 302
-    assert 'join' in resp.headers['Location']
+    assert 'import' in resp.headers['Location']
 
 
 def test_data_ops_join_build_exception_returns_500(client):

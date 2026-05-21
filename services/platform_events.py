@@ -25,9 +25,9 @@ def _map_event(r: dict) -> dict:
 
 def _mock_events() -> list:
     return [
-        {'id': '0..1', 'developer_name': 'Migration_Complete__e', 'label': 'Migration Complete', 'description': 'Fired when a migration batch completes'},
-        {'id': '0..2', 'developer_name': 'Student_Update__e',    'label': 'Student Update',    'description': 'Ethos student record changed'},
-        {'id': '0..3', 'developer_name': 'Ethos_Error__e',       'label': 'Ethos Error',       'description': 'Ethos integration error event'},
+        {'id': '0..1', 'developer_name': 'Migration_Complete__e', 'label': 'Migration Complete'},
+        {'id': '0..2', 'developer_name': 'Student_Update__e',    'label': 'Student Update'},
+        {'id': '0..3', 'developer_name': 'Ethos_Error__e',       'label': 'Ethos Error'},
     ]
 
 

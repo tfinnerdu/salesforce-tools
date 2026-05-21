@@ -133,6 +133,13 @@ def validate_csv(org: str, object_name: str, csv_text: str, field_mapping: dict,
                     if row_num not in row_flags:
                         row_flags[row_num] = 'warning'
 
+            elif ftype in ('email',):
+                import re
+                if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', value):
+                    errors.append({'row': row_num, 'field': sf_name, 'severity': 'error',
+                                    'message': f"'{value}' is not a valid email address for '{sf_name}'"})
+                    row_flags[row_num] = 'error'
+
             elif ftype in ('picklist',):
                 allowed = sf_field_meta.get('picklist_values') or []
                 if allowed and value not in allowed:

@@ -5,7 +5,11 @@ import pytest
 # ── Service-level tests ───────────────────────────────────────────────────────
 
 def test_get_platform_events_mock():
-    """With SF_MOCK=true, get_platform_events returns a list with expected keys."""
+    """With SF_MOCK=true, get_platform_events returns a list with expected keys.
+
+    Note: PlatformEventChannel has no Description field in the SF Tooling API,
+    so the service intentionally does not return a 'description' key.
+    """
     from services import platform_events
     result = platform_events.get_platform_events('dev')
     assert isinstance(result, list)
@@ -13,7 +17,7 @@ def test_get_platform_events_mock():
     assert 'id' in result[0]
     assert 'developer_name' in result[0]
     assert 'label' in result[0]
-    assert 'description' in result[0]
+    assert 'description' not in result[0]
 
 
 def test_get_event_members_mock():
@@ -38,14 +42,13 @@ def test_get_all_keys():
 
 
 def test_mock_events_required_fields():
-    """Mock events all have id, developer_name, label, and description."""
+    """Mock events all have id, developer_name, and label."""
     from services import platform_events
     events = platform_events.get_platform_events('dev')
     for ev in events:
         assert 'id' in ev
         assert 'developer_name' in ev
         assert 'label' in ev
-        assert 'description' in ev
 
 
 def test_mock_members_channel_field():

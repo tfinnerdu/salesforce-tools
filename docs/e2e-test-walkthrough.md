@@ -289,6 +289,107 @@ JOIN OPENQUERY(SALESFORCE, '
 
 ---
 
+## Data Ops > Data Import Wizard
+
+**URL:** `/data-ops/import`
+
+**Steps:**
+1. Navigate to Data Ops > Import. The four-step wizard nav (Configure / Map Fields /
+   Validate / Import) renders with step 1 active.
+2. Step 1: object `Account`, operation `Insert`, upload a CSV with columns
+   `Name,SIS_ID__c,PersonEmail` and at least one row with a bad email. CSV preview renders.
+3. Click "Next: Map Fields →". Step 2 shows a column→field mapping table.
+4. Click "Auto-Map" — columns auto-bind to matching SF fields.
+5. Click "Next: Validate →", then "Run Validation".
+6. **Expected:** four stat cards (Total / Clean / Warnings / Errors). The bad-email row
+   is flagged as an **error** in the issues table.
+7. With a clean CSV, the "Next: Import →" button appears; advancing to step 4 and
+   clicking "Execute Import" returns Total / Succeeded / Failed counts.
+8. When failures exist, "Download Error CSV" downloads a file with a `_sf_error` column.
+
+---
+
+## Data Ops > Export
+
+**URL:** `/data-ops/export`
+
+**Steps:**
+1. Navigate to Data Ops > Export.
+2. Enter `SELECT Id, Name, SIS_ID__c FROM Account LIMIT 10`, filename `accounts.csv`.
+3. Click "Download CSV".
+4. **Expected:** browser downloads `accounts.csv` with a header row and data rows,
+   no `attributes` column.
+
+---
+
+## Data Ops > Bulk Delete / Modify / Reassign
+
+**URLs:** `/data-ops/delete`, `/data-ops/modify`, `/data-ops/reassign`
+
+**Steps (Delete):**
+1. Navigate to Data Ops > Delete. A red destructive-operation banner is shown.
+2. Object `Account`, WHERE `SIS_ID__c = null`. Click "Preview".
+3. **Expected:** matching records + total count render. The "Delete Records" button
+   only appears after a successful preview.
+4. Click "Delete Records" → browser confirm dialog → result alert with deleted count.
+
+**Steps (Modify):**
+1. Navigate to Data Ops > Modify. Object `Account`, WHERE `Id != null`.
+2. Add one or more field/value rows. Click "Preview", then "Update Records".
+3. **Expected:** result alert reports an updated count.
+
+**Steps (Reassign):**
+1. Navigate to Data Ops > Reassign. Object `Account`, WHERE `Id != null`.
+2. Search for a user, select one (green owner badge appears).
+3. Click "Preview", then "Reassign Records".
+4. **Expected:** result alert reports a reassigned count.
+
+---
+
+## Admin > Permissions Audit
+
+**URL:** `/admin/` → Permissions Audit tab
+
+**Steps:**
+1. Open Admin, click the "Permissions Audit" tab.
+2. **Permission Sets:** list loads with user-count badges; clicking one shows
+   Users / Object Perms / Field Perms.
+3. **By User:** search, select a user → profile + permission sets + object access.
+4. **Object Matrix:** enter `Account` → R/C/E/D/View-All/Modify-All table.
+5. **Field Coverage:** enter `Account` → per-field read/edit table.
+
+**Expected:** all four sub-tabs load without error. In live mode, IDs render as
+"↗ Open in Salesforce" deep links.
+
+---
+
+## Admin > Automation & Sharing
+
+**URL:** `/admin/` → Automation & Sharing tab
+
+**Steps:**
+1. Open Admin, click the "Automation & Sharing" tab.
+2. **Validation Rules** loads by default — table with object, status, error message.
+3. **Flows**, **Apex Triggers**, **Sharing Model** sub-tabs lazy-load on first view.
+4. Use the filter box on any sub-tab.
+
+**Expected:** each sub-tab loads on first view; filter narrows rows live.
+
+---
+
+## Migration > Velocity & ETA
+
+**URL:** `/migration/velocity`
+
+**Steps:**
+1. Navigate to Migration > Velocity & ETA.
+2. **Expected:** the loading spinner resolves within ~3s and the burn-down chart
+   renders. It must NOT spin forever (regression — `mc-migration-snippet.js` was
+   previously not loaded on this page).
+3. The four summary cards populate; changing the Days selector reloads the chart.
+
+---
+
 ## Settings
 
 **URL:** `/settings`
@@ -315,3 +416,10 @@ JOIN OPENQUERY(SALESFORCE, '
 5. `POST /schema/org-diff/run` with `{"compare_org": "prod"}` returns objects dict
 6. Navigation — all 6 tabs load without 500
 7. Org switch updates session and badge
+8. `GET /data-ops/` redirects (302) to `/data-ops/import`
+9. `GET /migration/velocity` — chart renders, spinner resolves (no infinite spin)
+10. `GET /admin/permissions/sets` and `/admin/automation/validation-rules` return
+    `success: true`
+11. `POST /data-ops/export/run` with a SOQL body returns a `text/csv` attachment
+12. `pytest tests/ -q` — full suite green (937 tests)
+13. `pytest tests/characterization/ -q` — Tooling API + route contracts intact

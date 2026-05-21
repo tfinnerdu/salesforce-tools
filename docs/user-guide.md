@@ -31,6 +31,11 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Apex Code Search](#apex-code-search)
    - [Schema Snapshots](#schema-snapshots)
 7. [Data Ops](#data-ops)
+   - [Data Import](#data-import)
+   - [Export](#export)
+   - [Bulk Modify](#bulk-modify)
+   - [Bulk Delete](#bulk-delete)
+   - [Bulk Reassign](#bulk-reassign)
    - [Join Builder](#join-builder)
    - [Bulk Update](#bulk-update)
    - [Record Lock Detector](#record-lock-detector)
@@ -66,6 +71,8 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
     - [Anonymizer](#anonymizer)
     - [Custom Metadata](#custom-metadata)
     - [Custom Settings](#custom-settings)
+    - [Permissions Audit](#permissions-audit)
+    - [Automation & Sharing](#automation--sharing)
 12. [Deploy](#deploy)
 13. [Settings](#settings)
 
@@ -529,6 +536,112 @@ Takes point-in-time snapshots of an object's field metadata and diffs two snapsh
 ---
 
 ## Data Ops
+
+The Data Ops tab houses the bulk data tools — the in-house equivalent of Validity
+DemandTools, tuned for the Colleague → Ethos → Salesforce migration. Every
+write tool follows the same safety pattern: **preview first, execute second**, and
+write operations are disabled in mock mode.
+
+### Data Import
+
+**URL:** `/data-ops/import`
+
+A four-step wizard for loading CSV files into Salesforce via the Bulk API — with a
+validation pass *before* anything is written.
+
+**Step 1 — Configure:** Choose the target Salesforce object, the operation
+(Insert, Upsert, Update, or Delete), and upload your CSV file. For Upsert, also
+enter the external ID field (e.g., `SIS_ID__c`). A preview of the first few rows
+appears so you can confirm the file parsed correctly.
+
+**Step 2 — Map Fields:** Match each CSV column to a Salesforce field. Click
+**Auto-Map** to bind columns whose names match a field automatically. Unmapped
+columns are ignored.
+
+**Step 3 — Validate:** Click **Run Validation**. The tool checks every row against
+the object's schema *without writing anything*:
+- Required fields that are empty (Insert only)
+- Numbers, dates, and booleans that don't parse
+- Email fields that aren't valid email addresses
+- Picklist values that aren't in the allowed set
+- CSV columns mapped to fields that don't exist
+
+You get four counts — Total, Clean, Warnings, Errors — and a row-by-row issue
+list. If there are errors, fix the CSV and re-validate. The **Import** step
+unlocks only when there are zero errors.
+
+**Step 4 — Import:** Review the summary and click **Execute Import**. Results show
+Succeeded / Failed counts. For any failures, click **Download Error CSV** to get
+your original rows back with a `_sf_error` column explaining each failure — fix
+those rows and re-import just them.
+
+> **Why two steps?** DemandTools shows you Salesforce's error only *after* a failed
+> load. The validate pass catches type errors, bad picklist values, and missing
+> required fields up front, so the actual import is clean.
+
+---
+
+### Export
+
+**URL:** `/data-ops/export`
+
+Runs a SOQL query and downloads the results as a CSV.
+
+**How to use it:**
+1. Enter a SOQL `SELECT` query.
+2. Set the filename.
+3. Leave **All pages** checked to fetch beyond the 2,000-row SOQL limit.
+4. Click **Download CSV**.
+
+Exported CSVs can be fed straight back into the Import tool — handy for pulling
+existing records, editing them, and upserting the changes.
+
+---
+
+### Bulk Modify
+
+**URL:** `/data-ops/modify`
+
+Updates one or more fields across every record matching a WHERE clause.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Add one or more **field / new-value** rows (use **+ Add Field** for more).
+3. Click **Preview** to see the affected records.
+4. Click **Update Records** to execute via the Bulk API.
+
+Capped at 10,000 records per operation. Optionally bypass triggers.
+
+---
+
+### Bulk Delete
+
+**URL:** `/data-ops/delete`
+
+Deletes every record matching a WHERE clause. Records go to the Recycle Bin
+(soft delete), so a same-day mistake is recoverable from Salesforce.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Click **Preview** — the matching records and total count appear.
+3. Click **Delete Records** and confirm.
+
+> **Warning:** Destructive. Always preview. Capped at 10,000 records per operation.
+
+---
+
+### Bulk Reassign
+
+**URL:** `/data-ops/reassign`
+
+Changes the Owner of every record matching a WHERE clause.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Search for and select the **new owner** from the user picker.
+3. Click **Preview**, then **Reassign Records**.
+
+---
 
 ### Join Builder
 
@@ -1028,6 +1141,62 @@ Browses Custom Setting records (Hierarchy and List types) without opening Salesf
 **Record columns:** Name · SetupOwner ID · Owner Type (Org / Profile / User).
 
 Hierarchy Custom Settings have one record per level — the most specific level wins at runtime. Use this to check bypass-trigger settings or integration feature flags before a migration run.
+
+---
+
+### Permissions Audit
+
+**URL:** `/admin` → Permissions Audit tab
+
+A one-stop drill-down for "who can see and do what" — the answer to permission
+questions without clicking through Setup. Four sub-tabs:
+
+**Permission Sets** — Lists every custom permission set with a badge showing how
+many users are assigned. Click a permission set to see, in three sub-tabs: the
+**users** assigned to it, the **object permissions** it grants (Read / Create /
+Edit / Delete / View All / Modify All), and the **field permissions** it grants.
+
+**By User** — Search for a user by name or username, then select them to see their
+full access picture: profile, license, every assigned permission set, and their
+aggregated object-level access across all those permission sets.
+
+**Object Matrix** — Enter any Salesforce object (e.g., `Account`). Shows every
+permission set that grants access to it and exactly which CRUD operations each one
+allows — a fast way to answer "who can delete Accounts?"
+
+**Field Coverage** — Enter an object to see a field-by-field matrix of read/edit
+access across all permission sets. Useful for confirming a sensitive field
+(e.g., `SIS_ID__c`) is locked down correctly.
+
+Wherever a record ID is shown and you're connected to a real org, names render as
+**↗ Open in Salesforce** links that jump straight to the record.
+
+---
+
+### Automation & Sharing
+
+**URL:** `/admin` → Automation & Sharing tab
+
+A read-only explorer for org configuration that normally takes a dozen Setup
+clicks to find — and the first place to look when an import row fails. Four
+sub-tabs:
+
+**Validation Rules** — Every validation rule in the org, with its object, active
+status, error field, and error message. When an import fails with a custom
+validation error, look the rule up here to see exactly what it checks.
+
+**Flows** — Every flow definition, with its type (record-triggered, screen,
+autolaunched) and status. Record-triggered flows are a common cause of silent
+import failures.
+
+**Apex Triggers** — Every Apex trigger and the object it runs on. The other usual
+suspect when a bulk load behaves unexpectedly.
+
+**Sharing Model** — The org-wide default (OWD) sharing setting for each object —
+internal and external access — with Private settings flagged in red.
+
+Each sub-tab loads on first view and has a filter box. Everything here is
+read-only.
 
 ---
 
