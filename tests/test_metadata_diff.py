@@ -102,3 +102,49 @@ def test_metadata_diff_run_error_returns_500(client, monkeypatch):
     resp = client.post('/schema/metadata-diff/run', json={})
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False
+
+
+# ── _tooling_query_all — nextRecordsUrl pagination ────────────────────────────
+
+class _PagingSF:
+    """Tooling API stub that returns three pages via nextRecordsUrl."""
+    def __init__(self):
+        self.paths = []
+
+    def restful(self, path, params=None):
+        self.paths.append(path)
+        if path == 'tooling/query/':
+            return {'records': [{'Name': 'A'}],
+                    'nextRecordsUrl': '/services/data/v59.0/tooling/query/01g000-2000'}
+        if path == 'tooling/query/01g000-2000':
+            return {'records': [{'Name': 'B'}],
+                    'nextRecordsUrl': '/services/data/v59.0/tooling/query/01g000-4000'}
+        if path == 'tooling/query/01g000-4000':
+            return {'records': [{'Name': 'C'}]}   # no nextRecordsUrl — done
+        raise AssertionError(f'unexpected path: {path}')
+
+
+def test_tooling_query_all_follows_next_records_url():
+    sf = _PagingSF()
+    records = metadata_diff._tooling_query_all(sf, 'SELECT Name FROM ApexClass')
+    assert [r['Name'] for r in records] == ['A', 'B', 'C']
+    # nextRecordsUrl must be relativized to a path restful() accepts —
+    # stripped of the /services/data/vXX.X/ prefix.
+    assert sf.paths == ['tooling/query/',
+                        'tooling/query/01g000-2000',
+                        'tooling/query/01g000-4000']
+
+
+def test_tooling_query_all_single_page_no_pagination():
+    class _OneSF:
+        def restful(self, path, params=None):
+            return {'records': [{'Name': 'X'}], 'done': True}
+    records = metadata_diff._tooling_query_all(_OneSF(), 'SELECT Name FROM ApexClass')
+    assert [r['Name'] for r in records] == ['X']
+
+
+def test_tooling_query_all_empty_result():
+    class _EmptySF:
+        def restful(self, path, params=None):
+            return {'records': []}
+    assert metadata_diff._tooling_query_all(_EmptySF(), 'SELECT Name FROM ApexClass') == []
