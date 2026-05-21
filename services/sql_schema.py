@@ -103,6 +103,29 @@ def get_cached_schema() -> dict:
     return {'captured_at': None, 'table_count': 0, 'tables': {}}
 
 
+def _friendly_odbc_error(exc: Exception) -> str:
+    """Turn a raw pyodbc error into an actionable message for the admin.
+
+    The schema cache exists precisely so the Join Builder keeps working when
+    the live link is down, so every message here ends by reassuring the user
+    that the last cached schema is still in use.
+    """
+    text = str(exc)
+    tail = 'The last cached schema is still in use.'
+    if 'IM002' in text:
+        return ('SQL Server ODBC driver/DSN not found on this server. Install the '
+                'Microsoft ODBC Driver for SQL Server, or fix the DSN named in '
+                f'SQLSERVER_CONN, then retry. {tail} [IM002]')
+    if 'IM003' in text or 'specified driver could not be loaded' in text.lower():
+        return ('The ODBC driver named in SQLSERVER_CONN is registered but could '
+                f'not be loaded (architecture or install issue). {tail} [IM003]')
+    if 'Login failed' in text or '28000' in text:
+        return f'SQL Server rejected the credentials in SQLSERVER_CONN. {tail}'
+    if 'timeout' in text.lower() or 'HYT00' in text or 'HYT01' in text:
+        return f'SQL Server did not respond before the connection timed out. {tail}'
+    return f'SQL Server refresh failed: {text}. {tail}'
+
+
 def refresh_schema() -> dict:
     """Re-introspect the SQL Server schema and cache it.
 
@@ -115,8 +138,18 @@ def refresh_schema() -> dict:
         conn_str = Config.SQLSERVER_CONN
         if not conn_str:
             raise ValueError('SQLSERVER_CONN is not configured — cannot refresh SQL schema')
-        import pyodbc  # noqa: imported lazily — only needed for a live refresh
-        conn = pyodbc.connect(conn_str, timeout=15)
+        try:
+            import pyodbc  # noqa: imported lazily — only needed for a live refresh
+        except ImportError:
+            raise RuntimeError(
+                'The pyodbc package is not installed on this server, so the SQL '
+                'Server schema cannot be refreshed. The last cached schema is '
+                'still in use.'
+            )
+        try:
+            conn = pyodbc.connect(conn_str, timeout=15)
+        except pyodbc.Error as exc:
+            raise RuntimeError(_friendly_odbc_error(exc)) from exc
         try:
             cur = conn.cursor()
             cur.execute(

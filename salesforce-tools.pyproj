@@ -146,6 +146,8 @@
     <Compile Include="tests\characterization\test_tune_rules_characterization.py" />
     <Compile Include="services\sql_schema.py" />
     <Compile Include="tests\test_sql_schema.py" />
+    <Compile Include="services\data_backup.py" />
+    <Compile Include="tests\test_data_backup.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".env" />
@@ -175,6 +177,7 @@
     <Content Include="templates\admin\index.html" />
     <Content Include="templates\base.html" />
     <Content Include="templates\dashboard\index.html" />
+    <Content Include="templates\data_ops\backup.html" />
     <Content Include="templates\data_ops\bulk_jobs.html" />
     <Content Include="templates\data_ops\bulk_update.html" />
     <Content Include="templates\data_ops\join_builder.html" />

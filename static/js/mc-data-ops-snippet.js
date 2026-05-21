@@ -1134,3 +1134,96 @@ MC.matcher = {
         <a href="/validation/duplicates">Validation &rsaquo; Duplicate Radar</a>.</div>`;
   },
 };
+
+// ── Data Backup ───────────────────────────────────────────────────────────────
+
+MC.backup = {
+  init() {
+    document.getElementById('btnRunBackup')?.addEventListener('click', () => this.run());
+    document.getElementById('btnRefreshBackups')?.addEventListener('click', () => this.loadHistory());
+    this.loadObjects();
+    this.loadHistory();
+  },
+
+  async loadObjects() {
+    try {
+      const objs = await MC.api('/data-ops/backup/objects') || [];
+      const ta = document.getElementById('backupObjects');
+      if (ta && !ta.value.trim()) ta.value = objs.join('\n');
+    } catch (err) {
+      MC.showToast('Could not load default objects: ' + err.message, 'danger');
+    }
+  },
+
+  async loadHistory() {
+    const empty = document.getElementById('backupEmpty');
+    const table = document.getElementById('backupTable');
+    try {
+      const runs = await MC.api('/data-ops/backup/list') || [];
+      if (!runs.length) {
+        empty?.classList.remove('d-none');
+        table?.classList.add('d-none');
+        return;
+      }
+      empty?.classList.add('d-none');
+      table?.classList.remove('d-none');
+      this._renderHistory(runs);
+    } catch (err) {
+      MC.showToast('Could not load backup history: ' + err.message, 'danger');
+    }
+  },
+
+  _renderHistory(runs) {
+    const tbody = document.getElementById('backupTbody');
+    if (!tbody) return;
+    const statusBadge = s => {
+      const cls = s === 'success' ? 'badge-green' : s === 'partial' ? 'badge-amber' : 'badge-red';
+      return `<span class="badge ${cls}">${MC._escHtml(s)}</span>`;
+    };
+    tbody.innerHTML = runs.map(r => `<tr>
+      <td class="small text-nowrap">${MC._fmtTime(r.started_at)}</td>
+      <td><span class="badge badge-secondary">${MC._escHtml(r.trigger)}</span></td>
+      <td>${statusBadge(r.status)}</td>
+      <td class="text-end small">${r.object_count}</td>
+      <td class="text-end small">${(r.total_records || 0).toLocaleString()}</td>
+      <td class="text-end">
+        <a href="/data-ops/backup/${r.id}/download" class="btn btn-outline-secondary btn-sm py-0">&#11123; Download ZIP</a>
+      </td>
+    </tr>`).join('');
+  },
+
+  async run() {
+    const objects = (document.getElementById('backupObjects')?.value || '')
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    if (!objects.length) { MC.showToast('List at least one object to back up', 'warning'); return; }
+
+    const loading = document.getElementById('backupLoading');
+    const table = document.getElementById('backupTable');
+    const empty = document.getElementById('backupEmpty');
+    const result = document.getElementById('backupResult');
+    loading?.classList.remove('d-none');
+    table?.classList.add('d-none');
+    empty?.classList.add('d-none');
+    result?.classList.add('d-none');
+
+    try {
+      const d = await MC.api('/data-ops/backup/run', 'POST', { objects });
+      loading?.classList.add('d-none');
+      const mockNote = d.persisted ? '' : ' <span class="badge badge-secondary">not stored — no database</span>';
+      const cls = d.status === 'success' ? 'success' : d.status === 'partial' ? 'warning' : 'danger';
+      if (result) {
+        result.className = `mt-3 alert alert-${cls}`;
+        result.innerHTML = `Backup ${MC._escHtml(d.status)} — ${d.object_count} object(s), ` +
+          `<strong>${(d.total_records || 0).toLocaleString()}</strong> record(s).${mockNote}` +
+          (d.errors && d.errors.length
+            ? '<br>' + d.errors.map(e => `<span class="small text-danger">${MC._escHtml(e.object)}: ${MC._escHtml(e.error)}</span>`).join('<br>')
+            : '');
+        result.classList.remove('d-none');
+      }
+      this.loadHistory();
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Backup failed: ' + err.message, 'danger');
+    }
+  },
+};

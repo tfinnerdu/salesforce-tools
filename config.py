@@ -25,6 +25,8 @@ class Config:
     SF_MOCK = os.environ.get('SF_MOCK', 'true').lower() == 'true'
     DEFAULT_ORG = os.environ.get('DEFAULT_ORG', 'dev')
     SCHEDULER_ENABLED = os.environ.get('SCHEDULER_ENABLED', 'false').lower() == 'true'
+    BACKUP_ENABLED = os.environ.get('BACKUP_ENABLED', 'false').lower() == 'true'
+    BACKUP_RETAIN = int(os.environ.get('BACKUP_RETAIN', '14'))
     SQLSERVER_CONN = os.environ.get('SQLSERVER_CONN', '')
     PORT = int(os.environ.get('PORT', 5000))
     VERSION = '1.0.0'

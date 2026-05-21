@@ -63,6 +63,11 @@ def convert_page():
     return render_template('data_ops/convert.html')
 
 
+@data_ops_bp.route('/backup')
+def backup_page():
+    return render_template('data_ops/backup.html')
+
+
 @data_ops_bp.route('/bulk-update')
 def bulk_update_page():
     return render_template('data_ops/bulk_update.html')
@@ -314,6 +319,56 @@ def api_export_run():
         )
     except Exception as exc:
         logger.exception('export failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+# ── Data Backup API ───────────────────────────────────────────────────────────
+
+@data_ops_bp.route('/backup/objects')
+def api_backup_objects():
+    from services import data_backup
+    return jsonify({'success': True, 'data': data_backup.DEFAULT_BACKUP_OBJECTS})
+
+
+@data_ops_bp.route('/backup/run', methods=['POST'])
+def api_backup_run():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    objects = body.get('objects') or None
+    try:
+        from services import data_backup
+        result = data_backup.run_backup(org, objects, trigger='manual')
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('backup run failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/backup/list')
+def api_backup_list():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import data_backup
+        return jsonify({'success': True, 'data': data_backup.list_backups(org)})
+    except Exception as exc:
+        logger.exception('backup list failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/backup/<int:run_id>/download')
+def api_backup_download(run_id):
+    try:
+        from services import data_backup
+        zip_bytes, filename = data_backup.build_archive(run_id)
+        return Response(
+            zip_bytes,
+            mimetype='application/zip',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 404
+    except Exception as exc:
+        logger.exception('backup download failed')
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 

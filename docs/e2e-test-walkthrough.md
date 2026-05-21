@@ -383,6 +383,28 @@ Validation > Duplicate Radar.
 
 ---
 
+## Data Ops > Data Backup (CSV Snapshot)
+
+**URL:** `/data-ops/backup`
+
+**Steps:**
+1. Navigate to Data Ops > Backup.
+2. Confirm the **Objects to back up** textarea pre-fills with the default object
+   list (`Account`, `Contact`, `Individual`, the three ContactPoint objects).
+3. Click **Run Backup Now**.
+4. **Expected:** a result panel reports a status (`success` or `partial`), an
+   object count, and a total record count.
+5. The **Backup History** table shows the run with trigger `manual`, status,
+   object count, and record count.
+6. Click **Download ZIP** — a `.zip` downloads containing one `.csv` per object.
+7. Click **Refresh** — the history table reloads.
+
+A backup is the recovery point for the destructive Data Ops tools. With no DB
+configured the run still produces an in-memory manifest but is not retained;
+with a DB it persists and old runs are pruned to `BACKUP_RETAIN`.
+
+---
+
 ## Admin > Permissions Audit
 
 **URL:** `/admin/` → Permissions Audit tab
@@ -460,5 +482,6 @@ Validation > Duplicate Radar.
 11. `POST /data-ops/export/run` with a SOQL body returns a `text/csv` attachment
 12. `GET /data-ops/tune/rules` returns 8 standardization rules
 13. `POST /data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
-14. `pytest tests/ -q` — full suite green (1,067 tests)
-15. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact
+14. `POST /data-ops/backup/run` with `{"objects": ["Account"]}` returns `success: true` with an object count
+15. `pytest tests/ -q` — full suite green (1,083 tests)
+16. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact

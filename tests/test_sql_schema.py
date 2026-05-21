@@ -104,6 +104,32 @@ def test_sql_schema_refresh_error_returns_500(client, monkeypatch):
     assert resp.get_json()['success'] is False
 
 
+# ── Friendly ODBC error messages ──────────────────────────────────────────────
+
+def test_friendly_odbc_error_im002_is_actionable():
+    """A missing-driver IM002 error is rephrased into an admin-actionable hint
+    that also reassures the user the cache is still usable."""
+    msg = sql_schema._friendly_odbc_error(
+        Exception("('IM002', '[IM002] [Microsoft][ODBC Driver Manager] "
+                   "Data source name not found and no default driver specified')")
+    )
+    assert 'ODBC Driver' in msg
+    assert 'cached schema is still in use' in msg
+    assert 'IM002' in msg
+
+
+def test_friendly_odbc_error_login_failure():
+    msg = sql_schema._friendly_odbc_error(Exception('Login failed for user'))
+    assert 'credentials' in msg
+    assert 'cached schema is still in use' in msg
+
+
+def test_friendly_odbc_error_falls_back_to_raw_text():
+    msg = sql_schema._friendly_odbc_error(Exception('something obscure'))
+    assert 'something obscure' in msg
+    assert 'cached schema is still in use' in msg
+
+
 # ── NOLOCK in the generated SQL ───────────────────────────────────────────────
 
 def test_generated_sql_uses_nolock():

@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Backup - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Data Backup
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Data Backup"
+            data-bs-content="Point-in-time CSV snapshots of key objects (all queryable fields), stored compressed in the database as a recovery point for the bulk Data Ops tools. Set BACKUP_ENABLED=true for a nightly run at 02:00 CT. Restore is a separate, planned feature.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="alert alert-secondary d-flex align-items-start gap-2 mb-3">
+    <span style="font-size:1.2rem">&#128190;</span>
+    <div>A backup exports every queryable field of each object to CSV and stores it
+      compressed. It is the recovery point for Delete / Modify / Tune — the Recycle
+      Bin only soft-deletes, and only for 15 days. Restore is planned; for now,
+      download a backup and re-import via the Import tool if you need to recover.</div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Configure</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Objects to back up
+              <small class="text-muted fw-normal">(one per line)</small>
+            </label>
+            <textarea id="backupObjects" class="form-control form-control-sm font-monospace" rows="8"
+                      placeholder="Account&#10;Contact&#10;Individual"></textarea>
+          </div>
+          <button id="btnRunBackup" class="btn btn-doane">&#9654; Run Backup Now</button>
+          <div class="form-text mt-2">Large objects can take a minute. Retention keeps the most recent runs.</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <span class="fw-semibold" style="color:var(--doane-slate)">Backup History</span>
+          <button id="btnRefreshBackups" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+        <div class="card-body p-0">
+          <div id="backupLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning"></div>
+            <p class="mt-2 text-muted small">Running backup…</p>
+          </div>
+          <div id="backupEmpty" class="text-center py-5 text-muted small d-none">
+            No backups yet. Run one to create a recovery point.
+          </div>
+          <table class="table table-sm table-hover mb-0 d-none" id="backupTable">
+            <thead class="table-light">
+              <tr>
+                <th>When</th>
+                <th>Trigger</th>
+                <th>Status</th>
+                <th class="text-end">Objects</th>
+                <th class="text-end">Records</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="backupTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="backupResult" class="d-none mt-3"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>document.addEventListener('DOMContentLoaded', () => MC.backup.init());</script>
+{% endblock %}

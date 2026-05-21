@@ -738,6 +738,24 @@ The join is performed in Python — no direct database link between Salesforce a
 
 ---
 
+### Data Backup
+
+**URL:** `/data-ops/backup`
+
+Captures point-in-time CSV snapshots of key objects (every queryable field) and stores them compressed in the database. It is the recovery point for the destructive Data Ops tools — the Salesforce Recycle Bin only soft-deletes, and only for 15 days.
+
+**How to use it:**
+1. Review the **Objects to back up** list — it pre-fills with `Account`, `Contact`, `Individual`, and the three ContactPoint objects. Edit it (one object per line) as needed.
+2. Click **Run Backup Now**. Large objects can take a minute.
+3. The **Backup History** table lists each run with its trigger, status, object count, and record count.
+4. Click **Download ZIP** on any run to download a ZIP archive containing one CSV per object.
+
+**Scheduled runs:** Set `BACKUP_ENABLED=true` to register a nightly run at 02:00 CT. `BACKUP_RETAIN` (default 14) controls how many runs are kept — older runs are pruned automatically.
+
+> **Note:** Restore is a separate, planned feature. For now, download a backup and re-import via the Import tool to recover data.
+
+---
+
 ### Bulk Update
 
 **URL:** `/data-ops/bulk-update`

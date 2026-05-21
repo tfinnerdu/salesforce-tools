@@ -983,6 +983,7 @@ MC.soql = {
   // ── Field & Operator Helper ─────────────────────────────────────────────────
 
   _OPERATORS: [
+    'SELECT', 'FROM',
     '=', '!=', '<', '>', '<=', '>=', 'LIKE', 'IN (', 'NOT IN (', 'INCLUDES (',
     'AND', 'OR', 'NOT', 'NULL', 'TRUE', 'FALSE',
     'WHERE', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET',
