@@ -57,6 +57,12 @@ def match_page():
     return render_template('data_ops/match.html')
 
 
+@data_ops_bp.route('/convert')
+def convert_page():
+    # Intentional stub — see templates/data_ops/convert.html for the rationale.
+    return render_template('data_ops/convert.html')
+
+
 @data_ops_bp.route('/bulk-update')
 def bulk_update_page():
     return render_template('data_ops/bulk_update.html')

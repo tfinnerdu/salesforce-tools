@@ -113,6 +113,7 @@ bug-fix sweep. Every file below has a bucket assignment per the Four-Bucket Rule
 | `services/fuzzy_matcher.py` | 81 | Unit-tested + Contract-pinned | 100% | `test_fuzzy_matcher.py` (similarity, blocking, find_matches) + `test_soundex_characterization.py` pins the Soundex algorithm |
 | `templates/data_ops/tune.html` | — | Manual-procedure-documented | — | Tune (data standardization) — see Procedure 19 |
 | `templates/data_ops/match.html` | — | Manual-procedure-documented | — | Match (fuzzy duplicate detection) — see Procedure 20 |
+| `templates/data_ops/convert.html` | — | Unit-tested | — | Intentional stub (no Doane Lead funnel); route render + "Not Implemented" content asserted in `test_data_ops_tools.py` |
 | `tests/characterization/test_tune_rules_characterization.py` | — | Contract-pinned (test) | — | Pins each Tune rule's known input→output |
 | `tests/characterization/test_soundex_characterization.py` | — | Contract-pinned (test) | — | Pins Soundex reference values used by Fuzzy Match blocking |
 | `services/org_automation.py` | 88 | Unit-tested | 91% | `test_org_automation.py` — happy path, mock fallback, error re-raise, empty-result fallback for all 4 query types |

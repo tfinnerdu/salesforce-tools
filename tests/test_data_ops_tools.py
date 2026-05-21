@@ -13,11 +13,19 @@ import pytest
 
 @pytest.mark.parametrize('path', [
     '/data-ops/import', '/data-ops/export', '/data-ops/delete',
-    '/data-ops/modify', '/data-ops/reassign',
+    '/data-ops/modify', '/data-ops/reassign', '/data-ops/tune',
+    '/data-ops/match', '/data-ops/convert',
 ])
 def test_tool_pages_render(client, path):
     resp = client.get(path)
     assert resp.status_code == 200
+
+
+def test_convert_page_is_marked_not_implemented(client):
+    """The Convert tab is an intentional stub — the page must say so."""
+    resp = client.get('/data-ops/convert')
+    assert resp.status_code == 200
+    assert b'Not Implemented' in resp.data or b'not currently implemented' in resp.data.lower()
 
 
 def test_data_ops_index_redirects_to_import(client):
