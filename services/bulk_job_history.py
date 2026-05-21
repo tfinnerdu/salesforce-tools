@@ -15,8 +15,8 @@ def get_bulk_jobs(org: str, limit: int = 50) -> list:
         return _mock_bulk_jobs()
     sf = get_sf(org)
     resp = sf.restful('jobs/ingest')
-    jobs = resp.get('records', [])[:limit]
-    return [
+    jobs = resp.get('records', [])
+    mapped = [
         {
             'id': j.get('id'),
             'operation': j.get('operation'),
@@ -30,6 +30,8 @@ def get_bulk_jobs(org: str, limit: int = 50) -> list:
         }
         for j in jobs
     ]
+    mapped.sort(key=lambda j: j.get('createdDate') or '', reverse=True)
+    return mapped[:limit]
 
 def _mock_bulk_jobs() -> list:
     return [

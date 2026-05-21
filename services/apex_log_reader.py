@@ -51,13 +51,30 @@ def list_logs(org: str, since: str = None) -> list:
 
 
 def get_log_body(org: str, log_id: str) -> str:
-    """Download and return raw log text for a single ApexLog."""
+    """Download and return raw log text for a single ApexLog.
+
+    The Body endpoint returns plain text, not JSON. simple_salesforce's
+    restful() tries to parse the response as JSON — for this one path we
+    fall back to a raw HTTP fetch via the session so we get the text as-is.
+    """
     sf = get_sf(org)
     path = f'tooling/sobjects/ApexLog/{log_id}/Body'
-    result = sf.restful(path)
-    if isinstance(result, str):
-        return result
-    return result.get('body', '') if isinstance(result, dict) else ''
+    try:
+        result = sf.restful(path)
+        if isinstance(result, str):
+            return result
+        if isinstance(result, dict):
+            return result.get('body', '')
+        return str(result) if result else ''
+    except Exception:
+        # simple_salesforce failed to parse the plain-text response as JSON.
+        # Use the underlying requests session to fetch the raw text directly.
+        if hasattr(sf, 'session') and hasattr(sf, 'base_url'):
+            url = sf.base_url + path
+            resp = sf.session.get(url)
+            resp.raise_for_status()
+            return resp.text
+        raise
 
 
 def parse_log(body: str) -> dict:
@@ -260,7 +277,24 @@ def list_trace_flags(org: str) -> list:
         "DebugLevel.DeveloperName, DebugLevel.Id, TracedEntityId "
         "FROM TraceFlag ORDER BY ExpirationDate DESC LIMIT 50"
     )
-    result = sf.restful('tooling/query/', params={'q': soql})
+    try:
+        result = sf.restful('tooling/query/', params={'q': soql})
+    except Exception:
+        # Fall back to a simpler query without the DebugLevel relationship
+        # in case the org's API version or config rejects the traversal.
+        try:
+            simple = ("SELECT Id, LogType, StartDate, ExpirationDate, "
+                      "DebugLevelId, TracedEntityId "
+                      "FROM TraceFlag ORDER BY ExpirationDate DESC LIMIT 50")
+            result = sf.restful('tooling/query/', params={'q': simple})
+            for r in result.get('records', []):
+                if 'DebugLevel' not in r:
+                    r['DebugLevel'] = {'DeveloperName': r.get('DebugLevelId', ''),
+                                       'Id': r.get('DebugLevelId', '')}
+        except Exception:
+            if Config.SF_MOCK:
+                return _mock_trace_flags()
+            return []
     flags = []
     for r in result.get('records', []):
         dl = r.get('DebugLevel') or {}

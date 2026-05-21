@@ -178,7 +178,12 @@ def _mock_connected_apps() -> list:
 
 
 def get_connected_apps(org: str) -> list:
-    """Query ConnectedApplication via Tooling API."""
+    """Query ConnectedApplication via Tooling API.
+
+    ConnectedApplication is not supported on all org editions and API
+    versions — when the org returns INVALID_TYPE we degrade gracefully to
+    an empty list rather than surfacing an error to the user.
+    """
     sf = get_sf(org)
     try:
         result = sf.restful('tooling/query/', params={'q': _CA_SOQL})
@@ -186,9 +191,13 @@ def get_connected_apps(org: str) -> list:
         if Config.SF_MOCK and not records:
             return _mock_connected_apps()
         return [_map_connected_app(r) for r in records]
-    except Exception:
+    except Exception as exc:
         if Config.SF_MOCK:
             return _mock_connected_apps()
+        err_str = str(exc)
+        if 'INVALID_TYPE' in err_str or 'not supported' in err_str.lower():
+            logger.info('ConnectedApplication not available in this org — returning empty list')
+            return []
         raise
 
 
