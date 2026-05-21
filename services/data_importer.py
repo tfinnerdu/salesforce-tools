@@ -178,12 +178,12 @@ def import_csv(org: str, object_name: str, csv_text: str, field_mapping: dict,
                operation: str = 'insert', external_id_field: str = '',
                bypass_triggers: bool = False) -> dict:
     """
-    Import CSV rows into Salesforce via Bulk API.
+    Import CSV rows into Salesforce via the Bulk API 2.0.
 
     Returns {
         success_count, error_count, total,
-        results: [{row, id, success, errors}],
-        error_csv: str  (CSV of failed rows with SF error column)
+        results: [{row, sf_id, success, errors}],   # failed rows only
+        error_csv: str  (the Bulk API failed-records CSV: sf__Id, sf__Error, …)
     }
     """
     if Config.SF_MOCK:
@@ -197,7 +197,10 @@ def import_csv(org: str, object_name: str, csv_text: str, field_mapping: dict,
     if len(rows) > _MAX_ROWS:
         raise ValueError(f"CSV has {len(rows):,} rows — maximum is {_MAX_ROWS:,} per operation")
 
-    # Build SF record dicts from mapping
+    if operation.lower() == 'upsert' and not external_id_field:
+        raise ValueError('external_id_field is required for upsert')
+
+    # Build SF record dicts from the column mapping.
     sf_records = []
     for row in rows:
         rec: dict = {}
@@ -206,77 +209,35 @@ def import_csv(org: str, object_name: str, csv_text: str, field_mapping: dict,
             rec[sf_field] = val if val != '' else None
         sf_records.append(rec)
 
+    from sf_provider import bulk2_dml, bulk2_failed_records, set_bypass_triggers
     if bypass_triggers:
-        from sf_provider import set_bypass_triggers
         set_bypass_triggers(sf, True)
-
     try:
-        bulk_obj = getattr(sf.bulk, object_name)
-        op = operation.lower()
-        if op == 'insert':
-            api_results = bulk_obj.insert(sf_records, batch_size=200, use_serial=False)
-        elif op == 'update':
-            api_results = bulk_obj.update(sf_records, batch_size=200, use_serial=False)
-        elif op == 'upsert':
-            if not external_id_field:
-                raise ValueError('external_id_field is required for upsert')
-            api_results = bulk_obj.upsert(sf_records, external_id_field, batch_size=200, use_serial=False)
-        elif op == 'delete':
-            api_results = bulk_obj.delete(sf_records, batch_size=200, use_serial=False)
-        else:
-            raise ValueError(f"Unknown operation '{operation}'")
+        res = bulk2_dml(sf, object_name, operation, sf_records, external_id_field)
+        error_csv = bulk2_failed_records(sf, object_name, res['job_ids']) if res['failed'] else ''
     finally:
         if bypass_triggers:
             set_bypass_triggers(sf, False)
 
-    # Process results
+    # Bulk API 2.0 reports per-record detail only for failures (sf__Id, sf__Error,
+    # plus the original request fields). Successes are not itemised.
     results = []
-    success_count = 0
-    error_count = 0
-    for i, (row, result) in enumerate(zip(rows, api_results or [])):
-        if isinstance(result, dict):
-            ok = bool(result.get('success'))
-            row_errors = result.get('errors', [])
-            err_msgs = '; '.join(
-                f"{e.get('statusCode', '')}: {e.get('message', '')}" if isinstance(e, dict) else str(e)
-                for e in (row_errors or [])
-            )
-        else:
-            ok = False
-            err_msgs = str(result)
-
-        if ok:
-            success_count += 1
-        else:
-            error_count += 1
-
-        results.append({
-            'row': i + 1,
-            'id': result.get('id', '') if isinstance(result, dict) else '',
-            'success': ok,
-            'sf_id': result.get('id', '') if isinstance(result, dict) else '',
-            'errors': err_msgs,
-            'source': row,
-        })
-
-    # Build error CSV
-    error_csv = ''
-    failed_rows = [r for r in results if not r['success']]
-    if failed_rows:
-        original_cols = list(rows[0].keys()) if rows else []
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=original_cols + ['_sf_error'])
-        writer.writeheader()
-        for r in failed_rows:
-            out_row = dict(r['source'])
-            out_row['_sf_error'] = r['errors']
-            writer.writerow(out_row)
-        error_csv = buf.getvalue()
+    if error_csv:
+        reader = csv.DictReader(io.StringIO(error_csv))
+        for i, frow in enumerate(reader):
+            results.append({
+                'row': i + 1,
+                'sf_id': frow.get('sf__Id', '') or '',
+                'success': False,
+                'errors': frow.get('sf__Error', '') or '',
+                'source': {k: v for k, v in frow.items()
+                           if k not in ('sf__Id', 'sf__Error')},
+            })
 
     return {
-        'success_count': success_count,
-        'error_count': error_count,
-        'total': len(rows),
+        'success_count': res['succeeded'],
+        'error_count': res['failed'],
+        'total': res['total'] or len(rows),
         'results': results[:1000],  # cap for response size
         'error_csv': error_csv,
         'object_name': object_name,

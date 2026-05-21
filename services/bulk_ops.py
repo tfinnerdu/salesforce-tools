@@ -53,22 +53,17 @@ def bulk_delete_execute(org: str, object_name: str, where_clause: str,
     if not records:
         return {'deleted': 0, 'errors': 0}
 
+    from sf_provider import bulk2_dml, set_bypass_triggers
     if bypass_triggers:
-        from sf_provider import set_bypass_triggers
         set_bypass_triggers(sf, True)
-
     try:
         id_records = [{'Id': r['Id']} for r in records]
-        bulk_obj = getattr(sf.bulk, object_name)
-        api_results = bulk_obj.delete(id_records, batch_size=200)
+        res = bulk2_dml(sf, object_name, 'delete', id_records)
     finally:
         if bypass_triggers:
-            from sf_provider import set_bypass_triggers
             set_bypass_triggers(sf, False)
 
-    deleted = sum(1 for r in (api_results or []) if isinstance(r, dict) and r.get('success'))
-    errors = len(api_results or []) - deleted
-    return {'deleted': deleted, 'errors': errors, 'total': len(records)}
+    return {'deleted': res['succeeded'], 'errors': res['failed'], 'total': len(records)}
 
 
 # ── Modify (bulk field update) ────────────────────────────────────────────────
@@ -93,22 +88,17 @@ def bulk_modify_execute(org: str, object_name: str, where_clause: str,
     if not records:
         return {'updated': 0, 'errors': 0}
 
+    from sf_provider import bulk2_dml, set_bypass_triggers
     if bypass_triggers:
-        from sf_provider import set_bypass_triggers
         set_bypass_triggers(sf, True)
-
     try:
         update_records = [{'Id': r['Id'], **field_updates} for r in records]
-        bulk_obj = getattr(sf.bulk, object_name)
-        api_results = bulk_obj.update(update_records, batch_size=200)
+        res = bulk2_dml(sf, object_name, 'update', update_records)
     finally:
         if bypass_triggers:
-            from sf_provider import set_bypass_triggers
             set_bypass_triggers(sf, False)
 
-    updated = sum(1 for r in (api_results or []) if isinstance(r, dict) and r.get('success'))
-    errors = len(api_results or []) - updated
-    return {'updated': updated, 'errors': errors, 'total': len(records)}
+    return {'updated': res['succeeded'], 'errors': res['failed'], 'total': len(records)}
 
 
 # ── Reassign ──────────────────────────────────────────────────────────────────
@@ -142,22 +132,17 @@ def bulk_reassign_execute(org: str, object_name: str, where_clause: str,
     if not records:
         return {'reassigned': 0, 'errors': 0}
 
+    from sf_provider import bulk2_dml, set_bypass_triggers
     if bypass_triggers:
-        from sf_provider import set_bypass_triggers
         set_bypass_triggers(sf, True)
-
     try:
         update_records = [{'Id': r['Id'], 'OwnerId': new_owner_id} for r in records]
-        bulk_obj = getattr(sf.bulk, object_name)
-        api_results = bulk_obj.update(update_records, batch_size=200)
+        res = bulk2_dml(sf, object_name, 'update', update_records)
     finally:
         if bypass_triggers:
-            from sf_provider import set_bypass_triggers
             set_bypass_triggers(sf, False)
 
-    reassigned = sum(1 for r in (api_results or []) if isinstance(r, dict) and r.get('success'))
-    errors = len(api_results or []) - reassigned
-    return {'reassigned': reassigned, 'errors': errors, 'total': len(records)}
+    return {'reassigned': res['succeeded'], 'errors': res['failed'], 'total': len(records)}
 
 
 # ── Export ────────────────────────────────────────────────────────────────────

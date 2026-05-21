@@ -6,18 +6,21 @@ logger = logging.getLogger(__name__)
 
 
 def get_custom_metadata_types(org: str) -> list:
-    """List all Custom Metadata Types via Tooling API."""
+    """List Custom Metadata Types via the EntityDefinition Tooling object.
+
+    The Tooling CustomObject entity has no queryable Label/Description columns
+    (they live inside Metadata). EntityDefinition exposes Label directly and
+    reliably enumerates __mdt types; it requires a LIMIT (no queryMore).
+    """
     sf = get_sf(org)
     if Config.SF_MOCK:
         return _mock_cmdts()
     try:
-        resp = sf.restful('tooling/query/', params={'q': "SELECT Id, DeveloperName, Label, Description FROM CustomObject WHERE ManageableState='unmanaged' AND DeveloperName LIKE '%mdt%'"})
-        records = resp.get('records', [])
-        if not records:
-            # fallback: EntityDefinition approach
-            resp2 = sf.restful('tooling/query/', params={'q': "SELECT QualifiedApiName, Label, InternalSharingModel FROM EntityDefinition WHERE IsCustomizable=true AND QualifiedApiName LIKE '%__mdt' LIMIT 50"})
-            records = resp2.get('records', [])
-        return records
+        resp = sf.restful('tooling/query/', params={'q': (
+            "SELECT QualifiedApiName, Label FROM EntityDefinition "
+            "WHERE QualifiedApiName LIKE '%__mdt' ORDER BY Label LIMIT 500"
+        )})
+        return resp.get('records', [])
     except Exception as exc:
         logger.warning('custom metadata types failed: %s', exc)
         if Config.SF_MOCK:

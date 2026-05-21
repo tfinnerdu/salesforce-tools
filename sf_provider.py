@@ -57,6 +57,83 @@ def dml_guard(sf, bypass: bool = False) -> Generator:
             set_bypass_triggers(sf, False)
 
 
+# ── Bulk API 2.0 helpers ──────────────────────────────────────────────────────
+
+def bulk2_dml(sf, object_name: str, operation: str, records: list,
+              external_id_field: str = '') -> dict:
+    """Run a Bulk API 2.0 (``sf.bulk2``) DML operation on a list of record dicts.
+
+    Returns ``{total, succeeded, failed, job_ids}``.
+
+    Note: simple_salesforce 1.12.5's bulk2 ``delete`` cannot accept ``records=``
+    (its delete branch unconditionally opens ``csv_file``) — delete IDs are
+    written to a temporary single-column CSV and passed as ``csv_file=``.
+    """
+    bulk_obj = getattr(sf.bulk2, object_name)
+    op = (operation or '').lower()
+
+    if op == 'delete':
+        import csv as _csv
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix='.csv')
+        try:
+            with os.fdopen(fd, 'w', newline='', encoding='utf-8') as fh:
+                writer = _csv.writer(fh)
+                writer.writerow(['Id'])
+                for r in records:
+                    writer.writerow([r.get('Id', '')])
+            job_results = bulk_obj.delete(csv_file=path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    elif op == 'insert':
+        job_results = bulk_obj.insert(records=records)
+    elif op == 'update':
+        job_results = bulk_obj.update(records=records)
+    elif op == 'upsert':
+        if not external_id_field:
+            raise ValueError('external_id_field is required for upsert')
+        job_results = bulk_obj.upsert(records=records, external_id_field=external_id_field)
+    else:
+        raise ValueError(f"Unknown bulk operation '{operation}'")
+
+    job_results = job_results or []
+    total     = sum(int(j.get('numberRecordsTotal', 0) or 0) for j in job_results)
+    processed = sum(int(j.get('numberRecordsProcessed', 0) or 0) for j in job_results)
+    failed    = sum(int(j.get('numberRecordsFailed', 0) or 0) for j in job_results)
+    return {
+        'total': total or processed,
+        'succeeded': max(processed - failed, 0),
+        'failed': failed,
+        'job_ids': [j.get('job_id') for j in job_results if j.get('job_id')],
+    }
+
+
+def bulk2_failed_records(sf, object_name: str, job_ids: list) -> str:
+    """Return the combined failed-record CSV across Bulk API 2.0 ingest jobs.
+
+    The CSV columns are ``sf__Id``, ``sf__Error``, and the original request
+    fields. Best-effort — returns '' if the detail cannot be fetched.
+    """
+    bulk_obj = getattr(sf.bulk2, object_name)
+    parts = []
+    for jid in job_ids:
+        try:
+            text = bulk_obj.get_failed_records(jid)
+            if text and text.strip():
+                parts.append(text.strip())
+        except Exception as exc:
+            logger.warning('bulk2 get_failed_records failed for %s: %s', jid, exc)
+    if not parts:
+        return ''
+    combined = [parts[0]]
+    for p in parts[1:]:
+        combined.extend(p.splitlines()[1:])  # drop repeated header
+    return '\n'.join(combined)
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _configured(org: str) -> bool:

@@ -118,30 +118,34 @@ def test_apply_tune_requires_field_rules():
         data_tuner.apply_tune('dev', 'Account', 'Id != null', {})
 
 
-# ── apply_tune — real Bulk API path ───────────────────────────────────────────
+# ── apply_tune — real Bulk API 2.0 path ───────────────────────────────────────
 
-class _FakeBulkObject:
-    def __init__(self, results):
-        self._results = results
+class _FakeBulk2Object:
+    def __init__(self, processed, failed):
+        self._processed = processed
+        self._failed = failed
         self.received = None
 
-    def update(self, records, **kw):
+    def update(self, records=None, **kw):
         self.received = records
-        return self._results
+        return [{'numberRecordsTotal': len(records),
+                 'numberRecordsProcessed': self._processed,
+                 'numberRecordsFailed': self._failed,
+                 'job_id': 'JOB1'}]
 
 
-class _FakeBulk:
-    def __init__(self, results):
-        self._obj = _FakeBulkObject(results)
+class _FakeBulk2:
+    def __init__(self, obj):
+        self._obj = obj
 
     def __getattr__(self, name):
         return self._obj
 
 
 class _LiveSF:
-    def __init__(self, records, results):
+    def __init__(self, records, processed, failed):
         self._records = records
-        self.bulk = _FakeBulk(results)
+        self.bulk2 = _FakeBulk2(_FakeBulk2Object(processed, failed))
 
     def query_all(self, soql):
         return {'records': self._records}
@@ -153,7 +157,7 @@ def test_apply_tune_live_path_bypass_triggers_toggled(monkeypatch):
     import sf_provider
     monkeypatch.setattr(sf_provider, 'set_bypass_triggers',
                         lambda sf, on: calls.append(on))
-    sf = _LiveSF([{'Id': '001', 'Name': 'JOHN'}], results=[{'success': True}])
+    sf = _LiveSF([{'Id': '001', 'Name': 'JOHN'}], processed=1, failed=0)
     monkeypatch.setattr(data_tuner, 'get_sf', lambda org: sf)
     monkeypatch.setattr(data_tuner.Config, 'SF_MOCK', False)
 
@@ -181,7 +185,7 @@ def test_apply_tune_live_path_writes_only_changed_fields(monkeypatch):
         {'Id': '001', 'FirstName': 'JOHN', 'LastName': 'SMITH'},
         {'Id': '002', 'FirstName': 'Jane', 'LastName': 'Doe'},   # already clean
     ]
-    sf = _LiveSF(records, results=[{'success': True}])
+    sf = _LiveSF(records, processed=1, failed=0)
     monkeypatch.setattr(data_tuner, 'get_sf', lambda org: sf)
     monkeypatch.setattr(data_tuner.Config, 'SF_MOCK', False)
 
@@ -191,7 +195,7 @@ def test_apply_tune_live_path_writes_only_changed_fields(monkeypatch):
     assert result['updated'] == 1
     assert result['unchanged'] == 1
     # Only the changed record is sent, carrying just Id + the two normalized fields
-    sent = sf.bulk._obj.received
+    sent = sf.bulk2._obj.received
     assert len(sent) == 1
     assert sent[0]['Id'] == '001'
     assert sent[0]['FirstName'] == 'John'

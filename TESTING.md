@@ -651,7 +651,7 @@ assets, and 3 build files.
 | Manual-procedure-documented | 38 templates + 11 JS files | 20 procedures cover every JS-driven UI flow |
 | Structurally exempt | 1 line | `app.py` `__main__` guard |
 
-**Test suite: 1,050 tests passing.** The May 2026 expansion (DemandTools-equivalent
+**Test suite: 1,053 tests passing.** The May 2026 expansion (DemandTools-equivalent
 Data Ops tools, Permissions Audit, Automation & Sharing, the Tooling API bug-fix
 sweep, the deep-link sweep, and this matrix reconciliation) added 256 tests across
 unit, route-contract, real-Bulk-API-path, and characterization layers.

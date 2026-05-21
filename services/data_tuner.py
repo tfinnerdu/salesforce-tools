@@ -196,18 +196,14 @@ def apply_tune(org: str, object_name: str, where_clause: str, field_rules: dict,
         return {'updated': len(updates), 'unchanged': unchanged, 'errors': 0,
                 'total': len(records), 'mock': True}
 
+    from sf_provider import bulk2_dml, set_bypass_triggers
     if bypass_triggers:
-        from sf_provider import set_bypass_triggers
         set_bypass_triggers(sf, True)
     try:
-        bulk_obj = getattr(sf.bulk, object_name)
-        api_results = bulk_obj.update(updates, batch_size=200)
+        res = bulk2_dml(sf, object_name, 'update', updates)
     finally:
         if bypass_triggers:
-            from sf_provider import set_bypass_triggers
             set_bypass_triggers(sf, False)
 
-    updated = sum(1 for x in (api_results or []) if isinstance(x, dict) and x.get('success'))
-    errors = len(api_results or []) - updated
-    return {'updated': updated, 'unchanged': unchanged, 'errors': errors,
-            'total': len(records)}
+    return {'updated': res['succeeded'], 'unchanged': unchanged,
+            'errors': res['failed'], 'total': len(records)}
