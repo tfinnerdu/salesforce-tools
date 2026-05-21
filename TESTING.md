@@ -109,6 +109,9 @@ bug-fix sweep. Every file below has a bucket assignment per the Four-Bucket Rule
 |---|---|---|---|---|
 | `services/data_importer.py` | 172 | Unit-tested + Contract-pinned | 94% | `test_data_importer.py` (validation logic) + `test_bulk_api_paths.py` (real Bulk API path) + route-contract characterization. Uncovered: 2 defensive branches |
 | `services/bulk_ops.py` | 116 | Unit-tested | 90% | `test_bulk_ops.py` (mock paths) + `test_bulk_api_paths.py` (real Bulk API delete/modify/reassign) |
+| `services/data_tuner.py` | 109 | Unit-tested + Contract-pinned | 100% | `test_data_tuner.py` (preview/apply, mock + live Bulk path) + `test_tune_rules_characterization.py` pins all 8 standardization rules |
+| `templates/data_ops/tune.html` | — | Manual-procedure-documented | — | Tune (data standardization) — see Procedure 19 |
+| `tests/characterization/test_tune_rules_characterization.py` | — | Contract-pinned (test) | — | Pins each Tune rule's known input→output |
 | `services/org_automation.py` | 88 | Unit-tested | 91% | `test_org_automation.py` — happy path, mock fallback, error re-raise, empty-result fallback for all 4 query types |
 | `services/perm_auditor.py` | 131 | Unit-tested | 87% | `test_perm_auditor.py` — perm sets, users, drill-downs, matrices, legacy helpers, lookup-miss paths |
 | `services/platform_events.py` | 41 | Unit-tested + Contract-pinned | 68%* | `test_platform_events.py` + characterization pins the `PlatformEventChannel` query (no `Description` field) |
@@ -520,6 +523,30 @@ mode the helper intentionally renders plain text — see step 6.
 
 **Expected:** In live mode every real 15/18-char SF ID is a working link; in mock
 mode the same cells are plain text. No broken `/lightning/r/undefined/...` URLs.
+
+---
+
+### Procedure 19 — Data Ops: Tune (Data Standardization)
+
+**Goal:** Verify the standardization preview/apply flow.
+
+1. Navigate to `/data-ops/tune`.
+2. Enter `Account` as the object and `Id != null` as the WHERE clause.
+3. Click **+ Add Field**; in the new row enter a field API name (e.g. `Name`) and
+   select one or more rules in the multi-select (e.g. **Proper case**). Add a
+   second field row if desired.
+4. Click **Preview**.
+5. Confirm the preview panel shows a Before / After table for records that would
+   change, and a count line ("N of M sampled records would change").
+6. Confirm the **Apply Standardization** button appears only when the preview
+   found changes.
+7. Click **Apply Standardization** — confirm the result alert reports updated /
+   already-clean / error counts. In mock mode it shows a "mock — not written"
+   badge (the preview math runs for real; only the write is skipped).
+8. Remove a field row with the ✕ button — confirm it disappears.
+
+**Expected:** Preview shows accurate before/after. Apply gates on a successful
+preview. Rules apply in the selected order.
 
 ---
 

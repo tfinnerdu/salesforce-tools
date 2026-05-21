@@ -47,6 +47,11 @@ def export_page():
     return render_template('data_ops/export.html')
 
 
+@data_ops_bp.route('/tune')
+def tune_page():
+    return render_template('data_ops/tune.html')
+
+
 @data_ops_bp.route('/bulk-update')
 def bulk_update_page():
     return render_template('data_ops/bulk_update.html')
@@ -298,6 +303,55 @@ def api_export_run():
         )
     except Exception as exc:
         logger.exception('export failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+# ── Tune (data standardization) API ───────────────────────────────────────────
+
+@data_ops_bp.route('/tune/rules')
+def api_tune_rules():
+    try:
+        from services import data_tuner
+        return jsonify({'success': True, 'data': data_tuner.list_rules()})
+    except Exception as exc:
+        logger.exception('tune rules failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/tune/preview', methods=['POST'])
+def api_tune_preview():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    object_name = body.get('object', '').strip()
+    where_clause = body.get('where_clause', '').strip()
+    field_rules = body.get('field_rules', {})
+    if not object_name or not where_clause or not field_rules:
+        return jsonify({'success': False, 'error': 'object, where_clause, and field_rules required'}), 400
+    try:
+        from services import data_tuner
+        result = data_tuner.preview_tune(org, object_name, where_clause, field_rules)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('tune preview failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/tune/execute', methods=['POST'])
+def api_tune_execute():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    object_name = body.get('object', '').strip()
+    where_clause = body.get('where_clause', '').strip()
+    field_rules = body.get('field_rules', {})
+    bypass_triggers = bool(body.get('bypass_triggers', False))
+    if not object_name or not where_clause or not field_rules:
+        return jsonify({'success': False, 'error': 'object, where_clause, and field_rules required'}), 400
+    try:
+        from services import data_tuner
+        result = data_tuner.apply_tune(org, object_name, where_clause, field_rules, bypass_triggers)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('tune execute failed')
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 

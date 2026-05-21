@@ -34,6 +34,7 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Data Import](#data-import)
    - [Export](#export)
    - [Bulk Modify](#bulk-modify)
+   - [Tune (Data Standardization)](#tune-data-standardization)
    - [Bulk Delete](#bulk-delete)
    - [Bulk Reassign](#bulk-reassign)
    - [Join Builder](#join-builder)
@@ -619,6 +620,39 @@ Updates one or more fields across every record matching a WHERE clause.
 4. Click **Update Records** to execute via the Bulk API.
 
 Capped at 10,000 records per operation. Optionally bypass triggers.
+
+---
+
+### Tune (Data Standardization)
+
+**URL:** `/data-ops/tune`
+
+Cleans up inconsistent data by applying standardization rules in bulk — the
+in-house equivalent of DemandTools' Tune. Consistent data fails fewer validation
+rules on import.
+
+**Available rules:**
+
+| Rule | What it does |
+|---|---|
+| Trim whitespace | Collapses repeated spaces and strips the ends |
+| Proper case (name-aware) | `JOHN SMITH` → `John Smith`; handles hyphens, apostrophes, the `Mc` prefix |
+| Title case | Capitalizes the first letter of every word |
+| UPPERCASE / lowercase | Forces case |
+| Lowercase email | Trims and lowercases an email address |
+| US phone format | `402.555.1234` → `(402) 555-1234` (left unchanged if not 10 digits) |
+| State name → abbreviation | `Nebraska` → `NE` |
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Click **+ Add Field**; enter a field API name and pick one or more rules
+   (they apply in the order shown). Add as many field rows as you need.
+3. Click **Preview** — a Before / After table shows exactly what would change,
+   sampled from the matching records.
+4. Click **Apply Standardization** to write the changes via the Bulk API.
+
+Records already in the correct format are left untouched and reported as
+"already clean".
 
 ---
 

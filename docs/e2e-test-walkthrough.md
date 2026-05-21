@@ -346,6 +346,23 @@ JOIN OPENQUERY(SALESFORCE, '
 
 ---
 
+## Data Ops > Tune (Data Standardization)
+
+**URL:** `/data-ops/tune`
+
+**Steps:**
+1. Navigate to Data Ops > Tune.
+2. Object `Account`, WHERE clause `Id != null`.
+3. Click **+ Add Field**; enter `Name` and select the **Proper case** rule.
+4. Click **Preview**.
+5. **Expected:** a Before / After table for records that would change, plus a
+   count line ("N of M sampled records would change").
+6. The **Apply Standardization** button appears only when the preview found changes.
+7. Click **Apply Standardization** — the result alert reports updated / already-clean /
+   error counts. In mock mode an "mock — not written" badge is shown.
+
+---
+
 ## Admin > Permissions Audit
 
 **URL:** `/admin/` → Permissions Audit tab
@@ -421,5 +438,6 @@ JOIN OPENQUERY(SALESFORCE, '
 10. `GET /admin/permissions/sets` and `/admin/automation/validation-rules` return
     `success: true`
 11. `POST /data-ops/export/run` with a SOQL body returns a `text/csv` attachment
-12. `pytest tests/ -q` — full suite green (937 tests)
-13. `pytest tests/characterization/ -q` — Tooling API + route contracts intact
+12. `GET /data-ops/tune/rules` returns 8 standardization rules
+13. `pytest tests/ -q` — full suite green (977 tests)
+14. `pytest tests/characterization/ -q` — Tooling API, route, and Tune-rule contracts intact

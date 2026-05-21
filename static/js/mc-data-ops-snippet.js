@@ -917,3 +917,128 @@ MC.exporter = {
     document.body.removeChild(form);
   },
 };
+
+// ── Tuner (Data Standardization) ──────────────────────────────────────────────
+
+MC.tuner = {
+  _rules: [],
+  _rowSeq: 0,
+
+  async init() {
+    document.getElementById('btnTunePreview')?.addEventListener('click', () => this.preview());
+    document.getElementById('btnTuneExecute')?.addEventListener('click', () => this.execute());
+    try {
+      this._rules = await MC.api('/data-ops/tune/rules') || [];
+    } catch (err) {
+      MC.showToast('Could not load tune rules: ' + err.message, 'danger');
+    }
+    this.addField();
+  },
+
+  addField() {
+    const list = document.getElementById('tuneFieldsList');
+    if (!list) return;
+    const seq = ++this._rowSeq;
+    const opts = this._rules
+      .map(r => `<option value="${MC._escHtml(r.name)}">${MC._escHtml(r.label)}</option>`)
+      .join('');
+    const row = document.createElement('div');
+    row.className = 'tune-field-row border rounded p-2 mb-2';
+    row.innerHTML = `
+      <div class="d-flex gap-2 align-items-start">
+        <input type="text" class="form-control form-control-sm font-monospace tune-field-name"
+               placeholder="Field API name" style="max-width:45%">
+        <select multiple class="form-select form-select-sm tune-field-rules" size="4">${opts}</select>
+        <button class="btn btn-outline-secondary btn-sm" onclick="MC.tuner.removeField(this)">✕</button>
+      </div>`;
+    list.appendChild(row);
+  },
+
+  removeField(btn) {
+    btn.closest('.tune-field-row')?.remove();
+  },
+
+  _collectFieldRules() {
+    const fieldRules = {};
+    document.querySelectorAll('.tune-field-row').forEach(row => {
+      const name = row.querySelector('.tune-field-name')?.value.trim();
+      const sel = row.querySelector('.tune-field-rules');
+      const rules = sel ? Array.from(sel.selectedOptions).map(o => o.value) : [];
+      if (name && rules.length) fieldRules[name] = rules;
+    });
+    return fieldRules;
+  },
+
+  async preview() {
+    const obj = document.getElementById('tuneObject')?.value.trim();
+    const where = document.getElementById('tuneWhere')?.value.trim();
+    const fieldRules = this._collectFieldRules();
+    if (!obj || !where) { MC.showToast('Object and WHERE clause required', 'warning'); return; }
+    if (!Object.keys(fieldRules).length) {
+      MC.showToast('Add at least one field with a rule selected', 'warning'); return;
+    }
+    const body = document.getElementById('tunePreviewBody');
+    if (body) body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+    document.getElementById('btnTuneExecute')?.classList.add('d-none');
+    try {
+      const d = await MC.api('/data-ops/tune/preview', 'POST',
+        {object: obj, where_clause: where, field_rules: fieldRules});
+      if (body) body.innerHTML = this._renderPreview(d);
+      if (d.changed_in_sample > 0) {
+        document.getElementById('btnTuneExecute')?.classList.remove('d-none');
+      }
+    } catch (err) {
+      if (body) body.innerHTML = `<div class="alert alert-danger m-3">${MC._escHtml(err.message)}</div>`;
+    }
+  },
+
+  _renderPreview(d) {
+    if (!d.changed || !d.changed.length) {
+      return `<div class="text-muted text-center py-5 small">
+        Scanned ${d.sample_size} of ${d.total_matching.toLocaleString()} matching records —
+        nothing needs standardizing.</div>`;
+    }
+    const rows = d.changed.flatMap(rec =>
+      rec.changes.map((c, i) => `<tr>
+        ${i === 0 ? `<td class="font-monospace small" rowspan="${rec.changes.length}">${MC.sfLinkTag(rec.id)}</td>` : ''}
+        <td class="small font-monospace">${MC._escHtml(c.field)}</td>
+        <td class="small text-muted">${MC._escHtml(c.before)}</td>
+        <td class="small text-success fw-semibold">${MC._escHtml(c.after)}</td>
+      </tr>`)
+    ).join('');
+    return `<div class="p-2 small text-muted">
+        <strong>${d.changed_in_sample}</strong> of ${d.sample_size} sampled records would change
+        (${d.total_matching.toLocaleString()} match the filter).</div>
+      <div style="max-height:420px;overflow-y:auto">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light"><tr><th>Record</th><th>Field</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  },
+
+  async execute() {
+    const obj = document.getElementById('tuneObject')?.value.trim();
+    const where = document.getElementById('tuneWhere')?.value.trim();
+    const fieldRules = this._collectFieldRules();
+    const bypass = document.getElementById('tuneBypass')?.checked;
+    if (!Object.keys(fieldRules).length) {
+      MC.showToast('Add at least one field with a rule', 'warning'); return;
+    }
+    try {
+      const d = await MC.api('/data-ops/tune/execute', 'POST',
+        {object: obj, where_clause: where, field_rules: fieldRules, bypass_triggers: bypass});
+      const alert = document.getElementById('tuneResultAlert');
+      document.getElementById('tuneResultWrap')?.classList.remove('d-none');
+      const mockNote = d.mock ? ' <span class="badge badge-secondary">mock — not written</span>' : '';
+      if (alert) {
+        alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">
+          Standardized <strong>${d.updated}</strong> record(s).
+          ${d.unchanged} already clean. Errors: ${d.errors}.${mockNote}</div>`;
+      }
+      document.getElementById('btnTuneExecute')?.classList.add('d-none');
+    } catch (err) {
+      MC.showToast('Tune failed: ' + err.message, 'danger');
+    }
+  },
+};
