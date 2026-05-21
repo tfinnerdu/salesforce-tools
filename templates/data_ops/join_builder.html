@@ -60,10 +60,10 @@
                     data-bs-trigger="focus"
                     tabindex="0"
                     data-bs-title="SQL Server Table"
-                    data-bs-content="The SQL Server table to join against. Uses the SQLSERVER_CONN connection string from environment variables via pyodbc.">ⓘ</span>
+                    data-bs-content="The SQL Server table to join against, used verbatim. Schema-qualify it when the table is not in the connection's default schema — Colleague-on-SQL tables usually are not in dbo. Uses the SQLSERVER_CONN connection string via pyodbc.">ⓘ</span>
             </label>
             <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
-                   placeholder="dbo.Students">
+                   placeholder="colleague.STUDENTS">
           </div>
           <div class="mb-3">
             <label for="sqlFields" class="form-label small fw-semibold">
