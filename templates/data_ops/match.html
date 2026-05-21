@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}Match - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Match &mdash; Fuzzy Duplicate Detection
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Match"
+            data-bs-content="Finds NEAR-duplicate records — typos, nicknames, transposed characters — that exact matching misses. Records are bucketed by a Soundex blocking key, then compared pairwise. Detection only; review and merge candidates via Validation > Duplicate Radar.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-navy)">Configure</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">SF Object API Name</label>
+            <input id="matchObject" type="text" class="form-control" placeholder="e.g. Account">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">WHERE Clause</label>
+            <textarea id="matchWhere" class="form-control font-monospace" rows="2"
+                      placeholder="e.g. RecordType.DeveloperName = 'PersonAccount'"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Compare Fields</label>
+            <input id="matchCompareFields" type="text" class="form-control font-monospace"
+                   placeholder="FirstName, LastName, PersonEmail">
+            <div class="form-text">Comma-separated. Similarity is averaged across these fields.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Blocking Field</label>
+            <input id="matchBlockField" type="text" class="form-control font-monospace"
+                   placeholder="LastName">
+            <div class="form-text">Records are bucketed by the Soundex of this field — only same-bucket records are compared.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Similarity Threshold: <span id="matchThresholdVal">0.85</span>
+            </label>
+            <input id="matchThreshold" type="range" class="form-range" min="0.5" max="1" step="0.01" value="0.85">
+            <div class="form-text">Pairs scoring at or above this are reported.</div>
+          </div>
+          <button id="btnMatchRun" class="btn btn-doane">&#9654; Find Matches</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-navy)">Candidate Pairs</div>
+        <div class="card-body p-0">
+          <div id="matchLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning"></div>
+            <p class="mt-2 text-muted small">Scanning &amp; scoring…</p>
+          </div>
+          <div id="matchSummary" class="d-none px-3 pt-3"></div>
+          <div id="matchBody">
+            <div class="text-muted text-center py-5 small">Configure and run to find near-duplicates.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>document.addEventListener('DOMContentLoaded', () => MC.matcher.init());</script>
+{% endblock %}

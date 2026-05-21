@@ -363,6 +363,26 @@ JOIN OPENQUERY(SALESFORCE, '
 
 ---
 
+## Data Ops > Match (Fuzzy Duplicate Detection)
+
+**URL:** `/data-ops/match`
+
+**Steps:**
+1. Navigate to Data Ops > Match.
+2. Object `Account`, WHERE clause `Id != null`.
+3. Compare Fields `Name, PersonEmail`; Blocking Field `Name`.
+4. Adjust the Similarity Threshold slider — the displayed value updates live.
+5. Click **Find Matches**.
+6. **Expected:** a summary line (records scanned, Soundex blocks, comparisons,
+   candidate count) followed by a table of candidate pairs sorted by score, each
+   showing both records side by side with linked IDs.
+7. Raise the threshold and re-run — fewer candidates are returned.
+
+Detection only — no records are modified. Merge confirmed pairs via
+Validation > Duplicate Radar.
+
+---
+
 ## Admin > Permissions Audit
 
 **URL:** `/admin/` → Permissions Audit tab
@@ -439,5 +459,6 @@ JOIN OPENQUERY(SALESFORCE, '
     `success: true`
 11. `POST /data-ops/export/run` with a SOQL body returns a `text/csv` attachment
 12. `GET /data-ops/tune/rules` returns 8 standardization rules
-13. `pytest tests/ -q` — full suite green (977 tests)
-14. `pytest tests/characterization/ -q` — Tooling API, route, and Tune-rule contracts intact
+13. `POST /data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
+14. `pytest tests/ -q` — full suite green (1012 tests)
+15. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact

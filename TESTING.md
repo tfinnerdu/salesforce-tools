@@ -110,8 +110,11 @@ bug-fix sweep. Every file below has a bucket assignment per the Four-Bucket Rule
 | `services/data_importer.py` | 172 | Unit-tested + Contract-pinned | 94% | `test_data_importer.py` (validation logic) + `test_bulk_api_paths.py` (real Bulk API path) + route-contract characterization. Uncovered: 2 defensive branches |
 | `services/bulk_ops.py` | 116 | Unit-tested | 90% | `test_bulk_ops.py` (mock paths) + `test_bulk_api_paths.py` (real Bulk API delete/modify/reassign) |
 | `services/data_tuner.py` | 109 | Unit-tested + Contract-pinned | 100% | `test_data_tuner.py` (preview/apply, mock + live Bulk path) + `test_tune_rules_characterization.py` pins all 8 standardization rules |
+| `services/fuzzy_matcher.py` | 81 | Unit-tested + Contract-pinned | 100% | `test_fuzzy_matcher.py` (similarity, blocking, find_matches) + `test_soundex_characterization.py` pins the Soundex algorithm |
 | `templates/data_ops/tune.html` | — | Manual-procedure-documented | — | Tune (data standardization) — see Procedure 19 |
+| `templates/data_ops/match.html` | — | Manual-procedure-documented | — | Match (fuzzy duplicate detection) — see Procedure 20 |
 | `tests/characterization/test_tune_rules_characterization.py` | — | Contract-pinned (test) | — | Pins each Tune rule's known input→output |
+| `tests/characterization/test_soundex_characterization.py` | — | Contract-pinned (test) | — | Pins Soundex reference values used by Fuzzy Match blocking |
 | `services/org_automation.py` | 88 | Unit-tested | 91% | `test_org_automation.py` — happy path, mock fallback, error re-raise, empty-result fallback for all 4 query types |
 | `services/perm_auditor.py` | 131 | Unit-tested | 87% | `test_perm_auditor.py` — perm sets, users, drill-downs, matrices, legacy helpers, lookup-miss paths |
 | `services/platform_events.py` | 41 | Unit-tested + Contract-pinned | 68%* | `test_platform_events.py` + characterization pins the `PlatformEventChannel` query (no `Description` field) |
@@ -547,6 +550,27 @@ mode the same cells are plain text. No broken `/lightning/r/undefined/...` URLs.
 
 **Expected:** Preview shows accurate before/after. Apply gates on a successful
 preview. Rules apply in the selected order.
+
+---
+
+### Procedure 20 — Data Ops: Match (Fuzzy Duplicate Detection)
+
+**Goal:** Verify the fuzzy near-duplicate scan.
+
+1. Navigate to `/data-ops/match`.
+2. Enter `Account` as the object and `Id != null` as the WHERE clause.
+3. Enter comma-separated **Compare Fields** (e.g. `Name, PersonEmail`).
+4. Enter a **Blocking Field** (e.g. `Name`).
+5. Drag the **Similarity Threshold** slider — confirm the displayed value updates live.
+6. Click **Find Matches**.
+7. Confirm a summary line appears (records scanned, blocks, comparisons, candidate
+   count) followed by a table of candidate pairs.
+8. Confirm each pair shows a score badge and both records side by side, with
+   record IDs as Salesforce links and low-scoring fields highlighted.
+9. Raise the threshold to 0.99 and re-run — confirm fewer (or zero) candidates.
+
+**Expected:** The scan completes, candidate pairs render sorted by score, and the
+threshold filters results. Detection only — no records are modified.
 
 ---
 

@@ -52,6 +52,11 @@ def tune_page():
     return render_template('data_ops/tune.html')
 
 
+@data_ops_bp.route('/match')
+def match_page():
+    return render_template('data_ops/match.html')
+
+
 @data_ops_bp.route('/bulk-update')
 def bulk_update_page():
     return render_template('data_ops/bulk_update.html')
@@ -352,6 +357,30 @@ def api_tune_execute():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('tune execute failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+# ── Match (fuzzy duplicate detection) API ─────────────────────────────────────
+
+@data_ops_bp.route('/match/run', methods=['POST'])
+def api_match_run():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    object_name = body.get('object', '').strip()
+    where_clause = body.get('where_clause', '').strip()
+    compare_fields = body.get('compare_fields', [])
+    block_field = body.get('block_field', '').strip()
+    threshold = body.get('threshold', 0.85)
+    if not object_name or not where_clause or not compare_fields or not block_field:
+        return jsonify({'success': False,
+                        'error': 'object, where_clause, compare_fields, and block_field required'}), 400
+    try:
+        from services import fuzzy_matcher
+        result = fuzzy_matcher.find_matches(
+            org, object_name, where_clause, compare_fields, block_field, threshold)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('match run failed')
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 

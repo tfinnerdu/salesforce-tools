@@ -35,6 +35,7 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Export](#export)
    - [Bulk Modify](#bulk-modify)
    - [Tune (Data Standardization)](#tune-data-standardization)
+   - [Match (Fuzzy Duplicate Detection)](#match-fuzzy-duplicate-detection)
    - [Bulk Delete](#bulk-delete)
    - [Bulk Reassign](#bulk-reassign)
    - [Join Builder](#join-builder)
@@ -653,6 +654,40 @@ rules on import.
 
 Records already in the correct format are left untouched and reported as
 "already clean".
+
+---
+
+### Match (Fuzzy Duplicate Detection)
+
+**URL:** `/data-ops/match`
+
+Finds **near**-duplicate records — typos, nicknames, transposed characters —
+that exact matching misses. Where the [Duplicate Radar](#duplicate-radar) catches
+records with an identical SIS ID or email, Match catches "John Smith" vs
+"Jon Smith". It is the in-house equivalent of DemandTools' Match.
+
+**How it works:**
+- Records are bucketed by the **Soundex** code of a blocking field, so only
+  plausibly-similar records are compared (this keeps the scan fast).
+- Within each bucket, every pair is scored 0–100% on how similar the chosen
+  compare fields are.
+- Pairs scoring at or above your threshold are reported.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. **Compare Fields** — comma-separated fields whose similarity is averaged
+   (e.g. `FirstName, LastName, PersonEmail`).
+3. **Blocking Field** — the field whose Soundex buckets records (e.g. `LastName`).
+4. Set the **Similarity Threshold** with the slider (default 0.85).
+5. Click **Find Matches** — candidate pairs appear sorted by score, with each
+   record's ID linked to Salesforce and the fields that differ highlighted.
+
+Match is **detection only** — it never modifies records. Review the candidate
+pairs and merge confirmed duplicates via the Duplicate Radar.
+
+> **Scan limits:** up to 2,000 records per run; very large Soundex buckets are
+> capped at 300 records (the summary flags when this happens). Narrow the WHERE
+> clause for large objects.
 
 ---
 

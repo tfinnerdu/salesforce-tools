@@ -1042,3 +1042,95 @@ MC.tuner = {
     }
   },
 };
+
+// ── Matcher (Fuzzy Duplicate Detection) ───────────────────────────────────────
+
+MC.matcher = {
+  init() {
+    const slider = document.getElementById('matchThreshold');
+    const out = document.getElementById('matchThresholdVal');
+    slider?.addEventListener('input', () => { if (out) out.textContent = slider.value; });
+    document.getElementById('btnMatchRun')?.addEventListener('click', () => this.run());
+  },
+
+  async run() {
+    const obj = document.getElementById('matchObject')?.value.trim();
+    const where = document.getElementById('matchWhere')?.value.trim();
+    const blockField = document.getElementById('matchBlockField')?.value.trim();
+    const compareFields = (document.getElementById('matchCompareFields')?.value || '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const threshold = parseFloat(document.getElementById('matchThreshold')?.value || '0.85');
+
+    if (!obj || !where) { MC.showToast('Object and WHERE clause required', 'warning'); return; }
+    if (!blockField) { MC.showToast('A blocking field is required', 'warning'); return; }
+    if (!compareFields.length) { MC.showToast('Enter at least one compare field', 'warning'); return; }
+
+    const loading = document.getElementById('matchLoading');
+    const summary = document.getElementById('matchSummary');
+    const body = document.getElementById('matchBody');
+    loading?.classList.remove('d-none');
+    summary?.classList.add('d-none');
+    if (body) body.innerHTML = '';
+
+    try {
+      const d = await MC.api('/data-ops/match/run', 'POST', {
+        object: obj, where_clause: where, compare_fields: compareFields,
+        block_field: blockField, threshold,
+      });
+      loading?.classList.add('d-none');
+      this._renderSummary(d);
+      this._renderCandidates(d);
+    } catch (err) {
+      loading?.classList.add('d-none');
+      if (body) body.innerHTML = `<div class="alert alert-danger m-3">${MC._escHtml(err.message)}</div>`;
+    }
+  },
+
+  _renderSummary(d) {
+    const el = document.getElementById('matchSummary');
+    if (!el) return;
+    const trunc = d.truncated_blocks > 0
+      ? ` <span class="text-warning">(${d.truncated_blocks} large block(s) capped)</span>` : '';
+    el.innerHTML = `<p class="small text-muted mb-2">
+      Scanned <strong>${d.records_scanned.toLocaleString()}</strong> records in
+      <strong>${d.block_count}</strong> Soundex block(s),
+      <strong>${d.comparisons.toLocaleString()}</strong> comparison(s) &rarr;
+      <strong>${d.candidate_count}</strong> candidate pair(s) at threshold ${d.threshold}.${trunc}</p>`;
+    el.classList.remove('d-none');
+  },
+
+  _renderCandidates(d) {
+    const body = document.getElementById('matchBody');
+    if (!body) return;
+    if (!d.candidates.length) {
+      body.innerHTML = '<div class="text-muted text-center py-5 small">No near-duplicate pairs found above the threshold.</div>';
+      return;
+    }
+    const fields = d.compare_fields;
+    const recCell = (rec, fieldScores) => {
+      const vals = fields.map(f => {
+        const s = fieldScores[f];
+        const cls = s != null && s < 0.7 ? 'text-danger' : 'text-muted';
+        return `<div class="small"><span class="${cls}">${MC._escHtml(f)}:</span>
+                ${MC._escHtml(rec.values[f] ?? '')}</div>`;
+      }).join('');
+      return `<div class="font-monospace small mb-1">${MC.sfLinkTag(rec.id)}</div>${vals}`;
+    };
+    const rows = d.candidates.map(c => {
+      const pct = Math.round(c.score * 100);
+      const cls = c.score >= 0.95 ? 'badge-red' : c.score >= 0.85 ? 'badge-amber' : 'badge-secondary';
+      return `<tr>
+        <td class="text-center"><span class="badge ${cls}">${pct}%</span></td>
+        <td>${recCell(c.a, c.field_scores)}</td>
+        <td>${recCell(c.b, c.field_scores)}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `<div style="max-height:540px;overflow-y:auto">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light"><tr><th class="text-center">Score</th><th>Record A</th><th>Record B</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div class="p-2 small text-muted">Review pairs and merge via
+        <a href="/validation/duplicates">Validation &rsaquo; Duplicate Radar</a>.</div>`;
+  },
+};
