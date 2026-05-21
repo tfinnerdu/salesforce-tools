@@ -123,6 +123,27 @@
     <Compile Include="tests\test_soql_workbench.py" />
     <Compile Include="tests\test_storage_breakdown.py" />
     <Compile Include="tests\test_trace_flags.py" />
+    <Compile Include="services\bulk_ops.py" />
+    <Compile Include="services\data_importer.py" />
+    <Compile Include="services\data_tuner.py" />
+    <Compile Include="services\fuzzy_matcher.py" />
+    <Compile Include="services\org_automation.py" />
+    <Compile Include="tests\__init__.py" />
+    <Compile Include="tests\test_bulk_api_paths.py" />
+    <Compile Include="tests\test_bulk_ops.py" />
+    <Compile Include="tests\test_data_importer.py" />
+    <Compile Include="tests\test_data_ops_tools.py" />
+    <Compile Include="tests\test_data_tuner.py" />
+    <Compile Include="tests\test_field_impact.py" />
+    <Compile Include="tests\test_fuzzy_matcher.py" />
+    <Compile Include="tests\test_org_automation.py" />
+    <Compile Include="tests\test_perm_auditor.py" />
+    <Compile Include="tests\test_regression_tester.py" />
+    <Compile Include="tests\characterization\__init__.py" />
+    <Compile Include="tests\characterization\test_route_contracts_characterization.py" />
+    <Compile Include="tests\characterization\test_soundex_characterization.py" />
+    <Compile Include="tests\characterization\test_tooling_api_contracts_characterization.py" />
+    <Compile Include="tests\characterization\test_tune_rules_characterization.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".env" />
@@ -180,6 +201,14 @@
     <Content Include="templates\validation\merge_history.html" />
     <Content Include="templates\validation\orphan_scanner.html" />
     <Content Include="TESTING.md" />
+    <Content Include="templates\data_ops\import.html" />
+    <Content Include="templates\data_ops\export.html" />
+    <Content Include="templates\data_ops\modify.html" />
+    <Content Include="templates\data_ops\tune.html" />
+    <Content Include="templates\data_ops\match.html" />
+    <Content Include="templates\data_ops\convert.html" />
+    <Content Include="templates\data_ops\delete.html" />
+    <Content Include="templates\data_ops\reassign.html" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="docs\" />
@@ -203,5 +232,6 @@
     <Folder Include="templates\soql\" />
     <Folder Include="templates\validation\" />
     <Folder Include="tests\" />
+    <Folder Include="tests\characterization\" />
   </ItemGroup>
 </Project>
