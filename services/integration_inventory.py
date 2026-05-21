@@ -145,18 +145,16 @@ def get_remote_sites(org: str) -> list:
 
 # ── Connected Apps ────────────────────────────────────────────────────────────
 
-_CA_SOQL = (
-    "SELECT Id, DeveloperName, MasterLabel, Description "
-    "FROM ConnectedApplication ORDER BY MasterLabel"
-)
+_CA_SOQL = "SELECT Id, Name FROM ConnectedApplication ORDER BY Name"
 
 
 def _map_connected_app(r: dict) -> dict:
+    name = r.get('Name', '')
     return {
         'id': r.get('Id'),
-        'developer_name': r.get('DeveloperName', ''),
-        'master_label': r.get('MasterLabel', ''),
-        'description': r.get('Description', ''),
+        'developer_name': name,   # Data API doesn't expose DeveloperName separately
+        'master_label': name,
+        'description': '',
     }
 
 
@@ -178,15 +176,15 @@ def _mock_connected_apps() -> list:
 
 
 def get_connected_apps(org: str) -> list:
-    """Query ConnectedApplication via Tooling API.
+    """Query ConnectedApplication via the standard Data API (not Tooling API).
 
-    ConnectedApplication is not supported on all org editions and API
-    versions — when the org returns INVALID_TYPE we degrade gracefully to
-    an empty list rather than surfacing an error to the user.
+    ConnectedApplication is not a Tooling API object — querying it through
+    tooling/query returns INVALID_TYPE. The Data API object exposes Id and Name
+    only; DeveloperName and Description are not available on this endpoint.
     """
     sf = get_sf(org)
     try:
-        result = sf.restful('tooling/query/', params={'q': _CA_SOQL})
+        result = sf.query(_CA_SOQL)
         records = result.get('records', [])
         if Config.SF_MOCK and not records:
             return _mock_connected_apps()
@@ -194,10 +192,6 @@ def get_connected_apps(org: str) -> list:
     except Exception as exc:
         if Config.SF_MOCK:
             return _mock_connected_apps()
-        err_str = str(exc)
-        if 'INVALID_TYPE' in err_str or 'not supported' in err_str.lower():
-            logger.info('ConnectedApplication not available in this org — returning empty list')
-            return []
         raise
 
 
