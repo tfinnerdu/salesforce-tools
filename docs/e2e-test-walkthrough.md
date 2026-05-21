@@ -259,6 +259,29 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 
 ---
 
+## Schema > Org Metadata Diff
+
+**URL:** `/schema/metadata-diff`
+
+**Steps:**
+1. Navigate to Schema > Org Metadata Diff.
+2. Left org is the active org (badge); Right org defaults to `prod`.
+3. Leave all five metadata-type checkboxes checked (Apex Classes, Apex
+   Triggers, Flows, Validation Rules, Custom Objects).
+4. Click **Run Diff**.
+5. **Expected:** a summary banner reports the total difference count, and one
+   accordion panel renders per metadata type with an L/R count and a diff badge.
+6. Expand a panel — Left-only / Right-only / Modified sections list component
+   names with detail.
+7. **Expected (mock):** the seeded `prod` catalog lags the dev sandbox —
+   `MigrationBatchScheduler` is left-only, `LegacyEDAContactSync` is right-only,
+   `StudentSyncService` is modified. Comparing dev against dev shows zero
+   differences.
+
+Unlike Org Schema Diff (fields), this compares deployable metadata components.
+
+---
+
 ## Data Ops > SF ↔ SQL Join Builder
 
 **URL:** `/data-ops/join`
@@ -483,5 +506,6 @@ with a DB it persists and old runs are pruned to `BACKUP_RETAIN`.
 12. `GET /data-ops/tune/rules` returns 8 standardization rules
 13. `POST /data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
 14. `POST /data-ops/backup/run` with `{"objects": ["Account"]}` returns `success: true` with an object count
-15. `pytest tests/ -q` — full suite green (1,083 tests)
-16. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact
+15. `POST /schema/metadata-diff/run` with `{"compare_org": "prod"}` returns `success: true` with `total_differences > 0`
+16. `pytest tests/ -q` — full suite green (1,094 tests)
+17. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact

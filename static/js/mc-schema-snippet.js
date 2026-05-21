@@ -362,3 +362,139 @@ if (!MC._esc) {
       .replace(/"/g, '&quot;');
   };
 }
+
+/* ============================================================================
+ * MC.metadataDiff — Org-to-Org Metadata Diff
+ * ==========================================================================*/
+MC.metadataDiff = {
+  init() {
+    document.getElementById('btnRunMetaDiff')?.addEventListener('click', () => this.run());
+  },
+
+  async run() {
+    const rightOrg = document.getElementById('rightOrgSelect')?.value;
+    const types = Array.from(document.querySelectorAll('.meta-type-check:checked'))
+      .map(c => c.value);
+    if (types.length === 0) {
+      MC.showToast('Select at least one metadata type', 'warning');
+      return;
+    }
+    const empty = document.getElementById('metaDiffEmpty');
+    const loading = document.getElementById('metaDiffLoading');
+    const accordion = document.getElementById('metaDiffAccordion');
+    const legend = document.getElementById('metaDiffLegend');
+    const summary = document.getElementById('metaDiffSummary');
+
+    if (empty) empty.classList.add('d-none');
+    if (loading) loading.classList.remove('d-none');
+    if (accordion) accordion.innerHTML = '';
+    if (legend) legend.classList.add('d-none');
+    if (summary) summary.classList.add('d-none');
+    MC.showSpinner?.();
+    try {
+      const data = await MC.api('/schema/metadata-diff/run', 'POST',
+        { right_org: rightOrg, types });
+      this.renderResults(data || {});
+    } catch (err) {
+      MC.showToast('Diff failed: ' + err.message, 'danger');
+      if (empty) {
+        empty.textContent = 'Diff failed: ' + err.message;
+        empty.classList.remove('d-none');
+      }
+    } finally {
+      MC.hideSpinner?.();
+      if (loading) loading.classList.add('d-none');
+    }
+  },
+
+  renderResults(data) {
+    const accordion = document.getElementById('metaDiffAccordion');
+    const summary = document.getElementById('metaDiffSummary');
+    const legend = document.getElementById('metaDiffLegend');
+    const types = data.types || [];
+    if (!accordion) return;
+    if (types.length === 0) {
+      const empty = document.getElementById('metaDiffEmpty');
+      if (empty) {
+        empty.textContent = 'No metadata types compared.';
+        empty.classList.remove('d-none');
+      }
+      return;
+    }
+    const total = data.total_differences || 0;
+    const left = String(data.left_org || '').toUpperCase();
+    const right = String(data.right_org || '').toUpperCase();
+    if (summary) {
+      summary.className = 'alert mb-2 ' + (total > 0 ? 'alert-warning' : 'alert-success');
+      summary.textContent = total > 0
+        ? `${total} difference${total !== 1 ? 's' : ''} between ${left} and ${right} `
+          + `across ${types.length} metadata type${types.length !== 1 ? 's' : ''}.`
+        : `${left} and ${right} match across ${types.length} `
+          + `metadata type${types.length !== 1 ? 's' : ''}.`;
+      summary.classList.remove('d-none');
+    }
+    if (legend) legend.classList.remove('d-none');
+    accordion.innerHTML = types.map((t, i) => this.buildPanel(t, i)).join('');
+  },
+
+  buildPanel(diff, idx) {
+    const id = `metaDiff${idx}`;
+    if (diff.error) {
+      return `<div class="accordion-item">
+        <h2 class="accordion-header"><button class="accordion-button collapsed" type="button"
+          data-bs-toggle="collapse" data-bs-target="#c-${id}">
+          <span class="fw-bold">${MC._esc(diff.label)}</span>
+          <span class="badge badge-red ms-auto me-3">error</span></button></h2>
+        <div id="c-${id}" class="accordion-collapse collapse" data-bs-parent="#metaDiffAccordion">
+          <div class="accordion-body small text-danger">${MC._esc(diff.error)}</div></div></div>`;
+    }
+    const leftOnly = diff.left_only || [];
+    const rightOnly = diff.right_only || [];
+    const modified = diff.modified || [];
+    const count = diff.difference_count || 0;
+
+    const listSection = (title, items, rowClass) => {
+      if (!items.length) return '';
+      return `<div class="diff-section-title">${MC._esc(title)}</div>
+        <table class="table table-sm mb-2"><tbody>
+        ${items.map(it => `<tr class="${rowClass}">
+          <td class="font-monospace small py-1">${MC._esc(it.name)}</td>
+          <td class="small text-muted py-1">${MC._esc(it.detail || '')}</td></tr>`).join('')}
+        </tbody></table>`;
+    };
+    const modSection = () => {
+      if (!modified.length) return '';
+      return `<div class="diff-section-title">Modified (configured differently)</div>
+        <table class="table table-sm mb-2"><tbody>
+        ${modified.map(m => `<tr class="diff-mismatch">
+          <td class="font-monospace small py-1">${MC._esc(m.name)}</td>
+          <td class="small py-1"><span class="text-muted">left:</span> ${MC._esc(m.left_detail || '')}<br>
+            <span class="text-muted">right:</span> ${MC._esc(m.right_detail || '')}</td></tr>`).join('')}
+        </tbody></table>`;
+    };
+
+    return `<div class="accordion-item">
+      <h2 class="accordion-header" id="h-${id}">
+        <button class="accordion-button ${count === 0 ? 'collapsed' : ''}" type="button"
+          data-bs-toggle="collapse" data-bs-target="#c-${id}" aria-expanded="${count > 0}">
+          <span class="fw-bold">${MC._esc(diff.label)}</span>
+          <span class="d-flex gap-2 ms-auto me-3 small align-items-center">
+            <span class="text-muted">L: ${diff.left_total ?? '?'}</span>
+            <span class="text-muted">R: ${diff.right_total ?? '?'}</span>
+            ${count > 0 ? `<span class="badge badge-red">${count} diff${count !== 1 ? 's' : ''}</span>`
+                        : '<span class="badge badge-green">Match</span>'}
+          </span>
+        </button>
+      </h2>
+      <div id="c-${id}" class="accordion-collapse collapse ${count > 0 ? 'show' : ''}"
+           aria-labelledby="h-${id}" data-bs-parent="#metaDiffAccordion">
+        <div class="accordion-body">
+          ${listSection('Left-only (in active org, not in right org)', leftOnly, 'diff-left-only')}
+          ${listSection('Right-only (in right org, not in active org)', rightOnly, 'diff-right-only')}
+          ${modSection()}
+          ${count === 0 ? '<p class="text-muted small mb-0">No differences for this metadata type.</p>' : ''}
+        </div>
+      </div>
+    </div>`;
+  },
+};

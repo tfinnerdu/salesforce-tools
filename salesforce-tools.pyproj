@@ -148,6 +148,8 @@
     <Compile Include="tests\test_sql_schema.py" />
     <Compile Include="services\data_backup.py" />
     <Compile Include="tests\test_data_backup.py" />
+    <Compile Include="services\metadata_diff.py" />
+    <Compile Include="tests\test_metadata_diff.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".env" />
@@ -195,6 +197,7 @@
     <Content Include="templates\schema\crosswalk_diff.html" />
     <Content Include="templates\schema\data_dictionary.html" />
     <Content Include="templates\schema\field_usage.html" />
+    <Content Include="templates\schema\metadata_diff.html" />
     <Content Include="templates\schema\org_diff.html" />
     <Content Include="templates\schema\snapshots.html" />
     <Content Include="templates\settings\index.html" />

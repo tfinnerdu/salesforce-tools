@@ -473,6 +473,28 @@ Use after a sandbox refresh to verify the schema matches production, or before d
 
 ---
 
+### Org Metadata Diff
+
+**URL:** `/schema/metadata-diff`
+
+Compares *deployable metadata components* between two orgs — the counterpart to Org Schema Diff (which covers fields). Covers five metadata types: Apex Classes, Apex Triggers, Flows, Validation Rules, and Custom Objects.
+
+**How to use it:**
+1. The Left Org is the active org (shown as a badge). Select the Right Org from the dropdown (default: `prod`).
+2. Choose which metadata types to compare — all five are checked by default.
+3. Click **Run Diff**.
+
+Each accordion panel reports:
+- **Left-only** — components in the active org not yet deployed to the right org
+- **Right-only** — components in the right org that were removed from or never existed in the active org (legacy)
+- **Modified** — present in both, but configured differently (e.g., different API version, length, or active status)
+
+The component count badges are green (no differences) or orange (has differences). Expand any panel to see the full list.
+
+> In mock mode the seeded `prod` catalog deliberately lags the dev sandbox, so the diff shows representative results without a live Salesforce connection.
+
+---
+
 ### Field Usage
 
 **URL:** `/schema/field-usage`

@@ -27,6 +27,13 @@ def org_diff():
     return render_template('schema/org_diff.html')
 
 
+@schema_bp.route('/metadata-diff')
+def metadata_diff_page():
+    from services import metadata_diff
+    return render_template('schema/metadata_diff.html',
+                           metadata_types=metadata_diff.METADATA_TYPES)
+
+
 @schema_bp.route('/field-usage')
 def field_usage():
     return render_template('schema/field_usage.html')
@@ -204,4 +211,19 @@ def api_org_diff_run():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('org diff failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@schema_bp.route('/metadata-diff/run', methods=['POST'])
+def api_metadata_diff_run():
+    from services import metadata_diff
+    left_org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    right_org = body.get('compare_org') or body.get('right_org') or 'prod'
+    types = body.get('types', [])
+    try:
+        result = metadata_diff.run_metadata_diff(left_org, right_org, types)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('metadata diff failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

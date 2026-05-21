@@ -121,6 +121,7 @@ the Observe / Logs / Impact / Deploy tabs).
 | `services/integration_inventory.py` | Unit-tested + Contract-pinned | `test_integration_inventory.py`; characterization pins `RemoteSiteSetting` → `EndpointUrl` |
 | `services/join_builder.py` | Unit-tested | `test_join_builder.py` |
 | `services/merge_history.py` | Unit-tested | `test_merge_history.py` — incl. the no-mock-leak regression test |
+| `services/metadata_diff.py` | Unit-tested | `test_metadata_diff.py` — org-to-org diff of Apex, flows, validation rules, custom objects |
 | `services/migration_velocity.py` | Unit-tested | `test_migration_velocity.py` |
 | `services/org_automation.py` | Unit-tested | `test_org_automation.py` |
 | `services/org_observer.py` | Unit-tested | `test_limit_thresholds.py` |
@@ -178,6 +179,7 @@ a Jinja error.
 | `templates/data_ops/convert.html` | `GET /data-ops/convert` — intentional stub, content asserted |
 | `templates/data_ops/join_builder.html` | `GET /data-ops/join` — Procedure 8 |
 | `templates/data_ops/backup.html` | `GET /data-ops/backup` — Procedure 21 |
+| `templates/schema/metadata_diff.html` | `GET /schema/metadata-diff` — Procedure 22 |
 | `templates/data_ops/bulk_update.html` | `GET /data-ops/bulk-update` |
 | `templates/data_ops/record_locks.html` | `GET /data-ops/record-locks` |
 | `templates/data_ops/bulk_jobs.html` | `GET /data-ops/bulk-jobs` |
@@ -662,21 +664,44 @@ an in-memory manifest but is not retained.
 
 ---
 
+### Procedure 22 — Schema: Org Metadata Diff
+
+**Goal:** Verify deployable metadata is compared between two orgs.
+
+1. Navigate to `/schema/metadata-diff`.
+2. Confirm the Left Org badge shows the active org and the Right Org defaults
+   to `prod`.
+3. Confirm all five metadata-type checkboxes (Apex Classes, Apex Triggers,
+   Flows, Validation Rules, Custom Objects) are checked.
+4. Click **Run Diff**.
+5. Confirm a summary banner reports the total difference count, and one
+   accordion panel renders per metadata type with an L/R component count and a
+   diff badge.
+6. Expand a panel with differences — confirm Left-only, Right-only, and
+   Modified sections render with component names and detail.
+7. Uncheck all types but one, re-run — confirm only that panel renders.
+
+**Expected:** In mock mode the seeded `prod` catalog lags the dev sandbox, so
+the diff shows left-only, right-only, and modified components. Comparing an org
+against itself reports zero differences.
+
+---
+
 ## Coverage Summary
 
 Every production file is accounted for in the File Classification Matrix above —
-6 core modules, 14 route files, 44 service modules, 39 templates, 12 static
+6 core modules, 14 route files, 45 service modules, 40 templates, 12 static
 assets, and 3 build files.
 
 | Bucket | Count | Notes |
 |---|---|---|
-| Unit-tested | 6 core + 13 routes + 43 services | Every route and service module has a test exercising it |
+| Unit-tested | 6 core + 13 routes + 44 services | Every route and service module has a test exercising it |
 | Contract-pinned | `test_contracts.py` + 4 characterization specs | Mock-data invariants, Tooling API contracts, route contracts, Tune-rule and Soundex transformations |
 | Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/mission-control.css`, `Dockerfile`, `requirements.txt`, `k8s/manifest.yaml` | Declarative — the toolchain validates them |
-| Manual-procedure-documented | 39 templates + 11 JS files | 21 procedures cover every JS-driven UI flow |
+| Manual-procedure-documented | 40 templates + 11 JS files | 22 procedures cover every JS-driven UI flow |
 | Structurally exempt | 1 line | `app.py` `__main__` guard |
 
-**Test suite: 1,083 tests passing.** The May 2026 expansion (DemandTools-equivalent
+**Test suite: 1,094 tests passing.** The May 2026 expansion (DemandTools-equivalent
 Data Ops tools, Permissions Audit, Automation & Sharing, the Tooling API bug-fix
 sweep, the deep-link sweep, and this matrix reconciliation) added 256 tests across
 unit, route-contract, real-Bulk-API-path, and characterization layers.
