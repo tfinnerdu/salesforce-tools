@@ -60,10 +60,10 @@
                     data-bs-trigger="focus"
                     tabindex="0"
                     data-bs-title="SQL Server Table"
-                    data-bs-content="The SQL Server table to join against, used verbatim. Schema-qualify it when the table is not in the connection's default schema — Colleague-on-SQL tables usually are not in dbo. Uses the SQLSERVER_CONN connection string via pyodbc.">ⓘ</span>
+                    data-bs-content="The SQL Server table to join against, used verbatim. A bare name resolves via the connection's default schema (usually dbo); schema-qualify it (schema.table) only if the table lives elsewhere. Uses the SQLSERVER_CONN connection string via pyodbc.">ⓘ</span>
             </label>
             <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
-                   placeholder="colleague.STUDENTS">
+                   placeholder="dbo.STUDENTS">
           </div>
           <div class="mb-3">
             <label for="sqlFields" class="form-label small fw-semibold">

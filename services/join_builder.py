@@ -16,9 +16,9 @@ def build_query(
 ) -> dict:
     """Build OPENQUERY T-SQL, SOQL, and plain SQL strings for a SF-to-SQL join.
 
-    ``sql_table`` is used verbatim — pass a schema-qualified name when the
-    table is not in the connection's default schema (e.g. Colleague-on-SQL
-    tables typically are not in ``dbo``).
+    ``sql_table`` is used verbatim. Pass a schema-qualified name
+    (``schema.table``) when the table is not in the connection's default
+    schema; a bare name resolves via that default (usually ``dbo``).
     """
     join_field_sql = join_mapping.get('sql_field', '')
     join_field_sf = join_mapping.get('sf_field', '')
