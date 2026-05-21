@@ -472,7 +472,7 @@ MC.logs = {
                            &times; Delete
                          </button>`;
       return `<tr class="${rowCls}">
-        <td class="small font-monospace">${MC._escHtml(f.traced_entity_id)}</td>
+        <td class="small font-monospace">${MC.sfLinkTag(f.traced_entity_id, f.traced_entity_type)}</td>
         <td class="small">${MC._escHtml(f.traced_entity_type)}</td>
         <td class="small">${MC._escHtml(f.debug_level_name)}</td>
         <td class="small">${MC._escHtml(f.log_type)}</td>

@@ -132,18 +132,40 @@ MC._fmtTime = (ts) => {
   try { return new Date(ts).toLocaleString(); } catch (_) { return ts; }
 };
 
-/** Build a Lightning record URL or null when unavailable (mock instance). */
+/** True when the string looks like a real 15- or 18-char Salesforce record ID. */
+MC.isSfId = (v) =>
+  typeof v === 'string' && /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(v);
+
+/**
+ * Build a Salesforce URL for a record ID, or null when unavailable
+ * (mock instance, or the value is not a real SF ID).
+ * When objectApiName is given, builds the explicit Lightning record path;
+ * otherwise uses the bare-ID URL, which Salesforce resolves to the right
+ * record page regardless of object type.
+ */
 MC.sfLink = (id, objectApiName) => {
   const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance || instance === 'mock.salesforce.com' || !id || id.startsWith('0..')) return null;
-  return `https://${instance}/lightning/r/${objectApiName}/${id}/view`;
+  if (!instance || instance === 'mock.salesforce.com') return null;
+  if (!MC.isSfId(id)) return null;
+  return objectApiName
+    ? `https://${instance}/lightning/r/${objectApiName}/${id}/view`
+    : `https://${instance}/${id}`;
 };
 
-/** Return an anchor tag linking to the SF record, or just the ID text if unavailable. */
+/** Return an anchor tag linking to the SF record, or just the ID/label text if unavailable. */
 MC.sfLinkTag = (id, objectApiName, label) => {
   const url = MC.sfLink(id, objectApiName);
-  const display = MC._escHtml(label || id);
-  return url ? `<a href="${url}" target="_blank" rel="noopener" title="Open in Salesforce">${display} <span style="font-size:0.7em">↗</span></a>` : display;
+  const display = MC._escHtml(label != null ? label : id);
+  return url
+    ? `<a href="${url}" target="_blank" rel="noopener" title="Open in Salesforce">${display} <span style="font-size:0.7em">↗</span></a>`
+    : display;
+};
+
+/** Build a Salesforce object list-view URL, or null when no live instance. */
+MC.sfObjectLink = (objectApiName) => {
+  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
+  if (!instance || instance === 'mock.salesforce.com' || !objectApiName) return null;
+  return `https://${instance}/lightning/o/${encodeURIComponent(objectApiName)}/list`;
 };
 
 
@@ -607,7 +629,9 @@ MC.duplicates = {
     }
     tbody.innerHTML = strategies.map(s => {
       const sampleIds = (s.sample_ids || []).slice(0, 4);
-      const sampleHtml = sampleIds.map(id => `<code class="small">${MC._escHtml(String(id))}</code>`).join(' ');
+      const sampleHtml = sampleIds
+        .map(id => `<span class="font-monospace small me-1">${MC.sfLinkTag(String(id), 'Account')}</span>`)
+        .join(' ');
       const masterId = sampleIds[0] || '';
       const victimId = sampleIds[1] || '';
       return `<tr>
@@ -757,11 +781,14 @@ MC.externalIds = {
       if (summaryEl) summaryEl.textContent = `${records.length.toLocaleString()} records missing ${field}`;
       tbody.innerHTML = records.length === 0
         ? '<tr><td colspan="3" class="text-center text-muted py-3">No missing records found.</td></tr>'
-        : records.map(r => `<tr>
-            <td class="font-monospace small">${MC._escHtml(r.Id || r.id || '—')}</td>
+        : records.map(r => {
+            const rid = r.Id || r.id || '';
+            return `<tr>
+            <td class="font-monospace small">${rid ? MC.sfLinkTag(rid, objectName) : '—'}</td>
             <td>${MC._escHtml(r.Name || r.name || '—')}</td>
             <td class="text-muted small">${MC._escHtml(r.CreatedDate || r.created_date || '—')}</td>
-          </tr>`).join('');
+          </tr>`;
+          }).join('');
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-danger small">Failed: ${MC._escHtml(err.message)}</td></tr>`;
     }
@@ -836,7 +863,9 @@ MC.contactpoints = {
       const samplesDiv = document.getElementById(`cp${capT}Samples`);
       const sampleList = document.getElementById(`cp${capT}SampleList`);
       if (sampleList && sampleIds.length > 0) {
-        sampleList.innerHTML = sampleIds.map(id => `<div>${MC._escHtml(String(id))}</div>`).join('');
+        sampleList.innerHTML = sampleIds
+          .map(id => `<div class="font-monospace small">${MC.sfLinkTag(String(id), `ContactPoint${capT}`)}</div>`)
+          .join('');
         if (samplesDiv) samplesDiv.classList.remove('d-none');
       }
     });
@@ -1033,6 +1062,11 @@ MC.soql = {
       const cells = columns.map(col => {
         const val = record[col];
         const display = val == null ? '' : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+        // Cells holding a Salesforce record ID (the Id column and any lookup
+        // field) link straight to the record. ID cells are not inline-editable.
+        if (MC.isSfId(display)) {
+          return `<td title="${MC._escHtml(display)}" class="font-monospace small">${MC.sfLinkTag(display)}</td>`;
+        }
         return `<td title="${MC._escHtml(display)}"
                     ondblclick="MC.soql.enableInlineEdit(this,'${MC._escHtml(objectName)}','${MC._escHtml(recordId)}','${MC._escHtml(col)}')"
                 >${MC._escHtml(display)}</td>`;
@@ -1933,26 +1967,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ── SF Quick Links ────────────────────────────────────────────────────────────
-
-/** Build a Salesforce Lightning URL for a record. Returns '' when no instance known. */
-MC.sfUrl = (recordId, objectType = 'Account') => {
-  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance || instance === 'mock.salesforce.com') return '';
-  return `https://${instance}/lightning/r/${encodeURIComponent(objectType)}/${encodeURIComponent(recordId)}/view`;
-};
-
-/**
- * Return an anchor tag opening the record in Salesforce, or plain text if mock.
- * label defaults to recordId.
- */
-MC.sfLinkHtml = (recordId, objectType = 'Account', label = null) => {
-  const url = MC.sfUrl(recordId, objectType);
-  const display = MC._escHtml(label || recordId);
-  if (!url) return `<code class="small">${display}</code>`;
-  return `<a href="${url}" target="_blank" rel="noopener" class="font-monospace small"
-             title="Open in Salesforce">${display} &#8599;</a>`;
-};
+// ── Mock-mode helpers ─────────────────────────────────────────────────────────
 
 /** Return true when Salesforce is in mock mode. */
 MC.isMock = () => document.querySelector('meta[name="sf-mock"]')?.content === 'true';

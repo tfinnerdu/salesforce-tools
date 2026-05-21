@@ -334,7 +334,7 @@ MC.admin = {
          :                               '<span class="badge badge-green">ACTIVE</span>')
         : '<span class="badge badge-navy">INACTIVE</span>';
       return `<tr class="${rowCls}">
-        <td>${MC._escHtml(u.name)}</td>
+        <td>${MC.sfLinkTag(u.id, 'User', u.name)}</td>
         <td class="small text-muted"><code>${MC._escHtml(u.username)}</code></td>
         <td class="small">${MC._escHtml(u.profile_name)}</td>
         <td class="small">${loginText}</td>
@@ -1191,12 +1191,6 @@ MC.customSettings = {
 MC.permissions = {
   _initialized: false,
   _permSets: [],
-  _sfInstance: document.querySelector('meta[name="sf-instance"]')?.content || '',
-
-  _sfLink(id, type) {
-    if (!this._sfInstance || !id || id.startsWith('0..')) return null;
-    return `https://${this._sfInstance}/lightning/r/${type}/${id}/view`;
-  },
 
   init() {
     if (this._initialized) return;
@@ -1276,7 +1270,7 @@ MC.permissions = {
     detail.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
     try {
       const d = await MC.api(`/admin/permissions/set/${encodeURIComponent(psetId)}`);
-      const sfLink = this._sfLink(psetId, 'PermissionSet');
+      const sfLink = MC.sfLink(psetId, 'PermissionSet');
       const linkHtml = sfLink ? `<a href="${sfLink}" target="_blank" class="ms-2 small text-muted">↗ Open in SF</a>` : '';
       detail.innerHTML = `
         <div class="card shadow-sm">
@@ -1313,7 +1307,7 @@ MC.permissions = {
     return `<table class="table table-sm table-hover mb-0">
       <thead class="table-light"><tr><th>Name</th><th>Username</th></tr></thead>
       <tbody>${users.map(u => {
-        const link = this._sfLink(u.id, 'User');
+        const link = MC.sfLink(u.id, 'User');
         const nameCell = link ? `<a href="${link}" target="_blank">${MC._escHtml(u.name)}</a>` : MC._escHtml(u.name);
         return `<tr><td class="small">${nameCell}</td><td class="small text-muted">${MC._escHtml(u.username)}</td></tr>`;
       }).join('')}</tbody></table>`;
@@ -1385,12 +1379,12 @@ MC.permissions = {
     detail.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
     try {
       const d = await MC.api(`/admin/permissions/user/${encodeURIComponent(userId)}`);
-      const sfLink = this._sfLink(userId, 'User');
+      const sfLink = MC.sfLink(userId, 'User');
       const nameLink = sfLink ? `<a href="${sfLink}" target="_blank">${MC._escHtml(d.name)}</a>` : MC._escHtml(d.name);
       const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
 
       const psetRows = d.permission_sets.map(ps => {
-        const psLink = this._sfLink(ps.id, 'PermissionSet');
+        const psLink = MC.sfLink(ps.id, 'PermissionSet');
         const cell = psLink ? `<a href="${psLink}" target="_blank">${MC._escHtml(ps.label)}</a>` : MC._escHtml(ps.label);
         return `<tr><td class="small">${cell}</td><td class="small text-muted">${MC._escHtml(ps.name)}</td></tr>`;
       }).join('') || '<tr><td colspan="2" class="text-muted small">None</td></tr>';
@@ -1451,7 +1445,7 @@ MC.permissions = {
       const tbody = document.getElementById('permObjectTbody');
       if (tbody) {
         tbody.innerHTML = d.rows.map(r => {
-          const link = this._sfLink(r.pset_id, 'PermissionSet');
+          const link = MC.sfLink(r.pset_id, 'PermissionSet');
           const cell = link ? `<a href="${link}" target="_blank">${MC._escHtml(r.pset_label)}</a>` : MC._escHtml(r.pset_label);
           return `<tr><td class="small">${cell}</td>
             <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.create)}</td>
@@ -1484,7 +1478,7 @@ MC.permissions = {
       if (tbody) {
         tbody.innerHTML = d.fields.flatMap(f =>
           f.access.map((a, i) => {
-            const link = this._sfLink(a.pset_id, 'PermissionSet');
+            const link = MC.sfLink(a.pset_id, 'PermissionSet');
             const cell = link ? `<a href="${link}" target="_blank">${MC._escHtml(a.pset_label)}</a>` : MC._escHtml(a.pset_label);
             return `<tr data-field="${MC._escHtml(f.field.toLowerCase())}">
               ${i === 0 ? `<td class="small font-monospace fw-semibold" rowspan="${f.access.length}">${MC._escHtml(f.field)}</td>` : ''}

@@ -498,6 +498,31 @@ forever because `mc-migration-snippet.js` was not loaded).
 
 ---
 
+### Procedure 18 — Salesforce Deep Links
+
+**Goal:** Verify that displayed record IDs link back to the connected org.
+
+Preconditions: connected to a **real** Salesforce org (`SF_MOCK=false`). In mock
+mode the helper intentionally renders plain text — see step 6.
+
+1. **SOQL Workbench** (`/soql`): run `SELECT Id, Name, OwnerId FROM Account LIMIT 5`.
+   Confirm the `Id` and `OwnerId` cells render as links with a ↗ icon. Click one —
+   it opens the record in Salesforce in a new tab.
+2. **Validation › Duplicate Radar**: scan; confirm sample IDs in the results are
+   clickable links to the Account records.
+3. **Validation › Merge History**: confirm the Master and Victim ID columns link
+   to the Account records.
+4. **Admin › Users**: confirm each user's name links to their User record.
+5. **Admin › Permissions Audit**: confirm permission-set and user names render as
+   "↗ Open in SF" links.
+6. **Mock-mode check:** restart with `SF_MOCK=true`, repeat step 1 — confirm IDs
+   render as plain text (no links), since mock IDs have no real org to point at.
+
+**Expected:** In live mode every real 15/18-char SF ID is a working link; in mock
+mode the same cells are plain text. No broken `/lightning/r/undefined/...` URLs.
+
+---
+
 ## Coverage Summary
 
 | Category | Files | Lines |

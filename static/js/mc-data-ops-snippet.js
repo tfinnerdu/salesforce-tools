@@ -54,8 +54,8 @@ MC.bulkDml = {
       const sampleBody = document.getElementById('previewSampleBody');
       if (data.sample_ids && data.sample_ids.length > 0) {
         sampleBody.innerHTML = data.sample_ids.map(id => {
-          const link = MC.sfLinkHtml(id, data.sobject);
-          return `<tr><td><code class="small">${MC._escHtml(id)}</code></td><td>${link}</td></tr>`;
+          const link = MC.sfLinkTag(id, data.sobject);
+          return `<tr><td><code class="small">${MC._escHtml(id)}</code></td><td class="font-monospace small">${link}</td></tr>`;
         }).join('');
         sampleWrap?.classList.remove('d-none');
       } else {
@@ -237,11 +237,11 @@ MC.recordLocks = {
                       const daysPending = created ? Math.floor((now - created.getTime()) / 86400000) : '—';
                       const createdStr = created ? created.toLocaleDateString() : '—';
                       const sfLink = r.TargetObjectId
-                        ? MC.sfLinkHtml(r.TargetObjectId, obj)
+                        ? MC.sfLinkTag(r.TargetObjectId, obj)
                         : MC._escHtml(r.TargetObjectId || '');
                       return `<tr>
                         <td><code class="small">${MC._escHtml(r.Id || '')}</code></td>
-                        <td>${sfLink}</td>
+                        <td class="font-monospace small">${sfLink}</td>
                         <td>${createdStr}</td>
                         <td>${typeof daysPending === 'number' ? daysPending : daysPending}</td>
                         <td><span class="badge bg-warning text-dark">${MC._escHtml(r.Status || '')}</span></td>
@@ -653,7 +653,7 @@ MC.importer = {
         tbody.innerHTML = d.results.filter(r => !r.success).map(r =>
           `<tr>
             <td class="small">${r.row}</td>
-            <td class="small font-monospace">${r.sf_id ? MC.sfLinkTag(r.sf_id, 'Account', r.sf_id) : '—'}</td>
+            <td class="small font-monospace">${r.sf_id ? MC.sfLinkTag(r.sf_id) : '—'}</td>
             <td class="small text-danger">${MC._escHtml(r.errors)}</td>
           </tr>`
         ).join('');
@@ -732,7 +732,7 @@ MC.bulkDelete = {
           <thead class="table-light"><tr>${cols.map(c => `<th>${MC._escHtml(c)}</th>`).join('')}</tr></thead>
           <tbody>${d.rows.map(r => `<tr>${cols.map(c => {
             const val = r[c];
-            if (c === 'Id' && val) return `<td class="font-monospace small">${MC.sfLinkTag(val, 'SObject', val)}</td>`;
+            if (MC.isSfId(val)) return `<td class="font-monospace small">${MC.sfLinkTag(val)}</td>`;
             return `<td class="small">${MC._escHtml(val ?? '')}</td>`;
           }).join('')}</tr>`).join('')}</tbody>
         </table>

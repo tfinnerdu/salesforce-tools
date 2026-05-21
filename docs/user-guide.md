@@ -108,6 +108,14 @@ Click any badge for a detailed tooltip. In mock mode, an **⚠ MOCK DATA** chip 
 
 The top nav contains all tabs: **Dashboard · Migration · Validation · SOQL · Schema · Data Ops · Logs · Observe · Impact · Admin · Deploy · Settings**. The active tab is underlined in amber.
 
+### Salesforce Deep Links
+
+When you're connected to a real org, any Salesforce record ID shown in a table —
+in SOQL results, scan results, the Users list, and more — is a clickable link
+(marked with a ↗) that opens that record directly in Salesforce in a new tab.
+This works for `Id` columns and lookup fields alike. In mock mode the IDs are
+plain text, since there is no real org to open.
+
 ---
 
 ## Dashboard

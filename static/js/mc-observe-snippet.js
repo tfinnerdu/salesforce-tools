@@ -298,9 +298,9 @@ MC.observe = {
       const countFmt = row.count != null
         ? row.count.toLocaleString()
         : `<span class="text-danger small" title="${MC._escHtml(row.error || '')}">error</span>`;
-      const sfUrl = MC.sfUrl(null, row.object);
+      const sfUrl = MC.sfObjectLink(row.object);
       const actionCell = sfUrl
-        ? `<a href="${sfUrl}" target="_blank" rel="noopener" class="btn btn-link btn-sm p-0 small">SOQL &#8599;</a>`
+        ? `<a href="${sfUrl}" target="_blank" rel="noopener" class="btn btn-link btn-sm p-0 small">Open in SF &#8599;</a>`
         : `<a href="/soql?object=${encodeURIComponent(row.object)}" class="btn btn-link btn-sm p-0 small text-muted">SOQL</a>`;
       return `<tr>
         <td class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(row.label)}</td>
