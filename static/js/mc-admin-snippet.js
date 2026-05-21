@@ -75,6 +75,9 @@ MC.admin = {
     document.getElementById('loginHistorySearch')?.addEventListener('input', e => this._filterTable('loginHistoryTbody', e.target.value));
     document.getElementById('jobQueueAutoRefresh')?.addEventListener('change', e => this._setJobQueueAutoRefresh(e.target.checked));
 
+    document.getElementById('tab-permissions-btn')?.addEventListener('shown.bs.tab', () => MC.permissions.init());
+    document.getElementById('btnRefreshPermissions')?.addEventListener('click', () => MC.permissions.reload());
+
     // Status filter pills for job queue
     document.getElementById('jobQueueFilters')?.addEventListener('click', e => {
       const btn = e.target.closest('[data-jq-filter]');
@@ -1177,5 +1180,329 @@ MC.customSettings = {
       MC.showToast(`Failed to load records for ${settingName}: ${err.message}`, 'danger');
       if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-danger small text-center py-3">Error loading records.</td></tr>';
     }
+  },
+};
+
+// ── Permissions Audit ─────────────────────────────────────────────────────────
+
+MC.permissions = {
+  _initialized: false,
+  _permSets: [],
+  _sfInstance: document.querySelector('meta[name="sf-instance"]')?.content || '',
+
+  _sfLink(id, type) {
+    if (!this._sfInstance || !id || id.startsWith('0..')) return null;
+    return `https://${this._sfInstance}/lightning/r/${type}/${id}/view`;
+  },
+
+  init() {
+    if (this._initialized) return;
+    this._initialized = true;
+    this._wireEvents();
+    this.loadPermSets();
+  },
+
+  reload() {
+    this._initialized = false;
+    this.init();
+  },
+
+  _wireEvents() {
+    document.getElementById('permSetSearch')?.addEventListener('input', e =>
+      this._filterList('permSetsList', e.target.value));
+
+    document.getElementById('btnPermUserSearch')?.addEventListener('click', () => {
+      const q = document.getElementById('permUserSearch')?.value.trim() || '';
+      this.loadUsers(q);
+    });
+    document.getElementById('permUserSearch')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btnPermUserSearch')?.click();
+    });
+
+    document.getElementById('btnPermObjectLoad')?.addEventListener('click', () => {
+      const obj = document.getElementById('permObjectName')?.value.trim();
+      if (obj) this.loadObjectMatrix(obj);
+    });
+
+    document.getElementById('btnPermFieldLoad')?.addEventListener('click', () => {
+      const obj = document.getElementById('permFieldObject')?.value.trim();
+      if (obj) this.loadFieldMatrix(obj);
+    });
+
+    document.getElementById('permFieldFilter')?.addEventListener('input', e =>
+      this._filterTable('permFieldTbody', e.target.value));
+  },
+
+  // ── Permission Sets ──────────────────────────────────────────────────────
+
+  async loadPermSets() {
+    const loading = document.getElementById('permSetsLoading');
+    const empty   = document.getElementById('permSetsEmpty');
+    const content = document.getElementById('permSetsContent');
+    try {
+      this._permSets = await MC.api('/admin/permissions/sets') || [];
+      loading?.classList.add('d-none');
+      if (this._permSets.length === 0) { empty?.classList.remove('d-none'); return; }
+      content?.classList.remove('d-none');
+      this._renderPermSetList(this._permSets);
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load permission sets: ' + err.message, 'danger');
+    }
+  },
+
+  _renderPermSetList(sets) {
+    const list = document.getElementById('permSetsList');
+    if (!list) return;
+    list.innerHTML = sets.map(ps =>
+      `<button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2"
+               data-pset-id="${MC._escHtml(ps.id)}" onclick="MC.permissions.loadPermSetDetail('${MC._escHtml(ps.id)}')">
+        <span class="small fw-semibold">${MC._escHtml(ps.label || ps.name)}</span>
+        <span class="badge ${ps.user_count > 0 ? 'badge-navy' : 'badge-secondary'} ms-2">${ps.user_count}</span>
+       </button>`
+    ).join('');
+  },
+
+  async loadPermSetDetail(psetId) {
+    // Highlight selected
+    document.querySelectorAll('#permSetsList button').forEach(b =>
+      b.classList.toggle('active', b.dataset.psetId === psetId));
+
+    const detail = document.getElementById('permSetDetail');
+    if (!detail) return;
+    detail.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+    try {
+      const d = await MC.api(`/admin/permissions/set/${encodeURIComponent(psetId)}`);
+      const sfLink = this._sfLink(psetId, 'PermissionSet');
+      const linkHtml = sfLink ? `<a href="${sfLink}" target="_blank" class="ms-2 small text-muted">↗ Open in SF</a>` : '';
+      detail.innerHTML = `
+        <div class="card shadow-sm">
+          <div class="card-header py-2">
+            <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">${MC._escHtml(d.label)}${linkHtml}</h6>
+            ${d.description ? `<small class="text-muted">${MC._escHtml(d.description)}</small>` : ''}
+          </div>
+          <div class="card-body p-0">
+            <ul class="nav nav-tabs px-3 pt-2" id="psetDetailTabs">
+              <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pset-users-pane">Users (${d.users.length})</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pset-objs-pane">Object Perms (${d.object_permissions.length})</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pset-fields-pane">Field Perms (${d.field_permissions.length})</button></li>
+            </ul>
+            <div class="tab-content p-2">
+              <div class="tab-pane fade show active" id="pset-users-pane">
+                ${this._renderUserMini(d.users)}
+              </div>
+              <div class="tab-pane fade" id="pset-objs-pane">
+                ${this._renderObjPermsTable(d.object_permissions)}
+              </div>
+              <div class="tab-pane fade" id="pset-fields-pane">
+                ${this._renderFieldPermsTable(d.field_permissions)}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } catch (err) {
+      detail.innerHTML = `<div class="alert alert-danger">${MC._escHtml(err.message)}</div>`;
+    }
+  },
+
+  _renderUserMini(users) {
+    if (!users.length) return '<p class="text-muted small py-3 text-center">No users assigned.</p>';
+    return `<table class="table table-sm table-hover mb-0">
+      <thead class="table-light"><tr><th>Name</th><th>Username</th></tr></thead>
+      <tbody>${users.map(u => {
+        const link = this._sfLink(u.id, 'User');
+        const nameCell = link ? `<a href="${link}" target="_blank">${MC._escHtml(u.name)}</a>` : MC._escHtml(u.name);
+        return `<tr><td class="small">${nameCell}</td><td class="small text-muted">${MC._escHtml(u.username)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  },
+
+  _renderObjPermsTable(rows) {
+    if (!rows.length) return '<p class="text-muted small py-3 text-center">No object permissions.</p>';
+    const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+    return `<table class="table table-sm table-hover mb-0">
+      <thead class="table-light"><tr><th>Object</th><th class="text-center">R</th><th class="text-center">C</th><th class="text-center">E</th><th class="text-center">D</th><th class="text-center">VA</th><th class="text-center">MA</th></tr></thead>
+      <tbody>${rows.map(r =>
+        `<tr><td class="small font-monospace">${MC._escHtml(r.object)}</td>
+         <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.create)}</td>
+         <td class="text-center">${check(r.edit)}</td><td class="text-center">${check(r.delete)}</td>
+         <td class="text-center">${check(r.view_all)}</td><td class="text-center">${check(r.modify_all)}</td></tr>`
+      ).join('')}</tbody></table>`;
+  },
+
+  _renderFieldPermsTable(rows) {
+    if (!rows.length) return '<p class="text-muted small py-3 text-center">No field permissions.</p>';
+    const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+    return `<table class="table table-sm table-hover mb-0">
+      <thead class="table-light"><tr><th>Object</th><th>Field</th><th class="text-center">Read</th><th class="text-center">Edit</th></tr></thead>
+      <tbody>${rows.map(r =>
+        `<tr><td class="small font-monospace">${MC._escHtml(r.object)}</td>
+         <td class="small font-monospace">${MC._escHtml(r.field)}</td>
+         <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.edit)}</td></tr>`
+      ).join('')}</tbody></table>`;
+  },
+
+  _filterList(listId, query) {
+    const q = (query || '').toLowerCase();
+    document.querySelectorAll(`#${listId} button`).forEach(btn => {
+      const text = btn.textContent.toLowerCase();
+      btn.classList.toggle('d-none', !!q && !text.includes(q));
+    });
+  },
+
+  // ── By User ──────────────────────────────────────────────────────────────
+
+  async loadUsers(search = '') {
+    const loading = document.getElementById('permUsersLoading');
+    const list    = document.getElementById('permUsersList');
+    loading?.classList.remove('d-none');
+    if (list) list.innerHTML = '';
+    try {
+      const users = await MC.api(`/admin/permissions/users?q=${encodeURIComponent(search)}`) || [];
+      loading?.classList.add('d-none');
+      if (!users.length) { if (list) list.innerHTML = '<div class="text-muted small p-2">No users found.</div>'; return; }
+      list.innerHTML = users.map(u =>
+        `<button class="list-group-item list-group-item-action py-2"
+                 data-user-id="${MC._escHtml(u.id)}" onclick="MC.permissions.loadUserDetail('${MC._escHtml(u.id)}')">
+          <div class="small fw-semibold">${MC._escHtml(u.name)}</div>
+          <div class="small text-muted">${MC._escHtml(u.username)}</div>
+         </button>`
+      ).join('');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('User search failed: ' + err.message, 'danger');
+    }
+  },
+
+  async loadUserDetail(userId) {
+    document.querySelectorAll('#permUsersList button').forEach(b =>
+      b.classList.toggle('active', b.dataset.userId === userId));
+
+    const detail = document.getElementById('permUserDetail');
+    if (!detail) return;
+    detail.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+    try {
+      const d = await MC.api(`/admin/permissions/user/${encodeURIComponent(userId)}`);
+      const sfLink = this._sfLink(userId, 'User');
+      const nameLink = sfLink ? `<a href="${sfLink}" target="_blank">${MC._escHtml(d.name)}</a>` : MC._escHtml(d.name);
+      const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+
+      const psetRows = d.permission_sets.map(ps => {
+        const psLink = this._sfLink(ps.id, 'PermissionSet');
+        const cell = psLink ? `<a href="${psLink}" target="_blank">${MC._escHtml(ps.label)}</a>` : MC._escHtml(ps.label);
+        return `<tr><td class="small">${cell}</td><td class="small text-muted">${MC._escHtml(ps.name)}</td></tr>`;
+      }).join('') || '<tr><td colspan="2" class="text-muted small">None</td></tr>';
+
+      const objRows = d.object_permissions.map(o =>
+        `<tr><td class="small font-monospace">${MC._escHtml(o.object)}</td>
+         <td class="text-center">${check(o.read)}</td><td class="text-center">${check(o.create)}</td>
+         <td class="text-center">${check(o.edit)}</td><td class="text-center">${check(o.delete)}</td>
+         <td class="text-center">${check(o.view_all)}</td><td class="text-center">${check(o.modify_all)}</td></tr>`
+      ).join('') || '<tr><td colspan="7" class="text-muted small text-center">No object permissions via perm sets</td></tr>';
+
+      detail.innerHTML = `
+        <div class="card shadow-sm">
+          <div class="card-header py-2">
+            <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">${nameLink}</h6>
+            <small class="text-muted">${MC._escHtml(d.username)} &nbsp;·&nbsp; Profile: ${MC._escHtml(d.profile_name)} &nbsp;·&nbsp; License: ${MC._escHtml(d.license || '—')}</small>
+          </div>
+          <div class="card-body p-0">
+            <ul class="nav nav-tabs px-3 pt-2">
+              <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ud-psets-pane">Perm Sets (${d.permission_sets.length})</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ud-objs-pane">Object Access (${d.object_permissions.length})</button></li>
+            </ul>
+            <div class="tab-content p-2">
+              <div class="tab-pane fade show active" id="ud-psets-pane">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light"><tr><th>Label</th><th>API Name</th></tr></thead>
+                  <tbody>${psetRows}</tbody>
+                </table>
+              </div>
+              <div class="tab-pane fade" id="ud-objs-pane">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light"><tr><th>Object</th><th class="text-center">R</th><th class="text-center">C</th><th class="text-center">E</th><th class="text-center">D</th><th class="text-center">VA</th><th class="text-center">MA</th></tr></thead>
+                  <tbody>${objRows}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } catch (err) {
+      detail.innerHTML = `<div class="alert alert-danger">${MC._escHtml(err.message)}</div>`;
+    }
+  },
+
+  // ── Object Matrix ────────────────────────────────────────────────────────
+
+  async loadObjectMatrix(objectName) {
+    const loading = document.getElementById('permObjectLoading');
+    const empty   = document.getElementById('permObjectEmpty');
+    const card    = document.getElementById('permObjectCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const d = await MC.api(`/admin/permissions/object-matrix?object=${encodeURIComponent(objectName)}`);
+      loading?.classList.add('d-none');
+      if (!d.rows.length) { empty?.classList.remove('d-none'); return; }
+      const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+      const tbody = document.getElementById('permObjectTbody');
+      if (tbody) {
+        tbody.innerHTML = d.rows.map(r => {
+          const link = this._sfLink(r.pset_id, 'PermissionSet');
+          const cell = link ? `<a href="${link}" target="_blank">${MC._escHtml(r.pset_label)}</a>` : MC._escHtml(r.pset_label);
+          return `<tr><td class="small">${cell}</td>
+            <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.create)}</td>
+            <td class="text-center">${check(r.edit)}</td><td class="text-center">${check(r.delete)}</td>
+            <td class="text-center">${check(r.view_all)}</td><td class="text-center">${check(r.modify_all)}</td></tr>`;
+        }).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load object matrix: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Field Coverage ───────────────────────────────────────────────────────
+
+  async loadFieldMatrix(objectName) {
+    const loading = document.getElementById('permFieldLoading');
+    const empty   = document.getElementById('permFieldEmpty');
+    const content = document.getElementById('permFieldContent');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    content?.classList.add('d-none');
+    try {
+      const d = await MC.api(`/admin/permissions/field-matrix?object=${encodeURIComponent(objectName)}`);
+      loading?.classList.add('d-none');
+      if (!d.fields.length) { empty?.classList.remove('d-none'); return; }
+      const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+      const tbody = document.getElementById('permFieldTbody');
+      if (tbody) {
+        tbody.innerHTML = d.fields.flatMap(f =>
+          f.access.map((a, i) => {
+            const link = this._sfLink(a.pset_id, 'PermissionSet');
+            const cell = link ? `<a href="${link}" target="_blank">${MC._escHtml(a.pset_label)}</a>` : MC._escHtml(a.pset_label);
+            return `<tr data-field="${MC._escHtml(f.field.toLowerCase())}">
+              ${i === 0 ? `<td class="small font-monospace fw-semibold" rowspan="${f.access.length}">${MC._escHtml(f.field)}</td>` : ''}
+              <td class="small">${cell}</td>
+              <td class="text-center">${check(a.read)}</td>
+              <td class="text-center">${check(a.edit)}</td>
+            </tr>`;
+          })
+        ).join('');
+      }
+      content?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load field coverage: ' + err.message, 'danger');
+    }
+  },
+
+  _filterTable(tbodyId, query) {
+    const q = (query || '').toLowerCase();
+    document.querySelectorAll(`#${tbodyId} tr`).forEach(row => {
+      row.classList.toggle('d-none', !!q && !row.textContent.toLowerCase().includes(q));
+    });
   },
 };

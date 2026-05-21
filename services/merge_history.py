@@ -56,13 +56,14 @@ def log_merge(
 def list_merges(org: str, limit: int = 100) -> list:
     """Return recent merges for the org, newest first.
 
-    Returns mock data when DB is unavailable or no rows exist.
+    Returns mock data only when SF_MOCK is enabled and DB is unavailable.
     Each item: {id, org, master_id, victim_id, merged_at, bypass_used, status, error_msg}
     """
+    from config import Config
     try:
         from db import get_cursor, db_available
         if not db_available():
-            return _mock_merges(org)
+            return _mock_merges(org) if Config.SF_MOCK else []
         with get_cursor() as cur:
             cur.execute(
                 """
@@ -77,7 +78,7 @@ def list_merges(org: str, limit: int = 100) -> list:
             )
             rows = cur.fetchall()
         if not rows:
-            return _mock_merges(org)
+            return _mock_merges(org) if Config.SF_MOCK else []
         return [
             {
                 'id': r['id'],
@@ -92,8 +93,8 @@ def list_merges(org: str, limit: int = 100) -> list:
             for r in rows
         ]
     except Exception as exc:
-        logger.warning('list_merges failed, returning mock: %s', exc)
-        return _mock_merges(org)
+        logger.warning('list_merges failed: %s', exc)
+        return _mock_merges(org) if Config.SF_MOCK else []
 
 
 def _mock_merges(org: str) -> list:
@@ -135,10 +136,12 @@ def _mock_merges(org: str) -> list:
 
 def get_stats(org: str) -> dict:
     """Return {total_merges, successful, failed, bypass_used_count}."""
+    from config import Config
+    _empty = {'total_merges': 0, 'successful': 0, 'failed': 0, 'bypass_used_count': 0}
     try:
         from db import get_cursor, db_available
         if not db_available():
-            return _mock_stats(org)
+            return _mock_stats(org) if Config.SF_MOCK else _empty
         with get_cursor() as cur:
             cur.execute(
                 """
@@ -154,7 +157,7 @@ def get_stats(org: str) -> dict:
             )
             row = cur.fetchone()
         if not row or row['total_merges'] == 0:
-            return _mock_stats(org)
+            return _mock_stats(org) if Config.SF_MOCK else _empty
         return {
             'total_merges': int(row['total_merges']),
             'successful': int(row['successful']),
@@ -162,8 +165,8 @@ def get_stats(org: str) -> dict:
             'bypass_used_count': int(row['bypass_used_count']),
         }
     except Exception as exc:
-        logger.warning('get_stats failed, returning mock: %s', exc)
-        return _mock_stats(org)
+        logger.warning('get_stats failed: %s', exc)
+        return _mock_stats(org) if Config.SF_MOCK else _empty
 
 
 def _mock_stats(org: str) -> dict:

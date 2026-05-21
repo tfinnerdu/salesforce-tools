@@ -132,6 +132,20 @@ MC._fmtTime = (ts) => {
   try { return new Date(ts).toLocaleString(); } catch (_) { return ts; }
 };
 
+/** Build a Lightning record URL or null when unavailable (mock instance). */
+MC.sfLink = (id, objectApiName) => {
+  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
+  if (!instance || instance === 'mock.salesforce.com' || !id || id.startsWith('0..')) return null;
+  return `https://${instance}/lightning/r/${objectApiName}/${id}/view`;
+};
+
+/** Return an anchor tag linking to the SF record, or just the ID text if unavailable. */
+MC.sfLinkTag = (id, objectApiName, label) => {
+  const url = MC.sfLink(id, objectApiName);
+  const display = MC._escHtml(label || id);
+  return url ? `<a href="${url}" target="_blank" rel="noopener" title="Open in Salesforce">${display} <span style="font-size:0.7em">↗</span></a>` : display;
+};
+
 
 // ── Readiness ─────────────────────────────────────────────────────────────────
 

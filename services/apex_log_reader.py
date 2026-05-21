@@ -185,29 +185,35 @@ def list_flow_errors(org: str) -> list:
 
 
 def list_process_exceptions(org: str) -> list:
-    """Return pending ProcessException records."""
+    """Return pending ProcessException records (Order Management feature — skipped gracefully if unavailable)."""
     sf = get_sf(org)
     soql = (
-        'SELECT+Id,ExceptionType,Message,Status,SourceId,SourceObjectApiName,'
-        'CreatedDate+FROM+ProcessException+'
-        'WHERE+Status+=+%27Pending%27+'
-        'ORDER+BY+CreatedDate+DESC+LIMIT+100'
+        "SELECT Id, ExceptionType, Message, Status, SourceId, SourceObjectApiName, CreatedDate "
+        "FROM ProcessException "
+        "WHERE Status = 'Pending' "
+        "ORDER BY CreatedDate DESC LIMIT 100"
     )
-    path = f'tooling/query/?q={soql}'
-    result = sf.restful(path)
-    records = result.get('records', [])
-    return [
-        {
-            'id': r.get('Id'),
-            'exception_type': r.get('ExceptionType', ''),
-            'message': r.get('Message', ''),
-            'status': r.get('Status', ''),
-            'source_id': r.get('SourceId', ''),
-            'source_object': r.get('SourceObjectApiName', ''),
-            'created_date': r.get('CreatedDate', ''),
-        }
-        for r in records
-    ]
+    try:
+        result = sf.query(soql)
+        records = result.get('records', [])
+        return [
+            {
+                'id': r.get('Id'),
+                'exception_type': r.get('ExceptionType', ''),
+                'message': r.get('Message', ''),
+                'status': r.get('Status', ''),
+                'source_id': r.get('SourceId', ''),
+                'source_object': r.get('SourceObjectApiName', ''),
+                'created_date': r.get('CreatedDate', ''),
+            }
+            for r in records
+        ]
+    except Exception as exc:
+        msg = str(exc)
+        if 'INVALID_TYPE' in msg or 'ProcessException' in msg:
+            logger.debug('ProcessException not available in this org (Order Management not enabled)')
+            return []
+        raise
 
 
 # ── Trace Flags ──────────────────────────────────────────────────────────────

@@ -195,6 +195,85 @@ def api_custom_setting_records(setting_name):
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/permissions/sets')
+def api_perm_sets():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import perm_auditor
+        data = perm_auditor.get_permission_sets(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm sets failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/permissions/users')
+def api_perm_users():
+    org = session.get('active_org', 'dev')
+    search = request.args.get('q', '').strip()
+    try:
+        from services import perm_auditor
+        data = perm_auditor.get_users(org, search=search)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm users failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/permissions/user/<user_id>')
+def api_perm_user_detail(user_id):
+    org = session.get('active_org', 'dev')
+    try:
+        from services import perm_auditor
+        data = perm_auditor.get_user_detail(org, user_id)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm user detail failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/permissions/set/<pset_id>')
+def api_perm_set_detail(pset_id):
+    org = session.get('active_org', 'dev')
+    try:
+        from services import perm_auditor
+        data = perm_auditor.get_pset_detail(org, pset_id)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm set detail failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/permissions/object-matrix')
+def api_perm_object_matrix():
+    org = session.get('active_org', 'dev')
+    object_name = request.args.get('object', '').strip()
+    if not object_name:
+        return jsonify({'success': False, 'error': 'object param required'}), 400
+    try:
+        from services import perm_auditor
+        data = perm_auditor.get_object_access_matrix(org, object_name)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm object matrix failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/permissions/field-matrix')
+def api_perm_field_matrix():
+    org = session.get('active_org', 'dev')
+    object_name = request.args.get('object', '').strip()
+    if not object_name:
+        return jsonify({'success': False, 'error': 'object param required'}), 400
+    try:
+        from services import perm_auditor
+        data = perm_auditor.get_field_access_matrix(org, object_name)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('perm field matrix failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:

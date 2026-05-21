@@ -73,7 +73,7 @@ def get_named_credentials(org: str) -> list:
 # ── Remote Site Settings ──────────────────────────────────────────────────────
 
 _RSS_SOQL = (
-    "SELECT Id, SiteName, Description, Url, IsActive, DisableProtocolSecurity "
+    "SELECT Id, SiteName, Description, EndpointUrl, IsActive, DisableProtocolSecurity "
     "FROM RemoteSiteSetting ORDER BY SiteName"
 )
 
@@ -83,7 +83,7 @@ def _map_remote_site(r: dict) -> dict:
         'id': r.get('Id'),
         'site_name': r.get('SiteName', ''),
         'description': r.get('Description', ''),
-        'url': r.get('Url', ''),
+        'url': r.get('EndpointUrl', ''),
         'is_active': bool(r.get('IsActive', False)),
         'disable_protocol_security': bool(r.get('DisableProtocolSecurity', False)),
     }

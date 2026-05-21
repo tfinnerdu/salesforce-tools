@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Export - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Export to CSV
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Export"
+            data-bs-content="Run a SOQL SELECT query and download results as a CSV. Enable 'All Pages' to fetch beyond the 2,000 record SOQL limit using query_all.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-navy)">SOQL Query</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <textarea id="exportSoql" class="form-control font-monospace" rows="6"
+                      placeholder="SELECT Id, Name, SIS_ID__c FROM Account WHERE RecordType.DeveloperName = 'PersonAccount' LIMIT 1000"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Filename</label>
+            <input id="exportFilename" type="text" class="form-control" value="export.csv">
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="exportAllPages" checked>
+            <label class="form-check-label" for="exportAllPages">All pages (query_all — fetches beyond 2,000 SOQL limit)</label>
+          </div>
+          <button id="btnExport" class="btn btn-doane">&#11123; Download CSV</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-navy)">Tips</div>
+        <div class="card-body">
+          <ul class="small text-muted">
+            <li class="mb-2">Use <code>SELECT Id, Name, SIS_ID__c FROM Account</code> to export PersonAccounts with external IDs — useful as a base for Upsert imports.</li>
+            <li class="mb-2">Add <code>LIMIT</code> for quick spot-checks; remove it (or use All Pages) for full extracts.</li>
+            <li class="mb-2">Exported CSVs can be fed directly back into the <a href="/data-ops/import">Import</a> tool.</li>
+            <li class="mb-2">Related fields: <code>Owner.Name</code>, <code>RecordType.DeveloperName</code>, <code>CreatedBy.Name</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>document.addEventListener('DOMContentLoaded', () => MC.exporter.init());</script>
+{% endblock %}

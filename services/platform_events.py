@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # ── Platform Event Channels ───────────────────────────────────────────────────
 
 _PE_SOQL = (
-    "SELECT Id, DeveloperName, MasterLabel, Description "
+    "SELECT Id, DeveloperName, MasterLabel "
     "FROM PlatformEventChannel ORDER BY MasterLabel"
 )
 
@@ -20,7 +20,6 @@ def _map_event(r: dict) -> dict:
         'id': r.get('Id'),
         'developer_name': r.get('DeveloperName', ''),
         'label': r.get('MasterLabel', ''),
-        'description': r.get('Description', ''),
     }
 
 

@@ -121,6 +121,13 @@
         Custom Settings
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-permissions-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-permissions" type="button" role="tab"
+              aria-controls="tab-permissions" aria-selected="false">
+        Permissions Audit
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -936,6 +943,136 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Permissions Audit ────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-permissions" role="tabpanel" aria-labelledby="tab-permissions-btn">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <small class="text-muted">
+          Permission sets, user assignments, and object/field access — all in one place.
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Permissions Audit"
+                data-bs-content="Drill into who has what access. Browse by Permission Set to see assigned users and granted CRUD permissions, or search by User to see their full access picture. The Object Matrix and Field Coverage tabs let you audit access to specific objects and fields across all permission sets.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2">
+          <button id="btnRefreshPermissions" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+
+      <!-- Sub-tabs -->
+      <ul class="nav nav-pills mb-3 gap-1" id="permSubTabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" id="perm-tab-sets" data-bs-toggle="pill" data-bs-target="#perm-panel-sets" type="button">Permission Sets</button></li>
+        <li class="nav-item"><button class="nav-link" id="perm-tab-users" data-bs-toggle="pill" data-bs-target="#perm-panel-users" type="button">By User</button></li>
+        <li class="nav-item"><button class="nav-link" id="perm-tab-object" data-bs-toggle="pill" data-bs-target="#perm-panel-object" type="button">Object Matrix</button></li>
+        <li class="nav-item"><button class="nav-link" id="perm-tab-field" data-bs-toggle="pill" data-bs-target="#perm-panel-field" type="button">Field Coverage</button></li>
+      </ul>
+
+      <div class="tab-content" id="permSubContent">
+
+        <!-- Perm Sets list -->
+        <div class="tab-pane fade show active" id="perm-panel-sets" role="tabpanel">
+          <div id="permSetsLoading" class="text-center py-4">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+            <p class="mt-2 text-muted small">Loading permission sets…</p>
+          </div>
+          <div id="permSetsEmpty" class="text-center py-5 text-muted d-none">No custom permission sets found.</div>
+          <div class="row g-3 d-none" id="permSetsContent">
+            <!-- Left: perm set list -->
+            <div class="col-md-4">
+              <input id="permSetSearch" type="text" class="form-control form-control-sm mb-2" placeholder="Filter perm sets…">
+              <div class="list-group" id="permSetsList" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+            <!-- Right: perm set detail -->
+            <div class="col-md-8" id="permSetDetail">
+              <div class="text-muted text-center py-5 small">Select a permission set to view details.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- By User -->
+        <div class="tab-pane fade" id="perm-panel-users" role="tabpanel">
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <input id="permUserSearch" type="text" class="form-control form-control-sm" placeholder="Search by name or username…">
+            </div>
+            <div class="col-auto">
+              <button id="btnPermUserSearch" class="btn btn-doane btn-sm">Search</button>
+            </div>
+          </div>
+          <div id="permUsersLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div class="row g-3" id="permUsersContent">
+            <div class="col-md-4">
+              <div class="list-group" id="permUsersList" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+            <div class="col-md-8" id="permUserDetail">
+              <div class="text-muted text-center py-5 small">Search for a user and select them to view their permissions.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Object Matrix -->
+        <div class="tab-pane fade" id="perm-panel-object" role="tabpanel">
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <input id="permObjectName" type="text" class="form-control form-control-sm" placeholder="SF Object API name (e.g. Account)" style="max-width:260px">
+            <button id="btnPermObjectLoad" class="btn btn-doane btn-sm">Load Matrix</button>
+          </div>
+          <div id="permObjectLoading" class="d-none text-center py-3">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="permObjectEmpty" class="text-center py-4 text-muted d-none">No permission sets grant access to this object.</div>
+          <div class="card shadow-sm d-none" id="permObjectCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0" id="permObjectTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>Permission Set</th>
+                    <th class="text-center">Read</th>
+                    <th class="text-center">Create</th>
+                    <th class="text-center">Edit</th>
+                    <th class="text-center">Delete</th>
+                    <th class="text-center">View All</th>
+                    <th class="text-center">Modify All</th>
+                  </tr>
+                </thead>
+                <tbody id="permObjectTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Coverage -->
+        <div class="tab-pane fade" id="perm-panel-field" role="tabpanel">
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <input id="permFieldObject" type="text" class="form-control form-control-sm" placeholder="SF Object API name (e.g. Account)" style="max-width:260px">
+            <button id="btnPermFieldLoad" class="btn btn-doane btn-sm">Load Field Coverage</button>
+          </div>
+          <div id="permFieldLoading" class="d-none text-center py-3">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="permFieldEmpty" class="text-center py-4 text-muted d-none">No field permissions found for this object.</div>
+          <div id="permFieldContent" class="d-none">
+            <input id="permFieldFilter" type="text" class="form-control form-control-sm mb-2" placeholder="Filter fields…" style="max-width:300px">
+            <div class="card shadow-sm">
+              <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0" id="permFieldTable">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Field</th>
+                      <th>Permission Set</th>
+                      <th class="text-center">Read</th>
+                      <th class="text-center">Edit</th>
+                    </tr>
+                  </thead>
+                  <tbody id="permFieldTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /permSubContent -->
+    </div><!-- /tab-permissions -->
 
   </div><!-- /tab-content -->
 </div>

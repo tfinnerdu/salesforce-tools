@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Bulk Delete - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Bulk Delete
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Bulk Delete"
+            data-bs-content="Query records by SOQL WHERE clause, preview what would be deleted, then execute. Uses Bulk API. Max 10,000 records per operation. Soft-deleted to Recycle Bin.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+    <span style="font-size:1.2rem">&#9888;</span>
+    <div><strong>Destructive operation.</strong> Always preview before executing. Records are soft-deleted to the Recycle Bin.</div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-5">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-navy)">Configure Delete</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">SF Object API Name</label>
+            <input id="deleteObject" type="text" class="form-control" placeholder="e.g. Account">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">WHERE Clause</label>
+            <textarea id="deleteWhere" class="form-control font-monospace" rows="3"
+                      placeholder="e.g. SIS_ID__c = null AND CreatedDate = TODAY"></textarea>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="deleteBypass">
+            <label class="form-check-label" for="deleteBypass">Bypass triggers</label>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="btnDeletePreview" class="btn btn-outline-primary">Preview</button>
+            <button id="btnDeleteExecute" class="btn btn-danger d-none">Delete Records</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-7">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-navy)">Preview</div>
+        <div class="card-body p-0" id="deletePreviewBody">
+          <div class="text-muted text-center py-5 small">Configure and preview to see affected records.</div>
+        </div>
+      </div>
+      <div id="deleteResultWrap" class="d-none mt-3">
+        <div id="deleteResultAlert"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>document.addEventListener('DOMContentLoaded', () => MC.bulkDelete.init());</script>
+{% endblock %}
