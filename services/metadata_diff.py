@@ -113,10 +113,9 @@ def _real_flows(sf) -> dict:
 def _real_validation_rules(sf) -> dict:
     # No ORDER BY on the cross-entity relationship — it triggers UNKNOWN_EXCEPTION.
     soql = ("SELECT ValidationName, Active, EntityDefinition.QualifiedApiName "
-            "FROM ValidationRule LIMIT 2000")
-    res = sf.restful('tooling/query/', params={'q': soql})
+            "FROM ValidationRule")
     out = {}
-    for r in res.get('records', []):
+    for r in _tooling_query_all(sf, soql):
         rule = r.get('ValidationName')
         if not rule:
             continue
@@ -131,7 +130,10 @@ def _real_validation_rules(sf) -> dict:
 
 
 def _real_custom_objects(sf) -> dict:
-    # EntityDefinition needs a LIMIT — it does not support queryMore().
+    # EntityDefinition is a special Tooling API entity: it does NOT support
+    # queryMore(), so it cannot be paginated. A LIMIT (max 2000) is mandatory
+    # and the result is hard-capped there — _tooling_query_all would not help.
+    # An org with >2000 sharing-modelled entities is at the platform ceiling.
     soql = ("SELECT QualifiedApiName, Label, InternalSharingModel "
             "FROM EntityDefinition WHERE InternalSharingModel != null LIMIT 2000")
     res = sf.restful('tooling/query/', params={'q': soql})
