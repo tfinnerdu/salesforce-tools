@@ -5,32 +5,31 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 def get_bulk_jobs(org: str, limit: int = 50) -> list:
-    """Query AsyncApexJob / BulkApiJob2 for recent bulk jobs."""
-    sf = get_sf(org)
+    """Query the Bulk API 2.0 ingest jobs for the org's recent bulk loads.
+
+    Returns mock data only when SF_MOCK is enabled. Against a real org a query
+    failure propagates to the caller — it is never masked with mock data, and a
+    genuinely empty result returns an empty list.
+    """
     if Config.SF_MOCK:
         return _mock_bulk_jobs()
-    try:
-        # Bulk API v2 job list via REST
-        url = f'jobs/ingest?isPkChunkingSupported=false&jobType=V2Ingest'
-        resp = sf.restful(url)
-        jobs = resp.get('records', [])[:limit]
-        return [
-            {
-                'id': j.get('id'),
-                'operation': j.get('operation'),
-                'object': j.get('object'),
-                'state': j.get('state'),
-                'totalProcessingTime': j.get('totalProcessingTime'),
-                'numberRecordsProcessed': j.get('numberRecordsProcessed'),
-                'numberRecordsFailed': j.get('numberRecordsFailed'),
-                'createdDate': j.get('createdDate'),
-                'systemModstamp': j.get('systemModstamp'),
-            }
-            for j in jobs
-        ]
-    except Exception as exc:
-        logger.warning('bulk job history failed, using mock: %s', exc)
-        return _mock_bulk_jobs()
+    sf = get_sf(org)
+    resp = sf.restful('jobs/ingest')
+    jobs = resp.get('records', [])[:limit]
+    return [
+        {
+            'id': j.get('id'),
+            'operation': j.get('operation'),
+            'object': j.get('object'),
+            'state': j.get('state'),
+            'totalProcessingTime': j.get('totalProcessingTime'),
+            'numberRecordsProcessed': j.get('numberRecordsProcessed'),
+            'numberRecordsFailed': j.get('numberRecordsFailed'),
+            'createdDate': j.get('createdDate'),
+            'systemModstamp': j.get('systemModstamp'),
+        }
+        for j in jobs
+    ]
 
 def _mock_bulk_jobs() -> list:
     return [
