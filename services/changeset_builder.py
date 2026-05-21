@@ -49,7 +49,7 @@ def list_components(org: str, component_type: str) -> list:
 
     if component_type == 'ApexClass':
         soql = 'SELECT Name, LastModifiedDate FROM ApexClass ORDER BY Name'
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             name = r.get('Name', '')
             components.append({
@@ -60,7 +60,7 @@ def list_components(org: str, component_type: str) -> list:
 
     elif component_type == 'ApexTrigger':
         soql = 'SELECT Name, TableEnumOrId FROM ApexTrigger ORDER BY Name'
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             name = r.get('Name', '')
             obj = r.get('TableEnumOrId', '')
@@ -78,7 +78,7 @@ def list_components(org: str, component_type: str) -> list:
             'SELECT ApiName, Label, ProcessType, IsActive '
             'FROM FlowDefinitionView ORDER BY Label'
         )
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             api_name = r.get('ApiName', '')
             label = r.get('Label', api_name)
@@ -97,7 +97,7 @@ def list_components(org: str, component_type: str) -> list:
             'SELECT Name, Label FROM PermissionSet '
             'WHERE IsOwnedByProfile = false ORDER BY Label'
         )
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             name = r.get('Name', '')
             label = r.get('Label', name)

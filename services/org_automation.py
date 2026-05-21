@@ -84,7 +84,7 @@ def get_flows(org: str) -> list:
         "FROM FlowDefinitionView ORDER BY Label"
     )
     try:
-        res = sf.query(soql)
+        res = sf.query_all(soql)
         records = res.get('records', [])
         flows = []
         for r in records:

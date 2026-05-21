@@ -177,6 +177,10 @@ class _FlowSpySF:
         self.query_soql = soql
         return {'records': []}
 
+    def query_all(self, soql):
+        self.query_soql = soql
+        return {'records': []}
+
     def restful(self, *a, **kw):
         self.restful_called = True
         raise AssertionError('this query must use the Data API, not the Tooling API')

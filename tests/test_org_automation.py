@@ -123,6 +123,9 @@ class _EmptySF:
     def query(self, *a, **kw):
         return {'records': []}
 
+    def query_all(self, *a, **kw):
+        return {'records': []}
+
 
 @pytest.mark.parametrize('func', [
     'get_validation_rules', 'get_flows', 'get_apex_triggers', 'get_sharing_model',

@@ -35,12 +35,30 @@ _TYPE_KEYS = {k for k, _ in METADATA_TYPES}
 # ── Real-org fetchers ─────────────────────────────────────────────────────────
 # Each returns {component_name: {'fingerprint': str, 'detail': str}}.
 
+def _tooling_query_all(sf, soql: str) -> list:
+    """Run a Tooling API query, following nextRecordsUrl for the full set.
+
+    sf.restful() returns only the first batch (max 2000 records) — a large org
+    would otherwise lose components past that cap from the diff.
+    """
+    res = sf.restful('tooling/query/', params={'q': soql})
+    records = list(res.get('records', []))
+    next_url = res.get('nextRecordsUrl')
+    while next_url:
+        # nextRecordsUrl is rooted at /services/data/vXX.X/; restful() expects
+        # a path relative to that version segment.
+        rel = next_url.split('/services/data/', 1)[-1].split('/', 1)[-1]
+        res = sf.restful(rel)
+        records.extend(res.get('records', []))
+        next_url = res.get('nextRecordsUrl')
+    return records
+
+
 def _real_apex_classes(sf) -> dict:
     soql = ("SELECT Name, ApiVersion, LengthWithoutComments, Status "
             "FROM ApexClass WHERE NamespacePrefix = null ORDER BY Name")
-    res = sf.restful('tooling/query/', params={'q': soql})
     out = {}
-    for r in res.get('records', []):
+    for r in _tooling_query_all(sf, soql):
         name = r.get('Name')
         if not name:
             continue
@@ -58,9 +76,8 @@ def _real_apex_triggers(sf) -> dict:
     soql = ("SELECT Name, Status, ApiVersion, LengthWithoutComments, "
             "EntityDefinition.QualifiedApiName "
             "FROM ApexTrigger WHERE NamespacePrefix = null ORDER BY Name")
-    res = sf.restful('tooling/query/', params={'q': soql})
     out = {}
-    for r in res.get('records', []):
+    for r in _tooling_query_all(sf, soql):
         name = r.get('Name')
         if not name:
             continue
@@ -78,7 +95,7 @@ def _real_apex_triggers(sf) -> dict:
 def _real_flows(sf) -> dict:
     soql = ("SELECT ApiName, Label, ProcessType, IsActive "
             "FROM FlowDefinitionView ORDER BY ApiName")
-    res = sf.query(soql)
+    res = sf.query_all(soql)
     out = {}
     for r in res.get('records', []):
         name = r.get('ApiName')

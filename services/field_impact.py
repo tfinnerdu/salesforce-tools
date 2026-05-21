@@ -34,7 +34,7 @@ def scan_field(org: str, object_name: str, field_name: str) -> dict:
             "SELECT ApiName, Label, ProcessType, Description "
             "FROM FlowDefinitionView WHERE IsActive = true"
         )
-        flow_res = sf.query(flow_soql)
+        flow_res = sf.query_all(flow_soql)
         flows_raw = flow_res.get('records', [])
     except Exception as exc:
         logger.warning("FlowDefinitionView query failed: %s", exc)

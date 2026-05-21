@@ -28,11 +28,11 @@ class _StubSF:
         return {'records': []}
 
     def query(self, soql):
-        if 'FlowDefinitionView' in soql:
-            return {'records': self._flows}
         return {'records': []}
 
     def query_all(self, soql):
+        if 'FlowDefinitionView' in soql:
+            return {'records': self._flows}
         return {'totalSize': self._reports,
                 'records': [{} for _ in range(self._reports)]}
 
