@@ -386,10 +386,10 @@ MC.logs = {
     const tbody = document.getElementById('flowsBody');
     if (!tbody) return;
     tbody.innerHTML = flows.map(f => `<tr>
-      <td><code class="small">${MC._escHtml(f.current_element)}</code></td>
-      <td class="small text-danger">${MC._escHtml(f.error_message)}</td>
-      <td class="text-muted small">${MC._fmtTime(f.start_time)}</td>
-      <td class="text-muted small">${MC._fmtTime(f.end_time)}</td>
+      <td class="small fw-semibold">${MC._escHtml(f.flow_label) || '—'}</td>
+      <td><code class="small">${MC._escHtml(f.current_element) || '—'}</code></td>
+      <td><span class="badge badge-red">${MC._escHtml(f.status)}</span></td>
+      <td class="text-muted small">${MC._fmtTime(f.created_date)}</td>
     </tr>`).join('');
   },
 

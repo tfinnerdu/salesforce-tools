@@ -13,13 +13,17 @@ logger = logging.getLogger(__name__)
 # ── Validation Rules ──────────────────────────────────────────────────────────
 
 def get_validation_rules(org: str) -> list:
-    """List all validation rules across the org (Tooling API)."""
+    """List all validation rules across the org (Tooling API).
+
+    The Tooling API cannot ORDER BY a cross-entity relationship field over
+    every ValidationRule — doing so triggers an UNKNOWN_EXCEPTION. The query
+    is bounded with LIMIT and sorted in Python instead.
+    """
     sf = get_sf(org)
     soql = (
         "SELECT Id, ValidationName, Active, Description, ErrorMessage, "
         "ErrorDisplayField, EntityDefinition.QualifiedApiName "
-        "FROM ValidationRule "
-        "ORDER BY EntityDefinition.QualifiedApiName, ValidationName"
+        "FROM ValidationRule LIMIT 2000"
     )
     try:
         res = sf.restful('tooling/query/', params={'q': soql})
@@ -36,6 +40,7 @@ def get_validation_rules(org: str) -> list:
                 'error_field': r.get('ErrorDisplayField', '') or '',
                 'description': r.get('Description', '') or '',
             })
+        rules.sort(key=lambda x: (x['object'], x['name']))
         if Config.SF_MOCK and not rules:
             return _mock_validation_rules()
         return rules
@@ -66,25 +71,30 @@ def _mock_validation_rules() -> list:
 # ── Flows ─────────────────────────────────────────────────────────────────────
 
 def get_flows(org: str) -> list:
-    """List flow definitions (Tooling API FlowDefinition)."""
+    """List flows via the FlowDefinitionView Data API object.
+
+    FlowDefinition (Tooling API) has no ProcessType or Status columns.
+    FlowDefinitionView is the queryable view that exposes flow type and
+    active status, and it lives on the regular Data API.
+    """
     sf = get_sf(org)
     soql = (
-        "SELECT Id, DeveloperName, MasterLabel, ProcessType, Status, Description, "
-        "LastModifiedDate "
-        "FROM FlowDefinition "
-        "ORDER BY MasterLabel"
+        "SELECT DurableId, ApiName, Label, ProcessType, TriggerType, IsActive, "
+        "Description, LastModifiedDate "
+        "FROM FlowDefinitionView ORDER BY Label"
     )
     try:
-        res = sf.restful('tooling/query/', params={'q': soql})
+        res = sf.query(soql)
         records = res.get('records', [])
         flows = []
         for r in records:
             flows.append({
-                'id': r.get('Id'),
-                'name': r.get('DeveloperName', ''),
-                'label': r.get('MasterLabel', '') or r.get('DeveloperName', ''),
+                'id': r.get('DurableId') or r.get('ApiName', ''),
+                'name': r.get('ApiName', ''),
+                'label': r.get('Label', '') or r.get('ApiName', ''),
                 'type': r.get('ProcessType', '') or '',
-                'status': r.get('Status', '') or '',
+                'trigger_type': r.get('TriggerType', '') or '',
+                'status': 'Active' if r.get('IsActive') else 'Inactive',
                 'description': r.get('Description', '') or '',
                 'last_modified': r.get('LastModifiedDate', ''),
             })
@@ -101,13 +111,13 @@ def get_flows(org: str) -> list:
 def _mock_flows() -> list:
     return [
         {'id': 'FL001', 'name': 'Student_Update_Handler', 'label': 'Student Update Handler',
-         'type': 'AutoLaunchedFlow', 'status': 'Active',
+         'type': 'AutoLaunchedFlow', 'trigger_type': 'RecordAfterSave', 'status': 'Active',
          'description': 'Record-triggered flow on Account update', 'last_modified': '2026-05-18T10:00:00Z'},
         {'id': 'FL002', 'name': 'Migration_Complete_Notifier', 'label': 'Migration Complete Notifier',
-         'type': 'AutoLaunchedFlow', 'status': 'Active',
+         'type': 'AutoLaunchedFlow', 'trigger_type': 'PlatformEvent', 'status': 'Active',
          'description': 'Sends notification on Migration_Complete__e', 'last_modified': '2026-05-15T14:30:00Z'},
         {'id': 'FL003', 'name': 'ContactPoint_Dedupe', 'label': 'ContactPoint Dedupe',
-         'type': 'Workflow', 'status': 'Obsolete',
+         'type': 'Workflow', 'trigger_type': '', 'status': 'Inactive',
          'description': 'Legacy process builder — superseded', 'last_modified': '2025-11-02T09:00:00Z'},
     ]
 
@@ -177,11 +187,13 @@ _SHARING_LABELS = {
 def get_sharing_model(org: str) -> list:
     """List org-wide default sharing settings per object (Tooling API EntityDefinition)."""
     sf = get_sf(org)
+    # EntityDefinition does not support queryMore() — a LIMIT is required to
+    # keep the result within a single batch, or the query fails outright.
     soql = (
         "SELECT QualifiedApiName, Label, InternalSharingModel, ExternalSharingModel "
         "FROM EntityDefinition "
         "WHERE InternalSharingModel != null "
-        "ORDER BY Label"
+        "ORDER BY Label LIMIT 2000"
     )
     try:
         res = sf.restful('tooling/query/', params={'q': soql})

@@ -59,6 +59,19 @@ def api_readiness_history():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@migration_bp.route('/batches/recent', methods=['GET'])
+def api_batches_recent():
+    """Recent migration batches — consumed by the dashboard Batches widget."""
+    org = session.get('active_org', 'dev')
+    try:
+        from services import migration_velocity
+        data = migration_velocity.list_recent_batches(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('recent batches failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @migration_bp.route('/batch/status', methods=['GET'])
 def api_batch_status():
     workflow_name = request.args.get('workflow_name', '')

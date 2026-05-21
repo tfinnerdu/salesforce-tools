@@ -88,3 +88,42 @@ def test_custom_settings_route_returns_200_and_success(session_client):
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
+
+
+# ---------------------------------------------------------------------------
+# Mock-leak regression — with SF_MOCK off, a query failure must NOT silently
+# return mock data; it must propagate so the real error surfaces.
+# ---------------------------------------------------------------------------
+
+class _RaisingSF:
+    def restful(self, *a, **kw):
+        raise RuntimeError('tooling api down')
+
+    def query(self, *a, **kw):
+        raise RuntimeError('data api down')
+
+
+def test_custom_metadata_types_error_propagates_when_mock_disabled(monkeypatch):
+    from services import custom_config_viewer
+    import config
+    monkeypatch.setattr(config.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(custom_config_viewer, 'get_sf', lambda org: _RaisingSF())
+    with pytest.raises(RuntimeError):
+        custom_config_viewer.get_custom_metadata_types('prod')
+
+
+def test_custom_settings_error_propagates_when_mock_disabled(monkeypatch):
+    from services import custom_config_viewer
+    import config
+    monkeypatch.setattr(config.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(custom_config_viewer, 'get_sf', lambda org: _RaisingSF())
+    with pytest.raises(RuntimeError):
+        custom_config_viewer.get_custom_settings('prod')
+
+
+def test_custom_metadata_still_mocks_when_mock_enabled(monkeypatch):
+    """With SF_MOCK on, a failure still degrades to mock data for dev."""
+    from services import custom_config_viewer
+    monkeypatch.setattr(custom_config_viewer, 'get_sf', lambda org: _RaisingSF())
+    result = custom_config_viewer.get_custom_metadata_types('dev')
+    assert isinstance(result, list) and len(result) >= 1

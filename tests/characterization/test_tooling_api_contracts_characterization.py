@@ -19,13 +19,14 @@ import pytest
 # RemoteSiteSetting — the URL field is 'EndpointUrl', not 'Url'.
 #
 # RemoteSiteSetting resolves to the RemoteProxy entity in the Tooling API.
-# RemoteProxy has no 'Url' column — querying it returns:
-#   "No such column 'Url' on entity 'RemoteProxy'" (INVALID_FIELD)
-# The correct field name is 'EndpointUrl'.  Fixed: May 2026.
+# RemoteProxy has no 'Url' column — the URL field is 'EndpointUrl'. It also
+# has no 'DisableProtocolSecurity' column (that lives inside Metadata) —
+# querying it returns INVALID_FIELD. Both fixes verified against the
+# doanefull sandbox. Fixed: May 2026.
 # ─────────────────────────────────────────────────────────────────────────────
 
 KNOWN_RSS_SOQL = (
-    "SELECT Id, SiteName, Description, EndpointUrl, IsActive, DisableProtocolSecurity "
+    "SELECT Id, SiteName, Description, EndpointUrl, IsActive "
     "FROM RemoteSiteSetting ORDER BY SiteName"
 )
 
@@ -33,11 +34,35 @@ KNOWN_RSS_SOQL = (
 def test_remote_site_setting_query_uses_endpointurl_characterization():
     from services.integration_inventory import _RSS_SOQL
     assert _RSS_SOQL == KNOWN_RSS_SOQL, (
-        "The RemoteSiteSetting Tooling API query has changed. The URL field on "
-        "the backing RemoteProxy entity is 'EndpointUrl' — querying 'Url' fails "
-        "with INVALID_FIELD. If this changed intentionally, verify against the "
-        "org's Tooling API describe before updating KNOWN_RSS_SOQL."
+        "The RemoteSiteSetting Tooling API query has changed. The backing "
+        "RemoteProxy entity uses 'EndpointUrl' (not 'Url') and has no "
+        "'DisableProtocolSecurity' column. If this changed intentionally, "
+        "verify against the org's Tooling API describe before updating."
     )
+    assert 'DisableProtocolSecurity' not in _RSS_SOQL
+    assert ' Url ' not in _RSS_SOQL
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PlatformEventChannelMember — 'EventChannel' is a plain text field, not a
+# relationship. Querying EventChannel.DeveloperName returns:
+#   "Didn't understand relationship 'EventChannel' in field path" (INVALID_FIELD)
+# There is also no 'Type' column. Fixed: May 2026.
+# ─────────────────────────────────────────────────────────────────────────────
+
+KNOWN_PEM_SOQL = (
+    "SELECT Id, DeveloperName, MasterLabel, EventChannel "
+    "FROM PlatformEventChannelMember ORDER BY DeveloperName"
+)
+
+
+def test_platform_event_channel_member_query_characterization():
+    from services.platform_events import _PEM_SOQL
+    assert _PEM_SOQL == KNOWN_PEM_SOQL, (
+        "The PlatformEventChannelMember query changed. 'EventChannel' is a text "
+        "field, not a relationship — 'EventChannel.DeveloperName' is invalid."
+    )
+    assert 'EventChannel.' not in _PEM_SOQL
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -131,3 +156,50 @@ def test_process_exception_unexpected_error_still_raises_characterization(monkey
 
     with pytest.raises(RuntimeError, match='connection reset'):
         alr.list_process_exceptions('dev')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FlowInterview — queried via the Data API, NOT the Tooling API.
+#   tooling/query/ FROM FlowInterview -> "sObject type 'FlowInterview' is not
+#   supported" (INVALID_TYPE). Fixed: May 2026.
+#
+# Flows are listed via FlowDefinitionView (Data API). FlowDefinition (the
+# Tooling object) has no ProcessType or Status columns -> INVALID_FIELD.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _FlowSpySF:
+    """Records the Data API SOQL used; fails loudly if the Tooling API is hit."""
+    def __init__(self):
+        self.query_soql = None
+        self.restful_called = False
+
+    def query(self, soql):
+        self.query_soql = soql
+        return {'records': []}
+
+    def restful(self, *a, **kw):
+        self.restful_called = True
+        raise AssertionError('this query must use the Data API, not the Tooling API')
+
+
+def test_flow_errors_uses_data_api_characterization(monkeypatch):
+    import services.apex_log_reader as alr
+    spy = _FlowSpySF()
+    monkeypatch.setattr(alr, 'get_sf', lambda org: spy)
+    alr.list_flow_errors('dev')
+    assert spy.restful_called is False
+    assert spy.query_soql and 'FROM FlowInterview' in spy.query_soql, (
+        "list_flow_errors must query FlowInterview via the Data API — it is not "
+        "a Tooling API object."
+    )
+
+
+def test_org_automation_flows_use_flowdefinitionview_characterization(monkeypatch):
+    import services.org_automation as oa
+    spy = _FlowSpySF()
+    monkeypatch.setattr(oa, 'get_sf', lambda org: spy)
+    oa.get_flows('dev')
+    assert spy.query_soql and 'FlowDefinitionView' in spy.query_soql, (
+        "get_flows must query FlowDefinitionView (Data API) — FlowDefinition "
+        "(Tooling) has no ProcessType/Status columns."
+    )

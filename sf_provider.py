@@ -669,15 +669,29 @@ class MockSalesforce:
                     'TableEnumOrId': 'Account' if i == 1 else 'ContactPointEmail',
                     'attributes': {'type': 'ApexTrigger'},
                 })
-        elif 'flowdefinition' in soql_lower:
+        elif 'flowdefinitionview' in soql_lower or 'flowdefinition' in soql_lower:
+            _flow_types = ['AutoLaunchedFlow', 'Flow', 'Workflow']
             for i in range(1, min(limit, 5) + 1):
                 records.append({
-                    'Id': f'301{i:015d}',
-                    'DeveloperName': f'Sync_Student_Record_{i}',
-                    'MasterLabel': f'Sync Student Record {i}',
-                    'ProcessType': 'AutoLaunchedFlow',
-                    'Status': 'Active',
-                    'attributes': {'type': 'FlowDefinition'},
+                    'DurableId': f'301{i:015d}',
+                    'ApiName': f'Sync_Student_Record_{i}',
+                    'Label': f'Sync Student Record {i}',
+                    'ProcessType': _flow_types[i % 3],
+                    'TriggerType': 'RecordAfterSave' if i % 2 else '',
+                    'IsActive': i % 4 != 0,
+                    'Description': f'Mock flow {i}',
+                    'LastModifiedDate': '2026-05-19T10:00:00.000+0000',
+                    'attributes': {'type': 'FlowDefinitionView'},
+                })
+        elif 'flowinterview' in soql_lower:
+            for i in range(1, min(limit, 2) + 1):
+                records.append({
+                    'Id': f'0if{i:015d}',
+                    'InterviewLabel': f'Student Update Flow {i}',
+                    'CurrentElement': f'Update_Account_{i}',
+                    'InterviewStatus': 'Error',
+                    'CreatedDate': '2026-05-20T09:00:00.000+0000',
+                    'attributes': {'type': 'FlowInterview'},
                 })
         elif 'permissionset' in soql_lower and 'assignment' not in soql_lower:
             for i in range(1, min(limit, 6) + 1):

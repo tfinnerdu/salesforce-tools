@@ -49,18 +49,19 @@ def get_platform_events(org: str) -> list:
 # ── Platform Event Channel Members ────────────────────────────────────────────
 
 _PEM_SOQL = (
-    "SELECT Id, DeveloperName, EventChannel.DeveloperName, Type "
+    "SELECT Id, DeveloperName, MasterLabel, EventChannel "
     "FROM PlatformEventChannelMember ORDER BY DeveloperName"
 )
 
 
 def _map_member(r: dict) -> dict:
-    channel = r.get('EventChannel') or {}
+    # EventChannel is a plain text field holding the channel's API name —
+    # NOT a relationship, so EventChannel.DeveloperName is invalid.
     return {
         'id': r.get('Id'),
         'developer_name': r.get('DeveloperName', ''),
-        'channel': channel.get('DeveloperName', '') if isinstance(channel, dict) else '',
-        'type': r.get('Type', ''),
+        'channel': r.get('EventChannel', '') or '',
+        'type': '',
     }
 
 

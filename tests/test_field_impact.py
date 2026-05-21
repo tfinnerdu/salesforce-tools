@@ -11,7 +11,11 @@ from services import field_impact
 # ── Stub Salesforce clients ───────────────────────────────────────────────────
 
 class _StubSF:
-    """Returns controlled Tooling/Data API results for scan_field."""
+    """Returns controlled Tooling/Data API results for scan_field.
+
+    Validation rules come from the Tooling API (restful); flows come from
+    FlowDefinitionView on the Data API (query); reports from query_all.
+    """
     def __init__(self, validation_rules=None, flows=None, reports=0):
         self._vr = validation_rules or []
         self._flows = flows or []
@@ -21,7 +25,10 @@ class _StubSF:
         q = (params or {}).get('q', '')
         if 'ValidationRule' in q:
             return {'records': self._vr}
-        if 'FlowDefinition' in q:
+        return {'records': []}
+
+    def query(self, soql):
+        if 'FlowDefinitionView' in soql:
             return {'records': self._flows}
         return {'records': []}
 
@@ -33,6 +40,9 @@ class _StubSF:
 class _RaisingSF:
     def restful(self, *a, **kw):
         raise RuntimeError('tooling api down')
+
+    def query(self, *a, **kw):
+        raise RuntimeError('data api down')
 
     def query_all(self, *a, **kw):
         raise RuntimeError('query api down')

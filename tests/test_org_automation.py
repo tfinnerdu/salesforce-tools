@@ -80,6 +80,9 @@ class _RaisingSF:
     def restful(self, *a, **kw):
         raise RuntimeError('tooling api unavailable')
 
+    def query(self, *a, **kw):
+        raise RuntimeError('data api unavailable')
+
 
 def test_validation_rules_falls_back_to_mock_on_error(monkeypatch):
     """With SF_MOCK true, a tooling-query failure returns mock data, not an exception."""
@@ -113,8 +116,11 @@ def test_sharing_model_falls_back_to_mock_on_error(monkeypatch):
 
 
 class _EmptySF:
-    """SF stub whose Tooling queries return no records."""
+    """SF stub whose Tooling/Data API queries return no records."""
     def restful(self, *a, **kw):
+        return {'records': []}
+
+    def query(self, *a, **kw):
         return {'records': []}
 
 

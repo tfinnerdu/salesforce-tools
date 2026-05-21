@@ -71,6 +71,25 @@ def get_velocity_data(org: str, days: int = 30) -> dict:
     }
 
 
+def list_recent_batches(org: str, limit: int = 20) -> list:
+    """Return the most recent migration batches for the dashboard widget.
+
+    A row in the migration_batches table represents a completed batch load.
+    Returns [] when the DB is unavailable — the dashboard widget degrades
+    gracefully to its 'No batch data' state.
+    """
+    batches = _get_batches_from_db(org)
+    out = []
+    for b in batches[:limit]:
+        ts = b.get('started_at') or b.get('created_at') or ''
+        out.append({
+            'date': str(ts)[:19] if ts else '',
+            'records': int(b.get('records_processed', 0) or 0),
+            'status': 'Completed',
+        })
+    return out
+
+
 def _get_batches_from_db(org: str) -> list:
     """Attempt to read batch records from DB. Returns empty list if DB unavailable."""
     if not db_available():

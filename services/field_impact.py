@@ -24,19 +24,20 @@ def scan_field(org: str, object_name: str, field_name: str) -> dict:
         logger.warning("ValidationRule tooling query failed: %s", exc)
         validation_rules = []
 
-    # ── Active Flows (Tooling API) ────────────────────────────────────────────
+    # ── Active Flows (FlowDefinitionView — Data API) ──────────────────────────
     # Note: simple REST cannot inspect flow XML. We return active flows with a
     # note that manual review is required to confirm field references.
+    # FlowDefinition (Tooling) has no ProcessType/Status columns —
+    # FlowDefinitionView is the queryable view that does.
     try:
         flow_soql = (
-            "SELECT Id, MasterLabel, ProcessType, Status, Description "
-            "FROM FlowDefinition "
-            "WHERE Status = 'Active'"
+            "SELECT ApiName, Label, ProcessType, Description "
+            "FROM FlowDefinitionView WHERE IsActive = true"
         )
-        flow_res = sf.restful('tooling/query/', params={'q': flow_soql})
+        flow_res = sf.query(flow_soql)
         flows_raw = flow_res.get('records', [])
     except Exception as exc:
-        logger.warning("FlowDefinition tooling query failed: %s", exc)
+        logger.warning("FlowDefinitionView query failed: %s", exc)
         flows_raw = []
 
     flows = [

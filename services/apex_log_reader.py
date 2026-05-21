@@ -159,28 +159,36 @@ def get_cpu_summary(org: str, limit: int = 20) -> list:
 
 
 def list_flow_errors(org: str) -> list:
-    """Return FlowInterview records with InterviewStatus = Error."""
+    """Return FlowInterview records with InterviewStatus = Error.
+
+    FlowInterview is a Data API object (NOT Tooling) — querying it via the
+    Tooling API fails with INVALID_TYPE. It also has no ErrorMessage /
+    StartInterviewTime / EndInterviewTime fields; the queryable fields are
+    InterviewLabel, CurrentElement, InterviewStatus, and CreatedDate.
+    """
     sf = get_sf(org)
     soql = (
-        'SELECT+Id,FlowVersionId,InterviewStatus,CurrentElement,ErrorMessage,'
-        'StartInterviewTime,EndInterviewTime+FROM+FlowInterview+'
-        'WHERE+InterviewStatus+=+%27Error%27+'
-        'ORDER+BY+StartInterviewTime+DESC+LIMIT+100'
+        "SELECT Id, InterviewLabel, CurrentElement, InterviewStatus, CreatedDate "
+        "FROM FlowInterview WHERE InterviewStatus = 'Error' "
+        "ORDER BY CreatedDate DESC LIMIT 100"
     )
-    path = f'tooling/query/?q={soql}'
-    result = sf.restful(path)
-    records = result.get('records', [])
+    try:
+        result = sf.query(soql)
+    except Exception as exc:
+        msg = str(exc)
+        if 'INVALID_TYPE' in msg or 'FlowInterview' in msg:
+            logger.debug('FlowInterview not queryable in this org')
+            return []
+        raise
     return [
         {
             'id': r.get('Id'),
-            'flow_version_id': r.get('FlowVersionId', ''),
+            'flow_label': r.get('InterviewLabel', '') or '',
             'status': r.get('InterviewStatus', ''),
-            'current_element': r.get('CurrentElement', ''),
-            'error_message': r.get('ErrorMessage', ''),
-            'start_time': r.get('StartInterviewTime', ''),
-            'end_time': r.get('EndInterviewTime', ''),
+            'current_element': r.get('CurrentElement', '') or '',
+            'created_date': r.get('CreatedDate', ''),
         }
-        for r in records
+        for r in result.get('records', [])
     ]
 
 
@@ -226,13 +234,30 @@ DEBUG_LEVELS = {
 }
 
 
+def _entity_type_from_id(record_id: str) -> str:
+    """Derive a traced-entity type from a Salesforce ID key prefix.
+
+    TraceFlag has no TracedEntityType column — the type must be inferred
+    from the TracedEntityId prefix.
+    """
+    return {
+        '005': 'User',
+        '01p': 'ApexClass',
+        '01q': 'ApexTrigger',
+        '0Af': 'AsyncApexJob',
+    }.get((record_id or '')[:3], '')
+
+
 def list_trace_flags(org: str) -> list:
-    """Return active TraceFlag records via Tooling API."""
+    """Return active TraceFlag records via Tooling API.
+
+    TraceFlag has no TracedEntityType field — querying it returns
+    INVALID_FIELD. The type is derived from the TracedEntityId prefix.
+    """
     sf = get_sf(org)
     soql = (
         "SELECT Id, LogType, StartDate, ExpirationDate, "
-        "DebugLevel.DeveloperName, DebugLevel.Id, "
-        "TracedEntityId, TracedEntityType "
+        "DebugLevel.DeveloperName, DebugLevel.Id, TracedEntityId "
         "FROM TraceFlag ORDER BY ExpirationDate DESC LIMIT 50"
     )
     result = sf.restful('tooling/query/', params={'q': soql})
@@ -256,7 +281,7 @@ def list_trace_flags(org: str) -> list:
             'debug_level_name': dl.get('DeveloperName', ''),
             'debug_level_id': dl.get('Id', ''),
             'traced_entity_id': r.get('TracedEntityId', ''),
-            'traced_entity_type': r.get('TracedEntityType', ''),
+            'traced_entity_type': _entity_type_from_id(r.get('TracedEntityId', '')),
             'expired': expired,
             'expires_in_minutes': expires_in,
         })

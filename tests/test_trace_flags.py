@@ -115,3 +115,17 @@ def test_delete_trace_flag_route_returns_200(session_client):
     data = resp.get_json()
     assert data['success'] is True
     assert data['data']['deleted'] is True
+
+
+# ── _entity_type_from_id — TraceFlag has no TracedEntityType column ───────────
+
+@pytest.mark.parametrize('record_id,expected', [
+    ('005000000000000001', 'User'),
+    ('01p000000000000001', 'ApexClass'),
+    ('01q000000000000001', 'ApexTrigger'),
+    ('001000000000000001', ''),          # unknown prefix
+    ('', ''),
+])
+def test_entity_type_from_id(record_id, expected):
+    from services.apex_log_reader import _entity_type_from_id
+    assert _entity_type_from_id(record_id) == expected

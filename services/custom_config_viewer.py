@@ -20,7 +20,9 @@ def get_custom_metadata_types(org: str) -> list:
         return records
     except Exception as exc:
         logger.warning('custom metadata types failed: %s', exc)
-        return _mock_cmdts()
+        if Config.SF_MOCK:
+            return _mock_cmdts()
+        raise
 
 
 def get_custom_metadata_records(org: str, type_name: str) -> list:
@@ -34,7 +36,9 @@ def get_custom_metadata_records(org: str, type_name: str) -> list:
         return result.get('records', [])
     except Exception as exc:
         logger.warning('custom metadata records failed for %s: %s', type_name, exc)
-        return _mock_cmdt_records(type_name)
+        if Config.SF_MOCK:
+            return _mock_cmdt_records(type_name)
+        raise
 
 
 def get_custom_settings(org: str) -> list:
@@ -48,7 +52,9 @@ def get_custom_settings(org: str) -> list:
         return records
     except Exception as exc:
         logger.warning('custom settings list failed: %s', exc)
-        return _mock_custom_settings()
+        if Config.SF_MOCK:
+            return _mock_custom_settings()
+        raise
 
 
 def get_custom_setting_records(org: str, setting_name: str) -> list:
@@ -67,7 +73,9 @@ def get_custom_setting_records(org: str, setting_name: str) -> list:
         return records
     except Exception as exc:
         logger.warning('custom setting records failed for %s: %s', setting_name, exc)
-        return _mock_setting_records(setting_name)
+        if Config.SF_MOCK:
+            return _mock_setting_records(setting_name)
+        raise
 
 
 def _mock_cmdts() -> list:
