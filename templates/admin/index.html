@@ -128,6 +128,13 @@
         Permissions Audit
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-automation-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-automation" type="button" role="tab"
+              aria-controls="tab-automation" aria-selected="false">
+        Automation &amp; Sharing
+      </button>
+    </li>
   </ul>
 
   <div class="tab-content" id="adminTabContent">
@@ -1073,6 +1080,110 @@
 
       </div><!-- /permSubContent -->
     </div><!-- /tab-permissions -->
+
+    <!-- ── Automation & Sharing ─────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-automation" role="tabpanel" aria-labelledby="tab-automation-btn">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <small class="text-muted">
+          Config that normally takes a dozen clicks to find — validation rules, flows, triggers, and sharing defaults.
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Automation &amp; Sharing"
+                data-bs-content="Read-only org config explorer. Validation Rules, Flows, and Apex Triggers tell you exactly what automation fires on a given object — invaluable when an import row fails. Sharing Model shows the org-wide default (OWD) per object.">ⓘ</span>
+        </small>
+        <button id="btnRefreshAutomation" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+
+      <ul class="nav nav-pills mb-3 gap-1" id="autoSubTabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" id="auto-tab-vr" data-bs-toggle="pill" data-bs-target="#auto-panel-vr" type="button">Validation Rules</button></li>
+        <li class="nav-item"><button class="nav-link" id="auto-tab-flows" data-bs-toggle="pill" data-bs-target="#auto-panel-flows" type="button">Flows</button></li>
+        <li class="nav-item"><button class="nav-link" id="auto-tab-triggers" data-bs-toggle="pill" data-bs-target="#auto-panel-triggers" type="button">Apex Triggers</button></li>
+        <li class="nav-item"><button class="nav-link" id="auto-tab-sharing" data-bs-toggle="pill" data-bs-target="#auto-panel-sharing" type="button">Sharing Model</button></li>
+      </ul>
+
+      <div class="tab-content" id="autoSubContent">
+
+        <!-- Validation Rules -->
+        <div class="tab-pane fade show active" id="auto-panel-vr" role="tabpanel">
+          <input id="autoVrFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by object, rule name, or message…" style="max-width:340px">
+          <div id="autoVrLoading" class="text-center py-4">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoVrEmpty" class="text-center py-5 text-muted d-none">No validation rules found.</div>
+          <div class="card shadow-sm d-none" id="autoVrCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Object</th><th>Rule</th><th>Status</th><th>Error Field</th><th>Error Message</th>
+                </tr></thead>
+                <tbody id="autoVrTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flows -->
+        <div class="tab-pane fade" id="auto-panel-flows" role="tabpanel">
+          <input id="autoFlowFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by name or type…" style="max-width:340px">
+          <div id="autoFlowLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoFlowEmpty" class="text-center py-5 text-muted d-none">No flows found.</div>
+          <div class="card shadow-sm d-none" id="autoFlowCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Flow</th><th>Type</th><th>Status</th><th>Description</th><th>Last Modified</th>
+                </tr></thead>
+                <tbody id="autoFlowTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Apex Triggers -->
+        <div class="tab-pane fade" id="auto-panel-triggers" role="tabpanel">
+          <input id="autoTriggerFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by object or trigger name…" style="max-width:340px">
+          <div id="autoTriggerLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoTriggerEmpty" class="text-center py-5 text-muted d-none">No Apex triggers found.</div>
+          <div class="card shadow-sm d-none" id="autoTriggerCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Object</th><th>Trigger</th><th>Status</th><th class="text-end">API Version</th><th class="text-end">Length</th>
+                </tr></thead>
+                <tbody id="autoTriggerTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sharing Model -->
+        <div class="tab-pane fade" id="auto-panel-sharing" role="tabpanel">
+          <input id="autoSharingFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by object…" style="max-width:340px">
+          <div id="autoSharingLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoSharingEmpty" class="text-center py-5 text-muted d-none">No sharing settings found.</div>
+          <div class="card shadow-sm d-none" id="autoSharingCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Object</th><th>API Name</th><th>Internal Access</th><th>External Access</th>
+                </tr></thead>
+                <tbody id="autoSharingTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /autoSubContent -->
+    </div><!-- /tab-automation -->
 
   </div><!-- /tab-content -->
 </div>

@@ -274,6 +274,54 @@ def api_perm_field_matrix():
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
+@admin_bp.route('/automation/validation-rules')
+def api_validation_rules():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import org_automation
+        data = org_automation.get_validation_rules(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('validation rules failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/automation/flows')
+def api_flows():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import org_automation
+        data = org_automation.get_flows(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('flows failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/automation/triggers')
+def api_triggers():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import org_automation
+        data = org_automation.get_apex_triggers(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('triggers failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@admin_bp.route('/automation/sharing-model')
+def api_sharing_model():
+    org = session.get('active_org', 'dev')
+    try:
+        from services import org_automation
+        data = org_automation.get_sharing_model(org)
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.exception('sharing model failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
 @admin_bp.route('/anonymizer/objects', methods=['GET'])
 def api_anonymizer_objects():
     try:

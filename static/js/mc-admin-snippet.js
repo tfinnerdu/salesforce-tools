@@ -78,6 +78,9 @@ MC.admin = {
     document.getElementById('tab-permissions-btn')?.addEventListener('shown.bs.tab', () => MC.permissions.init());
     document.getElementById('btnRefreshPermissions')?.addEventListener('click', () => MC.permissions.reload());
 
+    document.getElementById('tab-automation-btn')?.addEventListener('shown.bs.tab', () => MC.automation.init());
+    document.getElementById('btnRefreshAutomation')?.addEventListener('click', () => MC.automation.reload());
+
     // Status filter pills for job queue
     document.getElementById('jobQueueFilters')?.addEventListener('click', e => {
       const btn = e.target.closest('[data-jq-filter]');
@@ -1504,5 +1507,190 @@ MC.permissions = {
     document.querySelectorAll(`#${tbodyId} tr`).forEach(row => {
       row.classList.toggle('d-none', !!q && !row.textContent.toLowerCase().includes(q));
     });
+  },
+};
+
+// ── Automation & Sharing ──────────────────────────────────────────────────────
+
+MC.automation = {
+  _initialized: false,
+
+  init() {
+    if (this._initialized) return;
+    this._initialized = true;
+    this._wireFilters();
+    this.loadValidationRules();
+    document.getElementById('auto-tab-flows')?.addEventListener('shown.bs.tab', () => this.loadFlows());
+    document.getElementById('auto-tab-triggers')?.addEventListener('shown.bs.tab', () => this.loadTriggers());
+    document.getElementById('auto-tab-sharing')?.addEventListener('shown.bs.tab', () => this.loadSharing());
+  },
+
+  reload() {
+    this._initialized = false;
+    this._loaded = {};
+    this.init();
+  },
+
+  _loaded: {},
+
+  _wireFilters() {
+    const f = (inputId, tbodyId) =>
+      document.getElementById(inputId)?.addEventListener('input', e =>
+        MC.permissions._filterTable(tbodyId, e.target.value));
+    f('autoVrFilter', 'autoVrTbody');
+    f('autoFlowFilter', 'autoFlowTbody');
+    f('autoTriggerFilter', 'autoTriggerTbody');
+    f('autoSharingFilter', 'autoSharingTbody');
+  },
+
+  _statusBadge(status) {
+    const s = (status || '').toLowerCase();
+    const cls = (s === 'active') ? 'badge-green'
+              : (s === 'inactive' || s === 'obsolete' || s === 'draft') ? 'badge-secondary'
+              : 'badge-amber';
+    return `<span class="badge ${cls}">${MC._escHtml(status || '—')}</span>`;
+  },
+
+  // ── Validation Rules ─────────────────────────────────────────────────────
+
+  async loadValidationRules() {
+    if (this._loaded.vr) return;
+    const loading = document.getElementById('autoVrLoading');
+    const empty   = document.getElementById('autoVrEmpty');
+    const card    = document.getElementById('autoVrCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const rules = await MC.api('/admin/automation/validation-rules') || [];
+      loading?.classList.add('d-none');
+      this._loaded.vr = true;
+      if (!rules.length) { empty?.classList.remove('d-none'); return; }
+      const tbody = document.getElementById('autoVrTbody');
+      if (tbody) {
+        tbody.innerHTML = rules.map(r =>
+          `<tr>
+            <td class="small font-monospace fw-semibold">${MC._escHtml(r.object)}</td>
+            <td class="small">${MC._escHtml(r.name)}</td>
+            <td>${this._statusBadge(r.active ? 'Active' : 'Inactive')}</td>
+            <td class="small font-monospace text-muted">${MC._escHtml(r.error_field || '—')}</td>
+            <td class="small">${MC._escHtml(r.error_message)}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load validation rules: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Flows ────────────────────────────────────────────────────────────────
+
+  async loadFlows() {
+    if (this._loaded.flows) return;
+    const loading = document.getElementById('autoFlowLoading');
+    const empty   = document.getElementById('autoFlowEmpty');
+    const card    = document.getElementById('autoFlowCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const flows = await MC.api('/admin/automation/flows') || [];
+      loading?.classList.add('d-none');
+      this._loaded.flows = true;
+      if (!flows.length) { empty?.classList.remove('d-none'); return; }
+      const tbody = document.getElementById('autoFlowTbody');
+      if (tbody) {
+        tbody.innerHTML = flows.map(f =>
+          `<tr>
+            <td class="small fw-semibold">${MC._escHtml(f.label)}</td>
+            <td><span class="badge badge-navy">${MC._escHtml(f.type || '—')}</span></td>
+            <td>${this._statusBadge(f.status)}</td>
+            <td class="small text-muted">${MC._escHtml(f.description || '—')}</td>
+            <td class="small text-nowrap">${MC._fmtTime(f.last_modified)}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load flows: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Apex Triggers ────────────────────────────────────────────────────────
+
+  async loadTriggers() {
+    if (this._loaded.triggers) return;
+    const loading = document.getElementById('autoTriggerLoading');
+    const empty   = document.getElementById('autoTriggerEmpty');
+    const card    = document.getElementById('autoTriggerCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const triggers = await MC.api('/admin/automation/triggers') || [];
+      loading?.classList.add('d-none');
+      this._loaded.triggers = true;
+      if (!triggers.length) { empty?.classList.remove('d-none'); return; }
+      const tbody = document.getElementById('autoTriggerTbody');
+      if (tbody) {
+        tbody.innerHTML = triggers.map(t =>
+          `<tr>
+            <td class="small font-monospace fw-semibold">${MC._escHtml(t.object || '—')}</td>
+            <td class="small">${MC._escHtml(t.name)}</td>
+            <td>${this._statusBadge(t.status)}</td>
+            <td class="small text-end">${MC._escHtml(t.api_version)}</td>
+            <td class="small text-end text-muted">${(t.length || 0).toLocaleString()}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load triggers: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Sharing Model ────────────────────────────────────────────────────────
+
+  async loadSharing() {
+    if (this._loaded.sharing) return;
+    const loading = document.getElementById('autoSharingLoading');
+    const empty   = document.getElementById('autoSharingEmpty');
+    const card    = document.getElementById('autoSharingCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const rows = await MC.api('/admin/automation/sharing-model') || [];
+      loading?.classList.add('d-none');
+      this._loaded.sharing = true;
+      if (!rows.length) { empty?.classList.remove('d-none'); return; }
+      const accessBadge = (val, label) => {
+        const v = (val || '').toLowerCase();
+        const cls = v === 'private' ? 'badge-red'
+                  : v.startsWith('read') && v !== 'readwrite' && v !== 'readwritetransfer' ? 'badge-amber'
+                  : v.startsWith('controlledby') ? 'badge-secondary'
+                  : 'badge-green';
+        return `<span class="badge ${cls}">${MC._escHtml(label || val || '—')}</span>`;
+      };
+      const tbody = document.getElementById('autoSharingTbody');
+      if (tbody) {
+        tbody.innerHTML = rows.map(r =>
+          `<tr>
+            <td class="small fw-semibold">${MC._escHtml(r.label)}</td>
+            <td class="small font-monospace text-muted">${MC._escHtml(r.object)}</td>
+            <td>${accessBadge(r.internal, r.internal_label)}</td>
+            <td>${accessBadge(r.external, r.external_label)}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load sharing model: ' + err.message, 'danger');
+    }
   },
 };
