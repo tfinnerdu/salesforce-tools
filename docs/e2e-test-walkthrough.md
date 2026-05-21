@@ -282,6 +282,25 @@ Unlike Org Schema Diff (fields), this compares deployable metadata components.
 
 ---
 
+## Schema > Record Inspector
+
+**URL:** `/schema/inspect`
+
+**Steps:**
+1. Navigate to Schema > Record Inspector.
+2. Enter `Account` in Object API Name.
+3. With **Salesforce ID** mode, enter any ID value and click **Inspect**.
+4. **Expected:** field table renders with Name / Label / Type / Value columns; null values
+   show as italic `null`; field count badge appears.
+5. Type into **Filter fields** — table narrows and count updates live.
+6. Switch to **External ID** mode — confirm External ID Field input appears and the
+   label changes to "External ID Value".
+7. Enter `SIS_ID__c` and a SIS ID value, click **Inspect**.
+8. **Expected:** results bar shows `ext id: SIS_ID__c` mode badge; in mock mode 9
+   fields render including `SIS_ID__c`, `Ethos_Guid__c`, and `IsPersonAccount`.
+
+---
+
 ## Data Ops > SF ↔ SQL Join Builder
 
 **URL:** `/data-ops/join`
@@ -507,5 +526,7 @@ with a DB it persists and old runs are pruned to `BACKUP_RETAIN`.
 13. `POST /data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
 14. `POST /data-ops/backup/run` with `{"objects": ["Account"]}` returns `success: true` with an object count
 15. `POST /schema/metadata-diff/run` with `{"compare_org": "prod"}` returns `success: true` with `total_differences > 0`
-16. `pytest tests/ -q` — full suite green (1,094 tests)
+16. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "TEST001"}` returns `success: true` with `total_fields > 0`
+17. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "12345", "external_id_field": "SIS_ID__c"}` returns `lookup_mode: "external_id:SIS_ID__c"`
+18. `pytest tests/ -q` — full suite green (1,109 tests)
 17. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact

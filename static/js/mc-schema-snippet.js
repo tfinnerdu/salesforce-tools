@@ -498,3 +498,181 @@ MC.metadataDiff = {
     </div>`;
   },
 };
+
+/**
+ * MC.recordInspector — Quick Record Inspector
+ * Fetch all queryable field values for a single Salesforce record by SF ID or external ID.
+ */
+MC.recordInspector = {
+  _rows: [],   // [{name, label, type, value}] — full unfiltered set
+
+  init() {
+    document.getElementById('btnInspect')?.addEventListener('click', () => this.run());
+
+    // Toggle external ID field input
+    document.querySelectorAll('input[name="riLookupMode"]').forEach(radio => {
+      radio.addEventListener('change', () => this._onModeChange());
+    });
+
+    // Live filter
+    document.getElementById('riFilter')?.addEventListener('input', () => this._applyFilter());
+
+    // Submit on Enter in any config input
+    ['riObject', 'riRecordId', 'riExtIdField'].forEach(id => {
+      document.getElementById(id)?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') this.run();
+      });
+    });
+  },
+
+  _onModeChange() {
+    const mode = document.querySelector('input[name="riLookupMode"]:checked')?.value;
+    const wrap = document.getElementById('riExtIdFieldWrap');
+    const label = document.getElementById('riRecordIdLabel');
+    const input = document.getElementById('riRecordId');
+    if (mode === 'ext_id') {
+      wrap?.classList.remove('d-none');
+      if (label) label.textContent = 'External ID Value';
+      if (input) input.placeholder = 'e.g. 12345 or guid-string';
+    } else {
+      wrap?.classList.add('d-none');
+      if (label) label.textContent = 'Record ID';
+      if (input) input.placeholder = '18-char Salesforce ID';
+    }
+  },
+
+  async run() {
+    const objectName = (document.getElementById('riObject')?.value || '').trim();
+    const recordId = (document.getElementById('riRecordId')?.value || '').trim();
+    const mode = document.querySelector('input[name="riLookupMode"]:checked')?.value || 'sf_id';
+    const externalIdField = mode === 'ext_id'
+      ? (document.getElementById('riExtIdField')?.value || '').trim()
+      : '';
+
+    if (!objectName) { alert('Please enter an Object API name.'); return; }
+    if (!recordId)   { alert('Please enter a record ID or external ID value.'); return; }
+    if (mode === 'ext_id' && !externalIdField) {
+      alert('Please enter the External ID field name (e.g. SIS_ID__c).'); return;
+    }
+
+    this._setState('loading');
+
+    try {
+      MC.showSpinner?.();
+      const resp = await fetch('/schema/inspect/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          object: objectName,
+          record_id: recordId,
+          external_id_field: externalIdField,
+        }),
+      });
+      const json = await resp.json();
+      if (!json.success) throw new Error(json.error || 'Unknown error');
+      this.renderResults(json.data);
+    } catch (err) {
+      this._setState('error', err.message);
+    } finally {
+      MC.hideSpinner?.();
+    }
+  },
+
+  renderResults(data) {
+    this._rows = data.fields || [];
+    const recordId = data.record_id || '';
+    const lookupKey = data.lookup_key || recordId;
+    const mode = data.lookup_mode || 'sf_id';
+
+    // Meta bar
+    const orgBadge = document.getElementById('riOrgBadge');
+    if (orgBadge) orgBadge.textContent = (data.org || '').toUpperCase() || 'ORG';
+
+    const objectLabel = document.getElementById('riObjectLabel');
+    if (objectLabel) objectLabel.textContent = data.object || '';
+
+    const idLabel = document.getElementById('riIdLabel');
+    if (idLabel) idLabel.textContent = recordId;
+
+    const modeLabel = document.getElementById('riModeLabel');
+    if (modeLabel) {
+      modeLabel.textContent = mode.startsWith('external_id:')
+        ? `ext id: ${mode.split(':')[1]}`
+        : 'SF ID';
+    }
+
+    const fieldCount = document.getElementById('riFieldCount');
+    if (fieldCount) fieldCount.textContent = `${this._rows.length} fields`;
+
+    // Deep link — only valid for real SF IDs (18-char alphanum), not external IDs
+    const deepLink = document.getElementById('riDeepLink');
+    if (deepLink) {
+      if (recordId && /^[a-zA-Z0-9]{15,18}$/.test(recordId)) {
+        deepLink.href = `https://salesforce.com/${recordId}`;
+        deepLink.classList.remove('d-none');
+      } else {
+        deepLink.classList.add('d-none');
+      }
+    }
+
+    this._renderTable(this._rows);
+    this._setState('results');
+
+    // Show filter row and reset
+    document.getElementById('riFilterRow')?.classList.remove('d-none');
+    const filterEl = document.getElementById('riFilter');
+    if (filterEl) { filterEl.value = ''; }
+    this._updateFilterCount(this._rows.length, this._rows.length);
+  },
+
+  _renderTable(rows) {
+    const tbody = document.getElementById('riTableBody');
+    if (!tbody) return;
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted small">No fields returned.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(f => {
+      const val = f.value === null || f.value === undefined ? '' : String(f.value);
+      const isEmpty = val === '' || val === 'null' || val === 'None';
+      return `<tr class="${isEmpty ? 'text-muted' : ''}">
+        <td class="font-monospace small py-1">${MC._esc(f.name)}</td>
+        <td class="small py-1">${MC._esc(f.label)}</td>
+        <td class="small py-1 text-muted">${MC._esc(f.type)}</td>
+        <td class="font-monospace small py-1">${isEmpty ? '<em class="text-muted">null</em>' : MC._esc(val)}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  _applyFilter() {
+    const q = (document.getElementById('riFilter')?.value || '').toLowerCase();
+    const filtered = q
+      ? this._rows.filter(f =>
+          f.name.toLowerCase().includes(q) ||
+          f.label.toLowerCase().includes(q) ||
+          String(f.value ?? '').toLowerCase().includes(q))
+      : this._rows;
+    this._renderTable(filtered);
+    this._updateFilterCount(filtered.length, this._rows.length);
+  },
+
+  _updateFilterCount(shown, total) {
+    const el = document.getElementById('riFilterCount');
+    if (el) el.textContent = shown === total ? `${total} fields` : `${shown} of ${total} fields`;
+  },
+
+  _setState(state, message) {
+    const loading = document.getElementById('riLoading');
+    const empty   = document.getElementById('riEmpty');
+    const error   = document.getElementById('riError');
+    const results = document.getElementById('riResults');
+    [loading, empty, error, results].forEach(el => el?.classList.add('d-none'));
+    if (state === 'loading' && loading) loading.classList.remove('d-none');
+    if (state === 'empty'   && empty)   empty.classList.remove('d-none');
+    if (state === 'error'   && error) {
+      error.textContent = 'Failed to load record: ' + (message || 'Unknown error');
+      error.classList.remove('d-none');
+    }
+    if (state === 'results' && results) results.classList.remove('d-none');
+  },
+};

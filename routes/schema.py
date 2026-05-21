@@ -49,6 +49,11 @@ def apex_search():
     return render_template('schema/apex_search.html')
 
 
+@schema_bp.route('/inspect')
+def record_inspector():
+    return render_template('schema/record_inspector.html')
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 
 @schema_bp.route('/crosswalk/upload', methods=['POST'])
@@ -226,4 +231,24 @@ def api_metadata_diff_run():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('metadata diff failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@schema_bp.route('/inspect/run', methods=['POST'])
+def api_record_inspect():
+    from services import record_inspector
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    object_name = (body.get('object') or '').strip()
+    record_id = (body.get('record_id') or '').strip()
+    external_id_field = (body.get('external_id_field') or '').strip()
+    if not object_name or not record_id:
+        return jsonify({'success': False, 'data': None,
+                        'error': 'object and record_id are required'}), 400
+    try:
+        result = record_inspector.get_record(org, object_name, record_id,
+                                             external_id_field=external_id_field)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('record inspect failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

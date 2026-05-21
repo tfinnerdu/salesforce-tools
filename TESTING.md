@@ -122,6 +122,7 @@ the Observe / Logs / Impact / Deploy tabs).
 | `services/join_builder.py` | Unit-tested | `test_join_builder.py` |
 | `services/merge_history.py` | Unit-tested | `test_merge_history.py` — incl. the no-mock-leak regression test |
 | `services/metadata_diff.py` | Unit-tested | `test_metadata_diff.py` — org-to-org diff of Apex, flows, validation rules, custom objects |
+| `services/record_inspector.py` | Unit-tested | `test_record_inspector.py` — field browser by SF ID and external ID |
 | `services/migration_velocity.py` | Unit-tested | `test_migration_velocity.py` |
 | `services/org_automation.py` | Unit-tested | `test_org_automation.py` |
 | `services/org_observer.py` | Unit-tested | `test_limit_thresholds.py` |
@@ -180,6 +181,7 @@ a Jinja error.
 | `templates/data_ops/join_builder.html` | `GET /data-ops/join` — Procedure 8 |
 | `templates/data_ops/backup.html` | `GET /data-ops/backup` — Procedure 21 |
 | `templates/schema/metadata_diff.html` | `GET /schema/metadata-diff` — Procedure 22 |
+| `templates/schema/record_inspector.html` | `GET /schema/inspect` — Procedure 23 |
 | `templates/data_ops/bulk_update.html` | `GET /data-ops/bulk-update` |
 | `templates/data_ops/record_locks.html` | `GET /data-ops/record-locks` |
 | `templates/data_ops/bulk_jobs.html` | `GET /data-ops/bulk-jobs` |
@@ -687,21 +689,46 @@ against itself reports zero differences.
 
 ---
 
+### Procedure 23 — Schema: Record Inspector
+
+**Goal:** Verify a single Salesforce record's field values can be fetched by
+both Salesforce ID and external ID.
+
+1. Navigate to `/schema/inspect`.
+2. Enter `Account` in the **Object API Name** field.
+3. With **Salesforce ID** mode selected, enter any 18-char record ID and click
+   **Inspect**.
+4. Confirm the field table renders with Name, Label, Type, and Value columns.
+5. Confirm null values show as italic `null`.
+6. Use the **Filter fields** box — confirm the table narrows and the field count
+   updates.
+7. Switch to **External ID** mode — confirm the External ID Field input appears
+   and the Record ID label changes to "External ID Value".
+8. Enter `SIS_ID__c` as the field name and a SIS ID value, then click
+   **Inspect**.
+9. Confirm the mode badge shows `ext id: SIS_ID__c` in the results bar.
+
+**Expected:** In mock mode the seeded Account record returns 9 fields including
+`SIS_ID__c`, `Ethos_Guid__c`, and `IsPersonAccount`. The external-ID lookup
+path sets `lookup_mode: external_id:SIS_ID__c` in the response.
+
+---
+
 ## Coverage Summary
 
 Every production file is accounted for in the File Classification Matrix above —
-6 core modules, 14 route files, 45 service modules, 40 templates, 12 static
+6 core modules, 14 route files, 46 service modules, 41 templates, 12 static
 assets, and 3 build files.
 
 | Bucket | Count | Notes |
 |---|---|---|
-| Unit-tested | 6 core + 13 routes + 44 services | Every route and service module has a test exercising it |
+| Unit-tested | 6 core + 13 routes + 45 services | Every route and service module has a test exercising it |
 | Contract-pinned | `test_contracts.py` + 4 characterization specs | Mock-data invariants, Tooling API contracts, route contracts, Tune-rule and Soundex transformations |
 | Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/mission-control.css`, `Dockerfile`, `requirements.txt`, `k8s/manifest.yaml` | Declarative — the toolchain validates them |
-| Manual-procedure-documented | 40 templates + 11 JS files | 22 procedures cover every JS-driven UI flow |
+| Manual-procedure-documented | 41 templates + 11 JS files | 23 procedures cover every JS-driven UI flow |
 | Structurally exempt | 1 line | `app.py` `__main__` guard |
 
-**Test suite: 1,094 tests passing.** The May 2026 expansion (DemandTools-equivalent
+**Test suite: 1,109 tests passing.** The May 2026 expansion (DemandTools-equivalent
 Data Ops tools, Permissions Audit, Automation & Sharing, the Tooling API bug-fix
 sweep, the deep-link sweep, and this matrix reconciliation) added 256 tests across
 unit, route-contract, real-Bulk-API-path, and characterization layers.

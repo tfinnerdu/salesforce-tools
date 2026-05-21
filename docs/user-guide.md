@@ -495,6 +495,25 @@ The component count badges are green (no differences) or orange (has differences
 
 ---
 
+### Record Inspector
+
+**URL:** `/schema/inspect`
+
+Fetches every queryable field value for a single Salesforce record — a lightweight alternative to Salesforce Inspector for confirming migrated data without writing a SOQL query.
+
+**How to use it:**
+1. Enter the **Object API Name** (e.g. `Account`, `ContactPointEmail`).
+2. Choose the lookup mode:
+   - **Salesforce ID** — enter the 18-character record ID directly.
+   - **External ID** — enter the External ID field API name (e.g. `SIS_ID__c`) and the value to match.
+3. Click **Inspect**.
+
+The results table shows every non-compound, non-binary field with its API name, label, type, and live value. Use the **Filter fields** box to narrow by name, label, or value.
+
+> Tip: the "Open in Salesforce" button appears for SF ID lookups and links directly to the record in the org.
+
+---
+
 ### Field Usage
 
 **URL:** `/schema/field-usage`
