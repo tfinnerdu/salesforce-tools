@@ -54,16 +54,21 @@
         </div>
         <div class="card-body">
           <div class="mb-3">
-            <label for="sqlTable" class="form-label small fw-semibold">Table Name
-              <span class="mc-info-icon"
-                    data-bs-toggle="popover"
-                    data-bs-trigger="focus"
-                    tabindex="0"
-                    data-bs-title="SQL Server Table"
-                    data-bs-content="The SQL Server table to join against, used verbatim. A bare name resolves via the connection's default schema (usually dbo); schema-qualify it (schema.table) only if the table lives elsewhere. Uses the SQLSERVER_CONN connection string via pyodbc.">ⓘ</span>
+            <label for="sqlTable" class="form-label small fw-semibold d-flex justify-content-between align-items-center">
+              <span>Table Name
+                <span class="mc-info-icon"
+                      data-bs-toggle="popover"
+                      data-bs-trigger="focus"
+                      tabindex="0"
+                      data-bs-title="SQL Server Table"
+                      data-bs-content="Start typing to filter the cached table list. The schema is cached so this works even when the ODBC/Devart link is down — click 'Refresh schema' to re-introspect when tables change. The generated query is verbatim and uses WITH (NOLOCK).">ⓘ</span>
+              </span>
+              <button id="btnRefreshSqlSchema" type="button" class="btn btn-link btn-sm p-0 small no-print">&#8635; Refresh schema</button>
             </label>
             <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
-                   placeholder="dbo.STUDENTS">
+                   list="sqlTableDatalist" autocomplete="off" placeholder="dbo.STUDENTS">
+            <datalist id="sqlTableDatalist"></datalist>
+            <div class="form-text" id="sqlSchemaStatus">SQL schema not loaded.</div>
           </div>
           <div class="mb-3">
             <label for="sqlFields" class="form-label small fw-semibold">
@@ -98,13 +103,10 @@
                     data-bs-title="SF Object"
                     data-bs-content="The Salesforce object to query. Uses SELECT {fields} FROM {object} LIMIT {n}. The result set is aliased as the SF side of the join.">ⓘ</span>
             </label>
-            <select id="sfObject" class="form-select form-select-sm">
-              <option value="">-- Select SF Object --</option>
-              <option value="Account">Account</option>
-              <option value="Contact">Contact</option>
-              <option value="hed__Application__c">hed__Application__c</option>
-              <option value="hed__Course_Enrollment__c">hed__Course_Enrollment__c</option>
-            </select>
+            <input id="sfObject" type="text" class="form-control form-control-sm font-monospace"
+                   list="sfObjectDatalist" autocomplete="off" placeholder="Account">
+            <datalist id="sfObjectDatalist"></datalist>
+            <div class="form-text" id="sfObjectStatus">Loading objects…</div>
           </div>
           <div class="mb-3">
             <label for="sfFields" class="form-label small fw-semibold">
@@ -134,8 +136,12 @@
   <!-- Action buttons -->
   <div class="d-flex flex-wrap gap-2 mb-3 no-print">
     <button id="btnBuild" class="btn btn-doane btn-sm">&#9881; Build Query</button>
+    <button id="btnCheckFields" class="btn btn-outline-secondary btn-sm">&#10003; Check Fields</button>
     <button id="btnRun" class="btn btn-slate btn-sm">&#9654; Run (Python fallback)</button>
   </div>
+
+  <!-- Field-check result -->
+  <div id="joinCheckResult" class="d-none mb-3"></div>
 
   <!-- Generated SQL -->
   <div class="card shadow-sm mb-3">

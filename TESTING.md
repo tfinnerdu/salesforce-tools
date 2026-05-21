@@ -135,6 +135,7 @@ the Observe / Logs / Impact / Deploy tabs).
 | `services/schema_diff.py` | Unit-tested | `test_schema_diff.py` |
 | `services/schema_snapshot.py` | Unit-tested | `test_schema_snapshot.py` |
 | `services/soql_workbench.py` | Unit-tested | `test_soql_workbench.py`, `test_query_history.py` |
+| `services/sql_schema.py` | Unit-tested | `test_sql_schema.py` — SQL Server schema cache for the Join Builder (read/refresh/validate, NOLOCK output) |
 | `services/storage_breakdown.py` | Unit-tested | `test_storage_breakdown.py` |
 
 ### Templates (`templates/`)
@@ -651,7 +652,7 @@ assets, and 3 build files.
 | Manual-procedure-documented | 38 templates + 11 JS files | 20 procedures cover every JS-driven UI flow |
 | Structurally exempt | 1 line | `app.py` `__main__` guard |
 
-**Test suite: 1,053 tests passing.** The May 2026 expansion (DemandTools-equivalent
+**Test suite: 1,067 tests passing.** The May 2026 expansion (DemandTools-equivalent
 Data Ops tools, Permissions Audit, Automation & Sharing, the Tooling API bug-fix
 sweep, the deep-link sweep, and this matrix reconciliation) added 256 tests across
 unit, route-contract, real-Bulk-API-path, and characterization layers.

@@ -317,6 +317,73 @@ def api_export_run():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
+# ── SQL Server schema cache (Join Builder) ────────────────────────────────────
+
+@data_ops_bp.route('/sql-schema')
+def api_sql_schema():
+    """Cached SQL Server schema. ?table=<name> returns that table's columns;
+    otherwise returns the table-name list + cache metadata."""
+    table = request.args.get('table', '').strip()
+    try:
+        from services import sql_schema
+        if table:
+            return jsonify({'success': True, 'data': {
+                'table': table,
+                'columns': sql_schema.get_table_columns(table),
+            }})
+        cached = sql_schema.get_cached_schema()
+        return jsonify({'success': True, 'data': {
+            'captured_at': cached.get('captured_at'),
+            'table_count': cached.get('table_count', 0),
+            'mock': cached.get('mock', False),
+            'tables': sorted(cached.get('tables', {}).keys()),
+        }})
+    except Exception as exc:
+        logger.exception('sql schema read failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/sql-schema/refresh', methods=['POST'])
+def api_sql_schema_refresh():
+    """Re-introspect the SQL Server schema and cache it."""
+    try:
+        from services import sql_schema
+        result = sql_schema.refresh_schema()
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('sql schema refresh failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/sf-objects')
+def api_sf_objects():
+    """All queryable Salesforce objects — for the Join Builder object picker."""
+    org = session.get('active_org', 'dev')
+    try:
+        from services import soql_workbench
+        objects = soql_workbench.list_objects(org)
+        return jsonify({'success': True, 'data': objects})
+    except Exception as exc:
+        logger.exception('sf objects list failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/sf-object-fields')
+def api_sf_object_fields():
+    """Field list for one SF object — for the Join Builder field checker."""
+    org = session.get('active_org', 'dev')
+    object_name = request.args.get('object', '').strip()
+    if not object_name:
+        return jsonify({'success': False, 'error': 'object param required'}), 400
+    try:
+        from services import soql_workbench
+        fields = soql_workbench.list_fields(org, object_name)
+        return jsonify({'success': True, 'data': fields})
+    except Exception as exc:
+        logger.exception('sf object fields failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
 # ── Tune (data standardization) API ───────────────────────────────────────────
 
 @data_ops_bp.route('/tune/rules')

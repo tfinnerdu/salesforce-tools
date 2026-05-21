@@ -144,6 +144,8 @@
     <Compile Include="tests\characterization\test_soundex_characterization.py" />
     <Compile Include="tests\characterization\test_tooling_api_contracts_characterization.py" />
     <Compile Include="tests\characterization\test_tune_rules_characterization.py" />
+    <Compile Include="services\sql_schema.py" />
+    <Compile Include="tests\test_sql_schema.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".env" />

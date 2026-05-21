@@ -34,7 +34,7 @@ def build_query(
     openquery_sql = (
         f"SELECT {sql_fields_csv},\n"
         f"       {', '.join(f'sf.{f}' for f in sf_fields)}\n"
-        f"FROM {sql_table} s\n"
+        f"FROM {sql_table} s WITH (NOLOCK)\n"
         f"JOIN OPENQUERY(SALESFORCE, '\n"
         f"    SELECT {sf_fields_csv_bare}\n"
         f"    FROM {sf_object}\n"
@@ -44,7 +44,7 @@ def build_query(
 
     sql_only = (
         f"SELECT {', '.join(sql_fields)}\n"
-        f"FROM {sql_table}\n"
+        f"FROM {sql_table} WITH (NOLOCK)\n"
         f"WHERE {join_field_sql} IS NOT NULL"
     )
 

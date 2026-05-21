@@ -1683,10 +1683,113 @@ MC.joinBuilder = {
   init() {
     document.getElementById('btnBuild')?.addEventListener('click', () => this.buildQuery());
     document.getElementById('btnRun')?.addEventListener('click', () => this.runPython());
+    document.getElementById('btnCheckFields')?.addEventListener('click', () => this.checkFields());
+    document.getElementById('btnRefreshSqlSchema')?.addEventListener('click', () => this.refreshSqlSchema());
     document.getElementById('btnCopy')?.addEventListener('click', () => {
       const sql = document.getElementById('generatedSql')?.textContent || '';
       MC.copyToClipboard(sql);
     });
+    this.loadSfObjects();
+    this.loadSqlSchema();
+  },
+
+  // ── Typeahead data sources ──────────────────────────────────────────────────
+
+  async loadSfObjects() {
+    const status = document.getElementById('sfObjectStatus');
+    try {
+      const objects = await MC.api('/data-ops/sf-objects') || [];
+      const names = objects.map(o => (typeof o === 'string' ? o : (o.name || ''))).filter(Boolean);
+      const dl = document.getElementById('sfObjectDatalist');
+      if (dl) dl.innerHTML = names.map(n => `<option value="${MC._escHtml(n)}">`).join('');
+      if (status) status.textContent = `${names.length.toLocaleString()} objects — type to filter.`;
+    } catch (err) {
+      if (status) status.textContent = 'Could not load objects: ' + err.message;
+    }
+  },
+
+  async loadSqlSchema() {
+    const status = document.getElementById('sqlSchemaStatus');
+    try {
+      const d = await MC.api('/data-ops/sql-schema');
+      const dl = document.getElementById('sqlTableDatalist');
+      if (dl) dl.innerHTML = (d.tables || []).map(t => `<option value="${MC._escHtml(t)}">`).join('');
+      if (status) {
+        if (d.table_count) {
+          const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
+          status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}) — type to filter.`;
+        } else {
+          status.textContent = 'No SQL schema cached yet — click "Refresh schema".';
+        }
+      }
+    } catch (err) {
+      if (status) status.textContent = 'Could not load SQL schema: ' + err.message;
+    }
+  },
+
+  async refreshSqlSchema() {
+    const status = document.getElementById('sqlSchemaStatus');
+    if (status) status.textContent = 'Refreshing SQL schema…';
+    try {
+      const d = await MC.api('/data-ops/sql-schema/refresh', 'POST');
+      MC.showToast(`SQL schema refreshed — ${d.table_count} tables`, 'success');
+      await this.loadSqlSchema();
+    } catch (err) {
+      MC.showToast('Schema refresh failed: ' + err.message, 'danger');
+      if (status) status.textContent = 'Refresh failed: ' + err.message;
+    }
+  },
+
+  // ── Field checker ───────────────────────────────────────────────────────────
+
+  async checkFields() {
+    const cfg = this._collectConfig();
+    const box = document.getElementById('joinCheckResult');
+    if (!box) return;
+    box.className = 'mb-3';
+    box.innerHTML = '<div class="text-muted small">Checking fields…</div>';
+    const problems = [];
+    const oks = [];
+
+    // SF side — validate against the object's describe
+    if (cfg.sf_object && cfg.sf_fields.length) {
+      try {
+        const fields = await MC.api(`/data-ops/sf-object-fields?object=${encodeURIComponent(cfg.sf_object)}`);
+        const known = new Set((fields || []).map(f => (f.name || f).toLowerCase()));
+        const bad = cfg.sf_fields.filter(f => !known.has(f.toLowerCase()));
+        if (bad.length) problems.push(`Salesforce ${cfg.sf_object}: unknown field(s) — ${bad.join(', ')}`);
+        else oks.push(`Salesforce ${cfg.sf_object}: all ${cfg.sf_fields.length} field(s) valid`);
+      } catch (err) {
+        problems.push(`Salesforce ${cfg.sf_object}: could not verify — ${err.message}`);
+      }
+    }
+
+    // SQL side — validate against the cached schema
+    if (cfg.sql_table && cfg.sql_fields.length) {
+      try {
+        const d = await MC.api(`/data-ops/sql-schema?table=${encodeURIComponent(cfg.sql_table)}`);
+        const cols = d.columns || [];
+        if (!cols.length) {
+          problems.push(`SQL ${cfg.sql_table}: not in the cached schema — refresh, or check the name`);
+        } else {
+          const known = new Set(cols.map(c => c.toLowerCase()));
+          const bad = cfg.sql_fields.filter(f => !known.has(f.toLowerCase()));
+          if (bad.length) problems.push(`SQL ${cfg.sql_table}: unknown column(s) — ${bad.join(', ')}`);
+          else oks.push(`SQL ${cfg.sql_table}: all ${cfg.sql_fields.length} column(s) valid`);
+        }
+      } catch (err) {
+        problems.push(`SQL ${cfg.sql_table}: could not verify — ${err.message}`);
+      }
+    }
+
+    if (!problems.length && !oks.length) {
+      box.innerHTML = '<div class="alert alert-secondary mb-0 small">Enter an object/table and fields to check.</div>';
+      return;
+    }
+    const okHtml = oks.map(o => `<div class="text-success small">&#10003; ${MC._escHtml(o)}</div>`).join('');
+    const badHtml = problems.map(p => `<div class="text-danger small">&#10007; ${MC._escHtml(p)}</div>`).join('');
+    box.className = `mb-3 alert ${problems.length ? 'alert-warning' : 'alert-success'}`;
+    box.innerHTML = okHtml + badHtml;
   },
 
   _collectConfig() {

@@ -460,5 +460,5 @@ Validation > Duplicate Radar.
 11. `POST /data-ops/export/run` with a SOQL body returns a `text/csv` attachment
 12. `GET /data-ops/tune/rules` returns 8 standardization rules
 13. `POST /data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
-14. `pytest tests/ -q` — full suite green (1,053 tests)
+14. `pytest tests/ -q` — full suite green (1,067 tests)
 15. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact
