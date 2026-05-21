@@ -61,7 +61,7 @@ MC.velocity = {
         labels,
         datasets: [
           { label: 'Daily Records', data: daily, backgroundColor: 'rgba(252,185,0,0.7)', yAxisID: 'y' },
-          { label: 'Cumulative', data: cumulative, type: 'line', borderColor: '#003087', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, yAxisID: 'y2' },
+          { label: 'Cumulative', data: cumulative, type: 'line', borderColor: '#0063B0', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, yAxisID: 'y2' },
           { label: `Target (${data.target.toLocaleString()})`, data: targetLine, type: 'line', borderColor: '#dc3545', backgroundColor: 'transparent', borderWidth: 1, borderDash: [6, 3], pointRadius: 0, yAxisID: 'y2' },
         ],
       },

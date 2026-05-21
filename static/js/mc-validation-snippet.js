@@ -74,7 +74,7 @@ MC.validation = {
     const cards = checks.map(check => {
       const isOk = check.status === 'ok';
       const isError = check.status === 'error';
-      const badgeCls = isOk ? 'badge-green' : isError ? 'badge-navy' : 'badge-amber';
+      const badgeCls = isOk ? 'badge-green' : isError ? 'badge-slate' : 'badge-amber';
       const badgeText = isOk ? 'OK' : isError ? 'ERROR' : `${(check.count || 0).toLocaleString()} orphans`;
       const collapseId = `orphanCollapse_${MC._escHtml(check.key)}`;
       const objectType = this._orphanObjectType(check.key);
@@ -264,7 +264,7 @@ MC.validation = {
       const badgeCls =
         row.status === 'green' ? 'badge-green' :
         row.status === 'amber' ? 'badge-amber' :
-        row.status === 'error' ? 'badge-navy' : 'badge-red';
+        row.status === 'error' ? 'badge-slate' : 'badge-red';
       const totalFmt = (row.total || 0).toLocaleString();
       const populatedFmt = (row.populated || 0).toLocaleString();
       const missingFmt = (row.missing || 0).toLocaleString();

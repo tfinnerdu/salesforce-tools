@@ -315,7 +315,7 @@ MC.logs = {
       if (tmList) {
         tmList.innerHTML = timeline.map(ev => `
           <li class="list-group-item small py-1">
-            <span class="badge badge-navy me-1">${MC._escHtml(ev.event)}</span>
+            <span class="badge badge-slate me-1">${MC._escHtml(ev.event)}</span>
             <span class="text-muted">${MC._escHtml(ev.detail)}</span>
           </li>`).join('');
       }

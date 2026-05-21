@@ -133,7 +133,7 @@ MC.observe = {
     if (emptyEl) emptyEl.classList.add('d-none');
 
     const palette = [
-      '#FF7900', '#1F3864', '#28a745', '#dc3545',
+      '#FF7900', '#0063B0', '#28a745', '#dc3545',
       '#ffc107', '#17a2b8', '#6610f2', '#e83e8c',
     ];
 
@@ -226,8 +226,8 @@ MC.observe = {
     }
 
     headEl.innerHTML = `<tr>
-      <th style="background:var(--doane-navy);color:#fff;">Query</th>
-      ${orgs.map(o => `<th style="background:var(--doane-navy);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
+      <th style="background:var(--doane-slate);color:#fff;">Query</th>
+      ${orgs.map(o => `<th style="background:var(--doane-slate);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
     </tr>`;
 
     bodyEl.innerHTML = queries.map(label => {
@@ -252,7 +252,7 @@ MC.observe = {
       }).join('');
 
       return `<tr>
-        <td class="small fw-semibold" style="color:var(--doane-navy);">${MC._escHtml(label)}</td>
+        <td class="small fw-semibold" style="color:var(--doane-slate);">${MC._escHtml(label)}</td>
         ${cells}
       </tr>`;
     }).join('');
@@ -303,7 +303,7 @@ MC.observe = {
         ? `<a href="${sfUrl}" target="_blank" rel="noopener" class="btn btn-link btn-sm p-0 small">Open in SF &#8599;</a>`
         : `<a href="/soql?object=${encodeURIComponent(row.object)}" class="btn btn-link btn-sm p-0 small text-muted">SOQL</a>`;
       return `<tr>
-        <td class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(row.label)}</td>
+        <td class="fw-semibold small" style="color:var(--doane-slate);">${MC._escHtml(row.label)}</td>
         <td class="text-end font-monospace">${countFmt}</td>
         <td class="text-center no-print">${actionCell}</td>
       </tr>`;
@@ -330,7 +330,7 @@ MC.observe = {
       <div class="card h-100 border-0 shadow-sm">
         <div class="card-body py-3 px-3">
           <div class="d-flex justify-content-between align-items-start mb-2">
-            <span class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(lim.name)}${customBadge}</span>
+            <span class="fw-semibold small" style="color:var(--doane-slate);">${MC._escHtml(lim.name)}${customBadge}</span>
             <span class="badge ${badgeCls}">${pct.toFixed(1)}%</span>
           </div>
           <div class="progress mb-2" style="height:8px;" title="${usedFmt} used of ${maxFmt}">
@@ -503,7 +503,7 @@ MC.observe = {
       const title = c.error ? ` title="${MC._escHtml(c.error)}"` : '';
 
       return `<tr${title}>
-        <td class="small fw-semibold" style="color:var(--doane-navy);">${MC._escHtml(c.label)}</td>
+        <td class="small fw-semibold" style="color:var(--doane-slate);">${MC._escHtml(c.label)}</td>
         <td class="text-end font-monospace">${baseFmt}</td>
         <td class="text-end font-monospace">${tgtFmt}</td>
         <td class="text-end font-monospace">${deltaFmt}</td>

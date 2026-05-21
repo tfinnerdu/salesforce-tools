@@ -216,7 +216,7 @@ MC.recordLocks = {
 
         const tableHtml = `
           <div class="card shadow-sm mb-3">
-            <div class="card-header fw-semibold" style="background-color: var(--doane-navy); color:#fff;">
+            <div class="card-header fw-semibold" style="background-color: var(--doane-slate); color:#fff;">
               ${MC._escHtml(obj)} <span class="badge bg-light text-dark ms-1">${records.length}</span>
             </div>
             <div class="card-body p-0">

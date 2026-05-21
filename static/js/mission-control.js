@@ -104,7 +104,7 @@ MC.statusBadge = (status) => {
     s === 'success' || s === 'ok' || s === 'green' || s === 'pass' || s === 'passed' ? 'badge-green' :
     s === 'warning' || s === 'warn' || s === 'amber' || s === 'partial' ? 'badge-amber' :
     s === 'error' || s === 'fail' || s === 'failed' || s === 'red' ? 'badge-red' :
-    'badge-navy';
+    'badge-slate';
   return `<span class="badge ${cls}">${MC._escHtml(status?.toString().toUpperCase() || '')}</span>`;
 };
 
@@ -1302,7 +1302,7 @@ MC.soql = {
           <div class="font-monospace small text-truncate me-2" style="max-width:80%;"
                title="${MC._escHtml(h.query)}">${MC._escHtml(h.query)}</div>
           <div class="text-end text-muted" style="white-space:nowrap;font-size:0.75rem;">
-            <span class="badge badge-navy me-1">${h.row_count ?? '?'} rows</span>
+            <span class="badge badge-slate me-1">${h.row_count ?? '?'} rows</span>
             <button class="btn btn-sm p-0 text-muted" style="font-size:0.75rem;"
                     onclick="event.stopPropagation(); MC.soql._deleteHistory(${h.id}, this)">✕</button>
           </div>
@@ -2257,7 +2257,7 @@ MC.logs = {
       if (tmList) {
         tmList.innerHTML = timeline.map(ev => `
           <li class="list-group-item small py-1">
-            <span class="badge badge-navy me-1">${MC._escHtml(ev.event)}</span>
+            <span class="badge badge-slate me-1">${MC._escHtml(ev.event)}</span>
             <span class="text-muted">${MC._escHtml(ev.detail)}</span>
           </li>`).join('');
       }
@@ -2513,7 +2513,7 @@ MC.observe = {
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body py-3 px-3">
             <div class="d-flex justify-content-between align-items-start mb-2">
-              <span class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(lim.name)}</span>
+              <span class="fw-semibold small" style="color:var(--doane-slate);">${MC._escHtml(lim.name)}</span>
               <span class="badge ${badgeCls}">${pct.toFixed(1)}%</span>
             </div>
             <div class="progress mb-2" style="height:8px;" title="${usedFmt} used of ${maxFmt}">
@@ -2573,7 +2573,7 @@ MC.observe = {
     if (emptyEl) emptyEl.classList.add('d-none');
 
     const palette = [
-      '#FF7900', '#1F3864', '#28a745', '#dc3545',
+      '#FF7900', '#0063B0', '#28a745', '#dc3545',
       '#ffc107', '#17a2b8', '#6610f2', '#e83e8c',
     ];
 
@@ -2666,8 +2666,8 @@ MC.observe = {
     }
 
     headEl.innerHTML = `<tr>
-      <th style="background:var(--doane-navy);color:#fff;">Query</th>
-      ${orgs.map(o => `<th style="background:var(--doane-navy);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
+      <th style="background:var(--doane-slate);color:#fff;">Query</th>
+      ${orgs.map(o => `<th style="background:var(--doane-slate);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
     </tr>`;
 
     bodyEl.innerHTML = queries.map(label => {
@@ -2692,7 +2692,7 @@ MC.observe = {
       }).join('');
 
       return `<tr>
-        <td class="small fw-semibold" style="color:var(--doane-navy);">${MC._escHtml(label)}</td>
+        <td class="small fw-semibold" style="color:var(--doane-slate);">${MC._escHtml(label)}</td>
         ${cells}
       </tr>`;
     }).join('');
@@ -3178,7 +3178,7 @@ MC.admin = {
       s === 'EXECUTING' ? 'badge-green' :
       s === 'PAUSED'    ? 'badge-amber' :
       s === 'ERROR'     ? 'badge-red'   :
-      'badge-navy';
+      'badge-slate';
     return `<span class="badge ${cls}">${MC._escHtml(s)}</span>`;
   },
 
@@ -3370,7 +3370,7 @@ MC.admin = {
         ? (u.flag === 'never_logged_in' ? '<span class="badge badge-red">NEVER</span>'
          : u.flag === 'inactive_90d'    ? '<span class="badge badge-amber">STALE</span>'
          :                               '<span class="badge badge-green">ACTIVE</span>')
-        : '<span class="badge badge-navy">INACTIVE</span>';
+        : '<span class="badge badge-slate">INACTIVE</span>';
       return `<tr class="${rowCls}">
         <td>${MC._escHtml(u.name)}</td>
         <td class="small text-muted"><code>${MC._escHtml(u.username)}</code></td>

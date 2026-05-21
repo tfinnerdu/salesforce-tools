@@ -140,7 +140,7 @@ MC.admin = {
       s === 'EXECUTING' ? 'badge-green' :
       s === 'PAUSED'    ? 'badge-amber' :
       s === 'ERROR'     ? 'badge-red'   :
-      'badge-navy';
+      'badge-slate';
     return `<span class="badge ${cls}">${MC._escHtml(s)}</span>`;
   },
 
@@ -332,7 +332,7 @@ MC.admin = {
         ? (u.flag === 'never_logged_in' ? '<span class="badge badge-red">NEVER</span>'
          : u.flag === 'inactive_90d'    ? '<span class="badge badge-amber">STALE</span>'
          :                               '<span class="badge badge-green">ACTIVE</span>')
-        : '<span class="badge badge-navy">INACTIVE</span>';
+        : '<span class="badge badge-slate">INACTIVE</span>';
       return `<tr class="${rowCls}">
         <td>${MC.sfLinkTag(u.id, 'User', u.name)}</td>
         <td class="small text-muted"><code>${MC._escHtml(u.username)}</code></td>
@@ -608,7 +608,7 @@ MC.admin = {
   _eventTypeBadge(type) {
     const t = (type || '').trim();
     const cls =
-      t === 'Flow'          ? 'badge-navy'  :
+      t === 'Flow'          ? 'badge-slate'  :
       t === 'ApexTrigger'   ? 'badge-blue'  :
       t === 'WorkflowAlert' ? 'badge-amber' :
       'badge-secondary';
@@ -697,7 +697,7 @@ MC.admin = {
     tbody.innerHTML = templates.map(t => {
       const activeBadge = t.is_active
         ? '<span class="badge badge-green">ACTIVE</span>'
-        : '<span class="badge badge-navy">INACTIVE</span>';
+        : '<span class="badge badge-slate">INACTIVE</span>';
       const encodingCell = (t.encoding || '').toUpperCase() === 'UTF-8'
         ? `<span class="small">${MC._escHtml(t.encoding)}</span>`
         : `<span class="badge badge-amber">${MC._escHtml(t.encoding || '—')}</span>`;
@@ -783,7 +783,7 @@ MC.admin = {
       a === 'Created'   ? 'badge-green'  :
       a === 'Changed'   ? 'badge-amber'  :
       a === 'Deleted'   ? 'badge-red'    :
-      a === 'Installed' ? 'badge-navy'   :
+      a === 'Installed' ? 'badge-slate'   :
       a === 'Activated' ? 'badge-blue'   :
       'badge-secondary';
     return `<span class="badge ${cls}">${MC._escHtml(a || '—')}</span>`;
@@ -1170,7 +1170,7 @@ MC.customSettings = {
       }
       tbody.innerHTML = records.map(r => {
         const ownerBadgeCls =
-          r._owner_type === 'Org'     ? 'badge-navy'  :
+          r._owner_type === 'Org'     ? 'badge-slate'  :
           r._owner_type === 'Profile' ? 'badge-blue'  :
           'badge-secondary';
         return `<tr>
@@ -1255,7 +1255,7 @@ MC.permissions = {
       `<button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2"
                data-pset-id="${MC._escHtml(ps.id)}" onclick="MC.permissions.loadPermSetDetail('${MC._escHtml(ps.id)}')">
         <span class="small fw-semibold">${MC._escHtml(ps.label || ps.name)}</span>
-        <span class="badge ${ps.user_count > 0 ? 'badge-navy' : 'badge-secondary'} ms-2">${ps.user_count}</span>
+        <span class="badge ${ps.user_count > 0 ? 'badge-slate' : 'badge-secondary'} ms-2">${ps.user_count}</span>
        </button>`
     ).join('');
   },
@@ -1275,7 +1275,7 @@ MC.permissions = {
       detail.innerHTML = `
         <div class="card shadow-sm">
           <div class="card-header py-2">
-            <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">${MC._escHtml(d.label)}${linkHtml}</h6>
+            <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">${MC._escHtml(d.label)}${linkHtml}</h6>
             ${d.description ? `<small class="text-muted">${MC._escHtml(d.description)}</small>` : ''}
           </div>
           <div class="card-body p-0">
@@ -1399,7 +1399,7 @@ MC.permissions = {
       detail.innerHTML = `
         <div class="card shadow-sm">
           <div class="card-header py-2">
-            <h6 class="fw-semibold mb-0" style="color:var(--doane-navy);">${nameLink}</h6>
+            <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">${nameLink}</h6>
             <small class="text-muted">${MC._escHtml(d.username)} &nbsp;·&nbsp; Profile: ${MC._escHtml(d.profile_name)} &nbsp;·&nbsp; License: ${MC._escHtml(d.license || '—')}</small>
           </div>
           <div class="card-body p-0">
@@ -1599,7 +1599,7 @@ MC.automation = {
         tbody.innerHTML = flows.map(f =>
           `<tr>
             <td class="small fw-semibold">${MC._escHtml(f.label)}</td>
-            <td><span class="badge badge-navy">${MC._escHtml(f.type || '—')}</span></td>
+            <td><span class="badge badge-slate">${MC._escHtml(f.type || '—')}</span></td>
             <td>${this._statusBadge(f.status)}</td>
             <td class="small text-muted">${MC._escHtml(f.description || '—')}</td>
             <td class="small text-nowrap">${MC._fmtTime(f.last_modified)}</td>
