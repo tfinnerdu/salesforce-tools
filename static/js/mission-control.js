@@ -1753,6 +1753,9 @@ MC.orgDiff = {
 // ── Join Builder ──────────────────────────────────────────────────────────────
 
 MC.joinBuilder = {
+  _sfObjects: [],
+  _sqlTables: [],
+
   init() {
     document.getElementById('btnBuild')?.addEventListener('click', () => this.buildQuery());
     document.getElementById('btnRun')?.addEventListener('click', () => this.runPython());
@@ -1762,8 +1765,78 @@ MC.joinBuilder = {
       const sql = document.getElementById('generatedSql')?.textContent || '';
       MC.copyToClipboard(sql);
     });
+    this._attachTypeahead('sfObject', 'sfObjectMenu', () => this._sfObjects);
+    this._attachTypeahead('sqlTable', 'sqlTableMenu', () => this._sqlTables);
     this.loadSfObjects();
     this.loadSqlSchema();
+  },
+
+  // ── Typeahead ───────────────────────────────────────────────────────────────
+  // A custom dropdown so the menu width matches the input. Native <datalist>
+  // popups are browser-positioned and overflow the field, which looks off.
+
+  _attachTypeahead(inputId, menuId, getItems) {
+    const input = document.getElementById(inputId);
+    const menu  = document.getElementById(menuId);
+    if (!input || !menu) return;
+    let activeIdx = -1;
+
+    const render = () => {
+      const q = input.value.trim().toLowerCase();
+      const all = getItems() || [];
+      const matches = (q ? all.filter(n => n.toLowerCase().includes(q)) : all).slice(0, 50);
+      activeIdx = -1;
+      if (matches.length === 0) {
+        menu.classList.add('d-none');
+        return;
+      }
+      menu.innerHTML = matches.map(n =>
+        `<div class="mc-typeahead-item" data-val="${MC._escHtml(n)}">${MC._escHtml(n)}</div>`
+      ).join('');
+      menu.classList.remove('d-none');
+    };
+
+    const choose = (val) => {
+      input.value = val;
+      menu.classList.add('d-none');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', () => setTimeout(() => menu.classList.add('d-none'), 150));
+    input.addEventListener('keydown', (e) => {
+      const items = Array.from(menu.querySelectorAll('.mc-typeahead-item'));
+      if (menu.classList.contains('d-none') || items.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, items.length - 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+      } else if (e.key === 'Enter') {
+        if (activeIdx >= 0) {
+          e.preventDefault();
+          choose(items[activeIdx].dataset.val);
+        }
+        return;
+      } else if (e.key === 'Escape') {
+        menu.classList.add('d-none');
+        return;
+      } else {
+        return;
+      }
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      items[activeIdx]?.scrollIntoView({ block: 'nearest' });
+    });
+    // mousedown (not click) so it fires before the input's blur
+    menu.addEventListener('mousedown', (e) => {
+      const item = e.target.closest('.mc-typeahead-item');
+      if (item) {
+        e.preventDefault();
+        choose(item.dataset.val);
+      }
+    });
   },
 
   // ── Typeahead data sources ──────────────────────────────────────────────────
@@ -1773,8 +1846,7 @@ MC.joinBuilder = {
     try {
       const objects = await MC.api('/data-ops/sf-objects') || [];
       const names = objects.map(o => (typeof o === 'string' ? o : (o.name || ''))).filter(Boolean);
-      const dl = document.getElementById('sfObjectDatalist');
-      if (dl) dl.innerHTML = names.map(n => `<option value="${MC._escHtml(n)}">`).join('');
+      this._sfObjects = names;
       if (status) status.textContent = `${names.length.toLocaleString()} objects — type to filter.`;
     } catch (err) {
       if (status) status.textContent = 'Could not load objects: ' + err.message;
@@ -1785,8 +1857,7 @@ MC.joinBuilder = {
     const status = document.getElementById('sqlSchemaStatus');
     try {
       const d = await MC.api('/data-ops/sql-schema');
-      const dl = document.getElementById('sqlTableDatalist');
-      if (dl) dl.innerHTML = (d.tables || []).map(t => `<option value="${MC._escHtml(t)}">`).join('');
+      this._sqlTables = d.tables || [];
       if (status) {
         if (d.table_count) {
           const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';

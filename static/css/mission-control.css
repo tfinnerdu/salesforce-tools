@@ -878,3 +878,37 @@ a {
   background: var(--doane-orange);
   color: #fff;
 }
+
+/* ── Typeahead dropdown ──────────────────────────────────────────────────── */
+/* Custom dropdown so the menu width matches the input. Native <datalist>
+   popups are browser-positioned and overflow the field. */
+.mc-typeahead-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+
+.mc-typeahead-item {
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-family: var(--bs-font-monospace, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mc-typeahead-item:hover,
+.mc-typeahead-item.active {
+  background: var(--doane-orange);
+  color: #fff;
+}
