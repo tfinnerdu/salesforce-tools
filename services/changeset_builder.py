@@ -49,7 +49,7 @@ def list_components(org: str, component_type: str) -> list:
 
     if component_type == 'ApexClass':
         soql = 'SELECT Name, LastModifiedDate FROM ApexClass ORDER BY Name'
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             name = r.get('Name', '')
             components.append({
@@ -60,7 +60,7 @@ def list_components(org: str, component_type: str) -> list:
 
     elif component_type == 'ApexTrigger':
         soql = 'SELECT Name, TableEnumOrId FROM ApexTrigger ORDER BY Name'
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             name = r.get('Name', '')
             obj = r.get('TableEnumOrId', '')
@@ -72,28 +72,22 @@ def list_components(org: str, component_type: str) -> list:
             })
 
     elif component_type == 'Flow':
+        # FlowDefinitionView (Data API) exposes ProcessType + IsActive;
+        # FlowDefinition (Tooling) has neither column.
         soql = (
-            'SELECT DeveloperName, MasterLabel, ProcessType, Status '
-            'FROM FlowDefinition ORDER BY MasterLabel'
+            'SELECT ApiName, Label, ProcessType, IsActive '
+            'FROM FlowDefinitionView ORDER BY Label'
         )
-        try:
-            result = sf.query(soql)
-        except Exception:
-            # Fallback: some orgs expose FlowDefinition only via Tooling API
-            logger.info('FlowDefinition standard query failed — trying Tooling API')
-            result = sf.restful('tooling/query/', params={'q': soql})
+        result = sf.query_all(soql)
         for r in result.get('records', []):
-            dev_name = r.get('DeveloperName', '')
-            label = r.get('MasterLabel', dev_name)
+            api_name = r.get('ApiName', '')
+            label = r.get('Label', api_name)
             process_type = r.get('ProcessType', '')
-            status = r.get('Status', '')
-            display = label
-            if process_type:
-                display = f'{label} ({process_type})'
-            if status and status.lower() != 'active':
-                display = f'{display} [{status}]'
+            display = f'{label} ({process_type})' if process_type else label
+            if not r.get('IsActive'):
+                display = f'{display} [Inactive]'
             components.append({
-                'member': dev_name,
+                'member': api_name,
                 'type': 'Flow',
                 'label': display,
             })
@@ -103,7 +97,7 @@ def list_components(org: str, component_type: str) -> list:
             'SELECT Name, Label FROM PermissionSet '
             'WHERE IsOwnedByProfile = false ORDER BY Label'
         )
-        result = sf.query(soql)
+        result = sf.query_all(soql)
         for r in result.get('records', []):
             name = r.get('Name', '')
             label = r.get('Label', name)
@@ -114,32 +108,32 @@ def list_components(org: str, component_type: str) -> list:
             })
 
     elif component_type == 'CustomField':
+        # CustomField has no 'Label' column (it lives in Metadata). Ordering
+        # by a cross-entity relationship can also choke the Tooling API, so
+        # the result is sorted in Python instead.
         soql = (
-            'SELECT DeveloperName, EntityDefinition.QualifiedApiName, Label '
+            'SELECT DeveloperName, EntityDefinition.QualifiedApiName '
             'FROM CustomField WHERE ManageableState = \'unmanaged\' '
-            'ORDER BY EntityDefinition.QualifiedApiName, DeveloperName '
-            'LIMIT 500'
+            'LIMIT 2000'
         )
         result = sf.restful('tooling/query/', params={'q': soql})
         for r in result.get('records', []):
             dev_name = r.get('DeveloperName', '')
             entity = r.get('EntityDefinition') or {}
             obj_name = entity.get('QualifiedApiName', '')
-            field_label = r.get('Label', dev_name)
             member = f'{obj_name}.{dev_name}__c'
-            label = f'{member} — {field_label}' if field_label else member
             components.append({
                 'member': member,
                 'type': 'CustomField',
-                'label': label,
+                'label': member,
             })
 
     elif component_type == 'ValidationRule':
+        # The Tooling API cannot ORDER BY a cross-entity relationship over
+        # every ValidationRule (UNKNOWN_EXCEPTION) — sort in Python.
         soql = (
             'SELECT ValidationName, EntityDefinition.QualifiedApiName '
-            'FROM ValidationRule '
-            'ORDER BY EntityDefinition.QualifiedApiName, ValidationName '
-            'LIMIT 500'
+            'FROM ValidationRule LIMIT 2000'
         )
         result = sf.restful('tooling/query/', params={'q': soql})
         for r in result.get('records', []):
@@ -156,6 +150,7 @@ def list_components(org: str, component_type: str) -> list:
     else:
         logger.warning('list_components: unsupported type %s', component_type)
 
+    components.sort(key=lambda c: c['member'])
     return components
 
 

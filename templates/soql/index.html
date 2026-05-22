@@ -32,7 +32,7 @@
         <!-- Fields Panel -->
         <div id="fieldsPanelWrap" class="d-none mt-3">
           <div class="d-flex justify-content-between align-items-center mb-1">
-            <small class="fw-semibold text-navy" id="fieldsObjectLabel" style="color:var(--doane-navy)"></small>
+            <small class="fw-semibold text-navy" id="fieldsObjectLabel" style="color:var(--doane-slate)"></small>
             <span class="mc-info-icon"
                   data-bs-toggle="popover"
                   data-bs-trigger="focus"
@@ -60,7 +60,7 @@
       <!-- Button row -->
       <div class="d-flex flex-wrap gap-2 align-items-center mb-3 no-print">
         <button id="btnRun" class="btn btn-doane btn-sm">&#9654; Run</button>
-        <button id="btnRunAll" class="btn btn-navy btn-sm">&#9654;&#9654; Run All Pages</button>
+        <button id="btnRunAll" class="btn btn-slate btn-sm">&#9654;&#9654; Run All Pages</button>
         <button id="btnExplain" class="btn btn-outline-secondary btn-sm">Explain Plan</button>
         <button id="btnExport" class="btn btn-outline-secondary btn-sm">&#11123; Download CSV</button>
         <button id="btnSave" class="btn btn-outline-secondary btn-sm">&#128190; Save Query</button>
@@ -74,6 +74,25 @@
               data-bs-title="Saved Queries"
               data-bs-content="Saved queries are stored per IP address in the local PostgreSQL database. They persist across sessions. Share common diagnostic queries here so the whole team uses consistent definitions.">ⓘ</span>
         <button id="btnDeleteSaved" class="btn btn-outline-danger btn-sm d-none">Delete</button>
+      </div>
+
+      <!-- Field & Operator Helper -->
+      <div class="card shadow-sm mb-3 no-print" id="soqlHelper">
+        <div class="card-header py-1 d-flex justify-content-between align-items-center"
+             style="cursor:pointer" onclick="MC.soql.toggleHelper()">
+          <small class="fw-semibold" style="color:var(--doane-slate)">Field &amp; Operator Helper</small>
+          <small class="text-muted" id="soqlHelperToggle">&#9650;</small>
+        </div>
+        <div class="card-body py-2" id="soqlHelperBody">
+          <div class="mb-2">
+            <small class="text-muted d-block mb-1">Operators &amp; keywords &mdash; click to insert at cursor</small>
+            <div id="soqlOperators" class="d-flex flex-wrap gap-1"></div>
+          </div>
+          <div>
+            <small class="text-muted d-block mb-1" id="soqlHelperFieldsLabel">Fields &mdash; select an object in the explorer</small>
+            <div id="soqlHelperFields" class="d-flex flex-wrap gap-1" style="max-height:150px;overflow-y:auto"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Results area -->
@@ -110,7 +129,7 @@
       <div class="card shadow-sm mt-3" id="historyPanel">
         <div class="card-header d-flex align-items-center justify-content-between"
              style="cursor:pointer" onclick="MC.soql.toggleHistory()">
-          <span class="fw-semibold small" style="color:var(--doane-navy);">
+          <span class="fw-semibold small" style="color:var(--doane-slate);">
             &#128336; Recent Queries
             <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
                   data-bs-title="Query History"

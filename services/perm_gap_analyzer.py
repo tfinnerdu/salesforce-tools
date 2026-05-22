@@ -77,7 +77,7 @@ def compare(org: str, ps_id_a: str, ps_id_b: str) -> dict:
             f"FROM ObjectPermissions "
             f"WHERE ParentId IN ('{ps_id_a}', '{ps_id_b}')"
         )
-        obj_res = sf.query(obj_soql)
+        obj_res = sf.query_all(obj_soql)
         obj_gaps = _build_object_gaps(obj_res.get('records', []), ps_id_a, ps_id_b)
 
         # Field permissions
@@ -86,7 +86,7 @@ def compare(org: str, ps_id_a: str, ps_id_b: str) -> dict:
             f"FROM FieldPermissions "
             f"WHERE ParentId IN ('{ps_id_a}', '{ps_id_b}')"
         )
-        field_res = sf.query(field_soql)
+        field_res = sf.query_all(field_soql)
         field_gaps = _build_field_gaps(field_res.get('records', []), ps_id_a, ps_id_b)
 
     except Exception:
@@ -106,7 +106,7 @@ def compare(org: str, ps_id_a: str, ps_id_b: str) -> dict:
     obj_a_set: set = set()
     obj_b_set: set = set()
     try:
-        for r in sf.query(
+        for r in sf.query_all(
             f"SELECT SobjectType, ParentId FROM ObjectPermissions "
             f"WHERE ParentId IN ('{ps_id_a}', '{ps_id_b}')"
         ).get('records', []):

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Convert - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Convert
+      <span class="badge badge-amber ms-1">Not Implemented</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="fw-semibold mb-3" style="color:var(--doane-slate)">
+            Not currently implemented &mdash; intentionally
+          </h5>
+          <p>
+            In Validity DemandTools, <strong>Convert</strong> performs Salesforce
+            <em>Lead conversion</em> &mdash; turning a Lead into an Account, Contact,
+            and optionally an Opportunity.
+          </p>
+          <p>This module has been deliberately left unbuilt for two reasons:</p>
+          <ul>
+            <li class="mb-2">
+              <strong>No Doane use case.</strong> The student data model is the
+              <strong>Person Account</strong>, populated through the
+              Colleague &rarr; Ethos &rarr; Conductor pipeline. There is no
+              Lead-based admissions funnel for a Convert tool to act on.
+            </li>
+            <li class="mb-2">
+              <strong>Disproportionate cost.</strong> Salesforce exposes no REST
+              endpoint for Lead conversion &mdash; it requires the SOAP
+              <code>convertLead()</code> call (or an Apex shim). Building and
+              maintaining that plumbing for a feature with no users would not be
+              a responsible use of effort.
+            </li>
+          </ul>
+          <p class="mb-0">
+            If a genuine need emerges &mdash; for example, if Admissions adopts a
+            Lead-based prospect workflow &mdash; this tab is the place it would
+            live. Until then, the bulk-data needs of the migration are covered by
+            <a href="/data-ops/import">Import</a>,
+            <a href="/data-ops/export">Export</a>,
+            <a href="/data-ops/modify">Modify</a>,
+            <a href="/data-ops/tune">Tune</a>, and
+            <a href="/data-ops/match">Match</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

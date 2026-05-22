@@ -51,13 +51,32 @@ def list_logs(org: str, since: str = None) -> list:
 
 
 def get_log_body(org: str, log_id: str) -> str:
-    """Download and return raw log text for a single ApexLog."""
+    """Download and return raw log text for a single ApexLog.
+
+    The Body endpoint returns plain text, not JSON. simple_salesforce's
+    restful() tries to parse the response as JSON — for this one path we
+    fall back to a raw HTTP fetch via the session so we get the text as-is.
+    """
     sf = get_sf(org)
     path = f'tooling/sobjects/ApexLog/{log_id}/Body'
-    result = sf.restful(path)
-    if isinstance(result, str):
-        return result
-    return result.get('body', '') if isinstance(result, dict) else ''
+    try:
+        result = sf.restful(path)
+        if isinstance(result, str):
+            return result
+        if isinstance(result, dict):
+            return result.get('body', '')
+        return str(result) if result else ''
+    except Exception:
+        # simple_salesforce failed to parse the plain-text response as JSON.
+        # Use the underlying requests session to fetch the raw text directly.
+        # sf.session carries no auth on its own — the bearer token lives in
+        # sf.headers, so it must be passed explicitly or the fetch 401s.
+        if hasattr(sf, 'session') and hasattr(sf, 'base_url'):
+            url = sf.base_url + path
+            resp = sf.session.get(url, headers=getattr(sf, 'headers', None))
+            resp.raise_for_status()
+            return resp.text
+        raise
 
 
 def parse_log(body: str) -> dict:
@@ -159,55 +178,69 @@ def get_cpu_summary(org: str, limit: int = 20) -> list:
 
 
 def list_flow_errors(org: str) -> list:
-    """Return FlowInterview records with InterviewStatus = Error."""
+    """Return FlowInterview records with InterviewStatus = Error.
+
+    FlowInterview is a Data API object (NOT Tooling) — querying it via the
+    Tooling API fails with INVALID_TYPE. It also has no ErrorMessage /
+    StartInterviewTime / EndInterviewTime fields; the queryable fields are
+    InterviewLabel, CurrentElement, InterviewStatus, and CreatedDate.
+    """
     sf = get_sf(org)
     soql = (
-        'SELECT+Id,FlowVersionId,InterviewStatus,CurrentElement,ErrorMessage,'
-        'StartInterviewTime,EndInterviewTime+FROM+FlowInterview+'
-        'WHERE+InterviewStatus+=+%27Error%27+'
-        'ORDER+BY+StartInterviewTime+DESC+LIMIT+100'
+        "SELECT Id, InterviewLabel, CurrentElement, InterviewStatus, CreatedDate "
+        "FROM FlowInterview WHERE InterviewStatus = 'Error' "
+        "ORDER BY CreatedDate DESC LIMIT 100"
     )
-    path = f'tooling/query/?q={soql}'
-    result = sf.restful(path)
-    records = result.get('records', [])
+    try:
+        result = sf.query(soql)
+    except Exception as exc:
+        msg = str(exc)
+        if 'INVALID_TYPE' in msg or 'FlowInterview' in msg:
+            logger.debug('FlowInterview not queryable in this org')
+            return []
+        raise
     return [
         {
             'id': r.get('Id'),
-            'flow_version_id': r.get('FlowVersionId', ''),
+            'flow_label': r.get('InterviewLabel', '') or '',
             'status': r.get('InterviewStatus', ''),
-            'current_element': r.get('CurrentElement', ''),
-            'error_message': r.get('ErrorMessage', ''),
-            'start_time': r.get('StartInterviewTime', ''),
-            'end_time': r.get('EndInterviewTime', ''),
+            'current_element': r.get('CurrentElement', '') or '',
+            'created_date': r.get('CreatedDate', ''),
         }
-        for r in records
+        for r in result.get('records', [])
     ]
 
 
 def list_process_exceptions(org: str) -> list:
-    """Return pending ProcessException records."""
+    """Return pending ProcessException records (Order Management feature — skipped gracefully if unavailable)."""
     sf = get_sf(org)
     soql = (
-        'SELECT+Id,ExceptionType,Message,Status,SourceId,SourceObjectApiName,'
-        'CreatedDate+FROM+ProcessException+'
-        'WHERE+Status+=+%27Pending%27+'
-        'ORDER+BY+CreatedDate+DESC+LIMIT+100'
+        "SELECT Id, ExceptionType, Message, Status, SourceId, SourceObjectApiName, CreatedDate "
+        "FROM ProcessException "
+        "WHERE Status = 'Pending' "
+        "ORDER BY CreatedDate DESC LIMIT 100"
     )
-    path = f'tooling/query/?q={soql}'
-    result = sf.restful(path)
-    records = result.get('records', [])
-    return [
-        {
-            'id': r.get('Id'),
-            'exception_type': r.get('ExceptionType', ''),
-            'message': r.get('Message', ''),
-            'status': r.get('Status', ''),
-            'source_id': r.get('SourceId', ''),
-            'source_object': r.get('SourceObjectApiName', ''),
-            'created_date': r.get('CreatedDate', ''),
-        }
-        for r in records
-    ]
+    try:
+        result = sf.query(soql)
+        records = result.get('records', [])
+        return [
+            {
+                'id': r.get('Id'),
+                'exception_type': r.get('ExceptionType', ''),
+                'message': r.get('Message', ''),
+                'status': r.get('Status', ''),
+                'source_id': r.get('SourceId', ''),
+                'source_object': r.get('SourceObjectApiName', ''),
+                'created_date': r.get('CreatedDate', ''),
+            }
+            for r in records
+        ]
+    except Exception as exc:
+        msg = str(exc)
+        if 'INVALID_TYPE' in msg or 'ProcessException' in msg:
+            logger.debug('ProcessException not available in this org (Order Management not enabled)')
+            return []
+        raise
 
 
 # ── Trace Flags ──────────────────────────────────────────────────────────────
@@ -220,16 +253,50 @@ DEBUG_LEVELS = {
 }
 
 
+def _entity_type_from_id(record_id: str) -> str:
+    """Derive a traced-entity type from a Salesforce ID key prefix.
+
+    TraceFlag has no TracedEntityType column — the type must be inferred
+    from the TracedEntityId prefix.
+    """
+    return {
+        '005': 'User',
+        '01p': 'ApexClass',
+        '01q': 'ApexTrigger',
+        '0Af': 'AsyncApexJob',
+    }.get((record_id or '')[:3], '')
+
+
 def list_trace_flags(org: str) -> list:
-    """Return active TraceFlag records via Tooling API."""
+    """Return active TraceFlag records via Tooling API.
+
+    TraceFlag has no TracedEntityType field — querying it returns
+    INVALID_FIELD. The type is derived from the TracedEntityId prefix.
+    """
     sf = get_sf(org)
     soql = (
         "SELECT Id, LogType, StartDate, ExpirationDate, "
-        "DebugLevel.DeveloperName, DebugLevel.Id, "
-        "TracedEntityId, TracedEntityType "
+        "DebugLevel.DeveloperName, DebugLevel.Id, TracedEntityId "
         "FROM TraceFlag ORDER BY ExpirationDate DESC LIMIT 50"
     )
-    result = sf.restful('tooling/query/', params={'q': soql})
+    try:
+        result = sf.restful('tooling/query/', params={'q': soql})
+    except Exception:
+        # Fall back to a simpler query without the DebugLevel relationship
+        # in case the org's API version or config rejects the traversal.
+        try:
+            simple = ("SELECT Id, LogType, StartDate, ExpirationDate, "
+                      "DebugLevelId, TracedEntityId "
+                      "FROM TraceFlag ORDER BY ExpirationDate DESC LIMIT 50")
+            result = sf.restful('tooling/query/', params={'q': simple})
+            for r in result.get('records', []):
+                if 'DebugLevel' not in r:
+                    r['DebugLevel'] = {'DeveloperName': r.get('DebugLevelId', ''),
+                                       'Id': r.get('DebugLevelId', '')}
+        except Exception:
+            if Config.SF_MOCK:
+                return _mock_trace_flags()
+            return []
     flags = []
     for r in result.get('records', []):
         dl = r.get('DebugLevel') or {}
@@ -250,7 +317,7 @@ def list_trace_flags(org: str) -> list:
             'debug_level_name': dl.get('DeveloperName', ''),
             'debug_level_id': dl.get('Id', ''),
             'traced_entity_id': r.get('TracedEntityId', ''),
-            'traced_entity_type': r.get('TracedEntityType', ''),
+            'traced_entity_type': _entity_type_from_id(r.get('TracedEntityId', '')),
             'expired': expired,
             'expires_in_minutes': expires_in,
         })

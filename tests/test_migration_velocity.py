@@ -91,3 +91,34 @@ def test_velocity_data_api_returns_success(client):
     assert body['data'] is not None
     assert 'daily' in body['data']
     assert 'pct_complete' in body['data']
+
+
+# ── list_recent_batches + /migration/batches/recent ───────────────────────────
+
+def test_list_recent_batches_returns_list():
+    """list_recent_batches always returns a list (empty when no DB)."""
+    from services import migration_velocity
+    result = migration_velocity.list_recent_batches('dev')
+    assert isinstance(result, list)
+
+
+def test_list_recent_batches_maps_db_rows(monkeypatch):
+    """DB rows are mapped to {date, records, status} for the dashboard widget."""
+    from services import migration_velocity
+    monkeypatch.setattr(migration_velocity, '_get_batches_from_db', lambda org: [
+        {'started_at': '2026-05-20T08:00:00', 'records_processed': 120},
+        {'started_at': '2026-05-19T08:00:00', 'records_processed': 95},
+    ])
+    rows = migration_velocity.list_recent_batches('prod')
+    assert len(rows) == 2
+    assert rows[0]['records'] == 120
+    assert rows[0]['status'] == 'Completed'
+
+
+def test_batches_recent_route_returns_success(client):
+    """GET /migration/batches/recent returns 200 (regression — was a 404)."""
+    resp = client.get('/migration/batches/recent')
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['success'] is True
+    assert isinstance(body['data'], list)

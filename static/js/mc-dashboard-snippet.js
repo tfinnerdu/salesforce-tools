@@ -207,10 +207,19 @@ MC.dashboard = {
       const catKeys = ['Data Quality', 'Integrations', 'Permissions', 'Testing', 'Go-Live'];
       const catRows = catKeys.map(k => {
         const val = categories[k] ?? categories[k.toLowerCase().replace(/\s+/g, '_')];
-        const display = val !== undefined ? val : '—';
+        let display = '—';
+        if (val !== undefined && val !== null) {
+          if (typeof val === 'object') {
+            const c = val.checked ?? 0;
+            const t = val.total ?? 0;
+            display = t > 0 ? `${c}/${t}` : '—';
+          } else {
+            display = String(val);
+          }
+        }
         return `<div class="d-flex justify-content-between small py-1 border-bottom">
           <span>${MC._escHtml(k)}</span>
-          <span class="text-muted">${display}</span>
+          <span class="text-muted">${MC._escHtml(display)}</span>
         </div>`;
       }).join('');
 

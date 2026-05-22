@@ -6,21 +6,26 @@ logger = logging.getLogger(__name__)
 
 
 def get_custom_metadata_types(org: str) -> list:
-    """List all Custom Metadata Types via Tooling API."""
+    """List Custom Metadata Types via the EntityDefinition Tooling object.
+
+    The Tooling CustomObject entity has no queryable Label/Description columns
+    (they live inside Metadata). EntityDefinition exposes Label directly and
+    reliably enumerates __mdt types; it requires a LIMIT (no queryMore).
+    """
     sf = get_sf(org)
     if Config.SF_MOCK:
         return _mock_cmdts()
     try:
-        resp = sf.restful('tooling/query/', params={'q': "SELECT Id, DeveloperName, Label, Description FROM CustomObject WHERE ManageableState='unmanaged' AND DeveloperName LIKE '%mdt%'"})
-        records = resp.get('records', [])
-        if not records:
-            # fallback: EntityDefinition approach
-            resp2 = sf.restful('tooling/query/', params={'q': "SELECT QualifiedApiName, Label, InternalSharingModel FROM EntityDefinition WHERE IsCustomizable=true AND QualifiedApiName LIKE '%__mdt' LIMIT 50"})
-            records = resp2.get('records', [])
-        return records
+        resp = sf.restful('tooling/query/', params={'q': (
+            "SELECT QualifiedApiName, Label FROM EntityDefinition "
+            "WHERE QualifiedApiName LIKE '%__mdt' ORDER BY Label LIMIT 500"
+        )})
+        return resp.get('records', [])
     except Exception as exc:
         logger.warning('custom metadata types failed: %s', exc)
-        return _mock_cmdts()
+        if Config.SF_MOCK:
+            return _mock_cmdts()
+        raise
 
 
 def get_custom_metadata_records(org: str, type_name: str) -> list:
@@ -34,7 +39,9 @@ def get_custom_metadata_records(org: str, type_name: str) -> list:
         return result.get('records', [])
     except Exception as exc:
         logger.warning('custom metadata records failed for %s: %s', type_name, exc)
-        return _mock_cmdt_records(type_name)
+        if Config.SF_MOCK:
+            return _mock_cmdt_records(type_name)
+        raise
 
 
 def get_custom_settings(org: str) -> list:
@@ -48,7 +55,9 @@ def get_custom_settings(org: str) -> list:
         return records
     except Exception as exc:
         logger.warning('custom settings list failed: %s', exc)
-        return _mock_custom_settings()
+        if Config.SF_MOCK:
+            return _mock_custom_settings()
+        raise
 
 
 def get_custom_setting_records(org: str, setting_name: str) -> list:
@@ -67,7 +76,9 @@ def get_custom_setting_records(org: str, setting_name: str) -> list:
         return records
     except Exception as exc:
         logger.warning('custom setting records failed for %s: %s', setting_name, exc)
-        return _mock_setting_records(setting_name)
+        if Config.SF_MOCK:
+            return _mock_setting_records(setting_name)
+        raise
 
 
 def _mock_cmdts() -> list:

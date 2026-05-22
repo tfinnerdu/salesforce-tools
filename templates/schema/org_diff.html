@@ -13,6 +13,9 @@
         <a class="nav-link active" href="/schema/org-diff">Org Schema Diff</a>
       </li>
       <li class="nav-item">
+        <a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link" href="/schema/field-usage">Field Usage</a>
       </li>
       <li class="nav-item">
@@ -23,6 +26,9 @@
       </li>
       <li class="nav-item">
         <a class="nav-link" href="/schema/snapshots">Snapshots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/inspect">Record Inspector</a>
       </li>
     </ul>
   </div>
@@ -56,16 +62,30 @@
         </div>
         <div class="col-sm-3 col-lg-2">
           <label for="rightOrgSelect" class="form-label small fw-semibold mb-1">Right Org</label>
+          {% set default_right = (available_orgs | reject('equalto', active_org) | first) or active_org %}
           <select id="rightOrgSelect" class="form-select form-select-sm">
-            <option value="dev">dev</option>
-            <option value="prod" selected>prod</option>
-            <option value="sandbox">sandbox</option>
+            {% for o in available_orgs %}
+            <option value="{{ o }}"{% if o == default_right %} selected{% endif %}>{{ o }}</option>
+            {% endfor %}
           </select>
         </div>
-        <div class="col-sm-4 col-lg-4">
-          <label for="objectMultiSelect" class="form-label small fw-semibold mb-1">Objects to Compare</label>
-          <input id="objectMultiSelect" type="text" class="form-control form-control-sm"
-                 placeholder="Account,Contact,hed__Application__c (blank = all)">
+        <div class="col-sm-5 col-lg-5">
+          <label class="form-label small fw-semibold mb-1">Objects to Compare</label>
+          <div id="objectTagContainer"
+               class="d-flex flex-wrap gap-1 align-items-center p-1 rounded border bg-white"
+               style="min-height:34px;cursor:text;"
+               onclick="document.getElementById('objectTagInput').focus()">
+            <input id="objectTagInput" type="text" class="border-0 flex-grow-1 small"
+                   placeholder="Type an object, press Enter to add…"
+                   style="min-width:140px;outline:none;background:transparent;">
+          </div>
+          <div class="d-flex justify-content-between mt-1">
+            <small class="text-muted">Default: 6 Ed Cloud objects. Add any SF API name.</small>
+            <button type="button" id="btnResetObjects"
+                    class="btn btn-link btn-sm p-0 text-muted" style="font-size:0.75rem;">
+              Reset to defaults
+            </button>
+          </div>
         </div>
         <div class="col-sm-auto">
           <button id="btnRunDiff" class="btn btn-doane btn-sm">

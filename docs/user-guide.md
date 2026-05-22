@@ -31,6 +31,13 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Apex Code Search](#apex-code-search)
    - [Schema Snapshots](#schema-snapshots)
 7. [Data Ops](#data-ops)
+   - [Data Import](#data-import)
+   - [Export](#export)
+   - [Bulk Modify](#bulk-modify)
+   - [Tune (Data Standardization)](#tune-data-standardization)
+   - [Match (Fuzzy Duplicate Detection)](#match-fuzzy-duplicate-detection)
+   - [Bulk Delete](#bulk-delete)
+   - [Bulk Reassign](#bulk-reassign)
    - [Join Builder](#join-builder)
    - [Bulk Update](#bulk-update)
    - [Record Lock Detector](#record-lock-detector)
@@ -66,6 +73,8 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
     - [Anonymizer](#anonymizer)
     - [Custom Metadata](#custom-metadata)
     - [Custom Settings](#custom-settings)
+    - [Permissions Audit](#permissions-audit)
+    - [Automation & Sharing](#automation--sharing)
 12. [Deploy](#deploy)
 13. [Settings](#settings)
 
@@ -100,6 +109,14 @@ Click any badge for a detailed tooltip. In mock mode, an **⚠ MOCK DATA** chip 
 ### Navigation
 
 The top nav contains all tabs: **Dashboard · Migration · Validation · SOQL · Schema · Data Ops · Logs · Observe · Impact · Admin · Deploy · Settings**. The active tab is underlined in amber.
+
+### Salesforce Deep Links
+
+When you're connected to a real org, any Salesforce record ID shown in a table —
+in SOQL results, scan results, the Users list, and more — is a clickable link
+(marked with a ↗) that opens that record directly in Salesforce in a new tab.
+This works for `Id` columns and lookup fields alike. In mock mode the IDs are
+plain text, since there is no real org to open.
 
 ---
 
@@ -456,6 +473,47 @@ Use after a sandbox refresh to verify the schema matches production, or before d
 
 ---
 
+### Org Metadata Diff
+
+**URL:** `/schema/metadata-diff`
+
+Compares *deployable metadata components* between two orgs — the counterpart to Org Schema Diff (which covers fields). Covers five metadata types: Apex Classes, Apex Triggers, Flows, Validation Rules, and Custom Objects.
+
+**How to use it:**
+1. The Left Org is the active org (shown as a badge). Select the Right Org from the dropdown (default: `prod`).
+2. Choose which metadata types to compare — all five are checked by default.
+3. Click **Run Diff**.
+
+Each accordion panel reports:
+- **Left-only** — components in the active org not yet deployed to the right org
+- **Right-only** — components in the right org that were removed from or never existed in the active org (legacy)
+- **Modified** — present in both, but configured differently (e.g., different API version, length, or active status)
+
+The component count badges are green (no differences) or orange (has differences). Expand any panel to see the full list.
+
+> In mock mode the seeded `prod` catalog deliberately lags the dev sandbox, so the diff shows representative results without a live Salesforce connection.
+
+---
+
+### Record Inspector
+
+**URL:** `/schema/inspect`
+
+Fetches every queryable field value for a single Salesforce record — a lightweight alternative to Salesforce Inspector for confirming migrated data without writing a SOQL query.
+
+**How to use it:**
+1. Enter the **Object API Name** (e.g. `Account`, `ContactPointEmail`).
+2. Choose the lookup mode:
+   - **Salesforce ID** — enter the 18-character record ID directly.
+   - **External ID** — enter the External ID field API name (e.g. `SIS_ID__c`) and the value to match.
+3. Click **Inspect**.
+
+The results table shows every non-compound, non-binary field with its API name, label, type, and live value. Use the **Filter fields** box to narrow by name, label, or value.
+
+> Tip: the "Open in Salesforce" button appears for SF ID lookups and links directly to the record in the org.
+
+---
+
 ### Field Usage
 
 **URL:** `/schema/field-usage`
@@ -530,6 +588,179 @@ Takes point-in-time snapshots of an object's field metadata and diffs two snapsh
 
 ## Data Ops
 
+The Data Ops tab houses the bulk data tools — the in-house equivalent of Validity
+DemandTools, tuned for the Colleague → Ethos → Salesforce migration. Every
+write tool follows the same safety pattern: **preview first, execute second**, and
+write operations are disabled in mock mode.
+
+### Data Import
+
+**URL:** `/data-ops/import`
+
+A four-step wizard for loading CSV files into Salesforce via the Bulk API — with a
+validation pass *before* anything is written.
+
+**Step 1 — Configure:** Choose the target Salesforce object, the operation
+(Insert, Upsert, Update, or Delete), and upload your CSV file. For Upsert, also
+enter the external ID field (e.g., `SIS_ID__c`). A preview of the first few rows
+appears so you can confirm the file parsed correctly.
+
+**Step 2 — Map Fields:** Match each CSV column to a Salesforce field. Click
+**Auto-Map** to bind columns whose names match a field automatically. Unmapped
+columns are ignored.
+
+**Step 3 — Validate:** Click **Run Validation**. The tool checks every row against
+the object's schema *without writing anything*:
+- Required fields that are empty (Insert only)
+- Numbers, dates, and booleans that don't parse
+- Email fields that aren't valid email addresses
+- Picklist values that aren't in the allowed set
+- CSV columns mapped to fields that don't exist
+
+You get four counts — Total, Clean, Warnings, Errors — and a row-by-row issue
+list. If there are errors, fix the CSV and re-validate. The **Import** step
+unlocks only when there are zero errors.
+
+**Step 4 — Import:** Review the summary and click **Execute Import**. Results show
+Succeeded / Failed counts. For any failures, click **Download Error CSV** to get
+your original rows back with a `_sf_error` column explaining each failure — fix
+those rows and re-import just them.
+
+> **Why two steps?** DemandTools shows you Salesforce's error only *after* a failed
+> load. The validate pass catches type errors, bad picklist values, and missing
+> required fields up front, so the actual import is clean.
+
+---
+
+### Export
+
+**URL:** `/data-ops/export`
+
+Runs a SOQL query and downloads the results as a CSV.
+
+**How to use it:**
+1. Enter a SOQL `SELECT` query.
+2. Set the filename.
+3. Leave **All pages** checked to fetch beyond the 2,000-row SOQL limit.
+4. Click **Download CSV**.
+
+Exported CSVs can be fed straight back into the Import tool — handy for pulling
+existing records, editing them, and upserting the changes.
+
+---
+
+### Bulk Modify
+
+**URL:** `/data-ops/modify`
+
+Updates one or more fields across every record matching a WHERE clause.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Add one or more **field / new-value** rows (use **+ Add Field** for more).
+3. Click **Preview** to see the affected records.
+4. Click **Update Records** to execute via the Bulk API.
+
+Capped at 10,000 records per operation. Optionally bypass triggers.
+
+---
+
+### Tune (Data Standardization)
+
+**URL:** `/data-ops/tune`
+
+Cleans up inconsistent data by applying standardization rules in bulk — the
+in-house equivalent of DemandTools' Tune. Consistent data fails fewer validation
+rules on import.
+
+**Available rules:**
+
+| Rule | What it does |
+|---|---|
+| Trim whitespace | Collapses repeated spaces and strips the ends |
+| Proper case (name-aware) | `JOHN SMITH` → `John Smith`; handles hyphens, apostrophes, the `Mc` prefix |
+| Title case | Capitalizes the first letter of every word |
+| UPPERCASE / lowercase | Forces case |
+| Lowercase email | Trims and lowercases an email address |
+| US phone format | `402.555.1234` → `(402) 555-1234` (left unchanged if not 10 digits) |
+| State name → abbreviation | `Nebraska` → `NE` |
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Click **+ Add Field**; enter a field API name and pick one or more rules
+   (they apply in the order shown). Add as many field rows as you need.
+3. Click **Preview** — a Before / After table shows exactly what would change,
+   sampled from the matching records.
+4. Click **Apply Standardization** to write the changes via the Bulk API.
+
+Records already in the correct format are left untouched and reported as
+"already clean".
+
+---
+
+### Match (Fuzzy Duplicate Detection)
+
+**URL:** `/data-ops/match`
+
+Finds **near**-duplicate records — typos, nicknames, transposed characters —
+that exact matching misses. Where the [Duplicate Radar](#duplicate-radar) catches
+records with an identical SIS ID or email, Match catches "John Smith" vs
+"Jon Smith". It is the in-house equivalent of DemandTools' Match.
+
+**How it works:**
+- Records are bucketed by the **Soundex** code of a blocking field, so only
+  plausibly-similar records are compared (this keeps the scan fast).
+- Within each bucket, every pair is scored 0–100% on how similar the chosen
+  compare fields are.
+- Pairs scoring at or above your threshold are reported.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. **Compare Fields** — comma-separated fields whose similarity is averaged
+   (e.g. `FirstName, LastName, PersonEmail`).
+3. **Blocking Field** — the field whose Soundex buckets records (e.g. `LastName`).
+4. Set the **Similarity Threshold** with the slider (default 0.85).
+5. Click **Find Matches** — candidate pairs appear sorted by score, with each
+   record's ID linked to Salesforce and the fields that differ highlighted.
+
+Match is **detection only** — it never modifies records. Review the candidate
+pairs and merge confirmed duplicates via the Duplicate Radar.
+
+> **Scan limits:** up to 2,000 records per run; very large Soundex buckets are
+> capped at 300 records (the summary flags when this happens). Narrow the WHERE
+> clause for large objects.
+
+---
+
+### Bulk Delete
+
+**URL:** `/data-ops/delete`
+
+Deletes every record matching a WHERE clause. Records go to the Recycle Bin
+(soft delete), so a same-day mistake is recoverable from Salesforce.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Click **Preview** — the matching records and total count appear.
+3. Click **Delete Records** and confirm.
+
+> **Warning:** Destructive. Always preview. Capped at 10,000 records per operation.
+
+---
+
+### Bulk Reassign
+
+**URL:** `/data-ops/reassign`
+
+Changes the Owner of every record matching a WHERE clause.
+
+**How to use it:**
+1. Enter the **Object** and a **WHERE clause**.
+2. Search for and select the **new owner** from the user picker.
+3. Click **Preview**, then **Reassign Records**.
+
+---
+
 ### Join Builder
 
 **URL:** `/data-ops/join-builder`
@@ -545,6 +776,24 @@ Builds and executes join queries combining Salesforce data with your SQL Server 
 6. Click **Export CSV** to download.
 
 The join is performed in Python — no direct database link between Salesforce and SQL Server is required. Results show matched rows, SF-only records (in SF but not SQL), and SQL-only records (in SQL but not SF).
+
+---
+
+### Data Backup
+
+**URL:** `/data-ops/backup`
+
+Captures point-in-time CSV snapshots of key objects (every queryable field) and stores them compressed in the database. It is the recovery point for the destructive Data Ops tools — the Salesforce Recycle Bin only soft-deletes, and only for 15 days.
+
+**How to use it:**
+1. Review the **Objects to back up** list — it pre-fills with `Account`, `Contact`, `Individual`, and the three ContactPoint objects. Edit it (one object per line) as needed.
+2. Click **Run Backup Now**. Large objects can take a minute.
+3. The **Backup History** table lists each run with its trigger, status, object count, and record count.
+4. Click **Download ZIP** on any run to download a ZIP archive containing one CSV per object.
+
+**Scheduled runs:** Set `BACKUP_ENABLED=true` to register a nightly run at 02:00 CT. `BACKUP_RETAIN` (default 14) controls how many runs are kept — older runs are pruned automatically.
+
+> **Note:** Restore is a separate, planned feature. For now, download a backup and re-import via the Import tool to recover data.
 
 ---
 
@@ -1028,6 +1277,62 @@ Browses Custom Setting records (Hierarchy and List types) without opening Salesf
 **Record columns:** Name · SetupOwner ID · Owner Type (Org / Profile / User).
 
 Hierarchy Custom Settings have one record per level — the most specific level wins at runtime. Use this to check bypass-trigger settings or integration feature flags before a migration run.
+
+---
+
+### Permissions Audit
+
+**URL:** `/admin` → Permissions Audit tab
+
+A one-stop drill-down for "who can see and do what" — the answer to permission
+questions without clicking through Setup. Four sub-tabs:
+
+**Permission Sets** — Lists every custom permission set with a badge showing how
+many users are assigned. Click a permission set to see, in three sub-tabs: the
+**users** assigned to it, the **object permissions** it grants (Read / Create /
+Edit / Delete / View All / Modify All), and the **field permissions** it grants.
+
+**By User** — Search for a user by name or username, then select them to see their
+full access picture: profile, license, every assigned permission set, and their
+aggregated object-level access across all those permission sets.
+
+**Object Matrix** — Enter any Salesforce object (e.g., `Account`). Shows every
+permission set that grants access to it and exactly which CRUD operations each one
+allows — a fast way to answer "who can delete Accounts?"
+
+**Field Coverage** — Enter an object to see a field-by-field matrix of read/edit
+access across all permission sets. Useful for confirming a sensitive field
+(e.g., `SIS_ID__c`) is locked down correctly.
+
+Wherever a record ID is shown and you're connected to a real org, names render as
+**↗ Open in Salesforce** links that jump straight to the record.
+
+---
+
+### Automation & Sharing
+
+**URL:** `/admin` → Automation & Sharing tab
+
+A read-only explorer for org configuration that normally takes a dozen Setup
+clicks to find — and the first place to look when an import row fails. Four
+sub-tabs:
+
+**Validation Rules** — Every validation rule in the org, with its object, active
+status, error field, and error message. When an import fails with a custom
+validation error, look the rule up here to see exactly what it checks.
+
+**Flows** — Every flow definition, with its type (record-triggered, screen,
+autolaunched) and status. Record-triggered flows are a common cause of silent
+import failures.
+
+**Apex Triggers** — Every Apex trigger and the object it runs on. The other usual
+suspect when a bulk load behaves unexpectedly.
+
+**Sharing Model** — The org-wide default (OWD) sharing setting for each object —
+internal and external access — with Private settings flagged in red.
+
+Each sub-tab loads on first view and has a filter box. Everything here is
+read-only.
 
 ---
 

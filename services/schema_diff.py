@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sf_provider import get_sf
+from sf_provider import get_sf, assert_orgs_comparable
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +91,7 @@ def diff_schemas(schema_left: dict, schema_right: dict) -> dict:
 
 def run_diff(left_org: str, right_org: str, objects: Optional[list] = None) -> dict:
     """Run schema diff for a list of objects across two orgs."""
+    assert_orgs_comparable(left_org, right_org)
     sf_left = get_sf(left_org)
     sf_right = get_sf(right_org)
     target_objects = objects if objects else ED_CLOUD_OBJECTS

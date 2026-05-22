@@ -104,7 +104,7 @@ MC.statusBadge = (status) => {
     s === 'success' || s === 'ok' || s === 'green' || s === 'pass' || s === 'passed' ? 'badge-green' :
     s === 'warning' || s === 'warn' || s === 'amber' || s === 'partial' ? 'badge-amber' :
     s === 'error' || s === 'fail' || s === 'failed' || s === 'red' ? 'badge-red' :
-    'badge-navy';
+    'badge-slate';
   return `<span class="badge ${cls}">${MC._escHtml(status?.toString().toUpperCase() || '')}</span>`;
 };
 
@@ -130,6 +130,42 @@ MC._escHtml = (s) => {
 MC._fmtTime = (ts) => {
   if (!ts) return 'Never';
   try { return new Date(ts).toLocaleString(); } catch (_) { return ts; }
+};
+
+/** True when the string looks like a real 15- or 18-char Salesforce record ID. */
+MC.isSfId = (v) =>
+  typeof v === 'string' && /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(v);
+
+/**
+ * Build a Salesforce URL for a record ID, or null when unavailable
+ * (mock instance, or the value is not a real SF ID).
+ * When objectApiName is given, builds the explicit Lightning record path;
+ * otherwise uses the bare-ID URL, which Salesforce resolves to the right
+ * record page regardless of object type.
+ */
+MC.sfLink = (id, objectApiName) => {
+  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
+  if (!instance || instance === 'mock.salesforce.com') return null;
+  if (!MC.isSfId(id)) return null;
+  return objectApiName
+    ? `https://${instance}/lightning/r/${objectApiName}/${id}/view`
+    : `https://${instance}/${id}`;
+};
+
+/** Return an anchor tag linking to the SF record, or just the ID/label text if unavailable. */
+MC.sfLinkTag = (id, objectApiName, label) => {
+  const url = MC.sfLink(id, objectApiName);
+  const display = MC._escHtml(label != null ? label : id);
+  return url
+    ? `<a href="${url}" target="_blank" rel="noopener" title="Open in Salesforce">${display} <span style="font-size:0.7em">↗</span></a>`
+    : display;
+};
+
+/** Build a Salesforce object list-view URL, or null when no live instance. */
+MC.sfObjectLink = (objectApiName) => {
+  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
+  if (!instance || instance === 'mock.salesforce.com' || !objectApiName) return null;
+  return `https://${instance}/lightning/o/${encodeURIComponent(objectApiName)}/list`;
 };
 
 
@@ -593,7 +629,9 @@ MC.duplicates = {
     }
     tbody.innerHTML = strategies.map(s => {
       const sampleIds = (s.sample_ids || []).slice(0, 4);
-      const sampleHtml = sampleIds.map(id => `<code class="small">${MC._escHtml(String(id))}</code>`).join(' ');
+      const sampleHtml = sampleIds
+        .map(id => `<span class="font-monospace small me-1">${MC.sfLinkTag(String(id), 'Account')}</span>`)
+        .join(' ');
       const masterId = sampleIds[0] || '';
       const victimId = sampleIds[1] || '';
       return `<tr>
@@ -743,11 +781,14 @@ MC.externalIds = {
       if (summaryEl) summaryEl.textContent = `${records.length.toLocaleString()} records missing ${field}`;
       tbody.innerHTML = records.length === 0
         ? '<tr><td colspan="3" class="text-center text-muted py-3">No missing records found.</td></tr>'
-        : records.map(r => `<tr>
-            <td class="font-monospace small">${MC._escHtml(r.Id || r.id || '—')}</td>
+        : records.map(r => {
+            const rid = r.Id || r.id || '';
+            return `<tr>
+            <td class="font-monospace small">${rid ? MC.sfLinkTag(rid, objectName) : '—'}</td>
             <td>${MC._escHtml(r.Name || r.name || '—')}</td>
             <td class="text-muted small">${MC._escHtml(r.CreatedDate || r.created_date || '—')}</td>
-          </tr>`).join('');
+          </tr>`;
+          }).join('');
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-danger small">Failed: ${MC._escHtml(err.message)}</td></tr>`;
     }
@@ -822,7 +863,9 @@ MC.contactpoints = {
       const samplesDiv = document.getElementById(`cp${capT}Samples`);
       const sampleList = document.getElementById(`cp${capT}SampleList`);
       if (sampleList && sampleIds.length > 0) {
-        sampleList.innerHTML = sampleIds.map(id => `<div>${MC._escHtml(String(id))}</div>`).join('');
+        sampleList.innerHTML = sampleIds
+          .map(id => `<div class="font-monospace small">${MC.sfLinkTag(String(id), `ContactPoint${capT}`)}</div>`)
+          .join('');
         if (samplesDiv) samplesDiv.classList.remove('d-none');
       }
     });
@@ -932,8 +975,61 @@ MC.soql = {
       }
     });
 
+    this._renderOperators();
     this.loadObjects();
     this.loadSavedQueries();
+  },
+
+  // ── Field & Operator Helper ─────────────────────────────────────────────────
+
+  _OPERATORS: [
+    'SELECT', 'FROM',
+    '=', '!=', '<', '>', '<=', '>=', 'LIKE', 'IN (', 'NOT IN (', 'INCLUDES (',
+    'AND', 'OR', 'NOT', 'NULL', 'TRUE', 'FALSE',
+    'WHERE', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET',
+    'ASC', 'DESC', 'NULLS LAST', 'COUNT()', 'TODAY', 'LAST_N_DAYS:',
+  ],
+
+  _renderOperators() {
+    const el = document.getElementById('soqlOperators');
+    if (!el) return;
+    el.innerHTML = this._OPERATORS.map(op =>
+      `<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 font-monospace"
+               style="font-size:0.72rem"
+               onclick="MC.soql._insertText(' ${MC._escHtml(op)} ')">${MC._escHtml(op)}</button>`
+    ).join('');
+  },
+
+  _insertText(text) {
+    const editor = document.getElementById('soqlEditor');
+    if (!editor) return;
+    const start = editor.selectionStart ?? editor.value.length;
+    const end = editor.selectionEnd ?? editor.value.length;
+    editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
+    const pos = start + text.length;
+    editor.focus();
+    editor.setSelectionRange(pos, pos);
+  },
+
+  toggleHelper() {
+    const body = document.getElementById('soqlHelperBody');
+    const toggle = document.getElementById('soqlHelperToggle');
+    if (!body) return;
+    const hidden = body.classList.toggle('d-none');
+    if (toggle) toggle.innerHTML = hidden ? '&#9660;' : '&#9650;';
+  },
+
+  _renderHelperFields(objectName, fields) {
+    const el = document.getElementById('soqlHelperFields');
+    const label = document.getElementById('soqlHelperFieldsLabel');
+    if (label) label.textContent = `Fields on ${objectName} — click to add to SELECT`;
+    if (!el) return;
+    el.innerHTML = fields.map(f => {
+      const name = f.name || f;
+      return `<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 font-monospace"
+               style="font-size:0.72rem"
+               onclick="MC.soql._insertField('${MC._escHtml(name)}')">${MC._escHtml(name)}</button>`;
+    }).join('');
   },
 
   async run(allPages = false) {
@@ -1019,6 +1115,11 @@ MC.soql = {
       const cells = columns.map(col => {
         const val = record[col];
         const display = val == null ? '' : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+        // Cells holding a Salesforce record ID (the Id column and any lookup
+        // field) link straight to the record. ID cells are not inline-editable.
+        if (MC.isSfId(display)) {
+          return `<td title="${MC._escHtml(display)}" class="font-monospace small">${MC.sfLinkTag(display)}</td>`;
+        }
         return `<td title="${MC._escHtml(display)}"
                     ondblclick="MC.soql.enableInlineEdit(this,'${MC._escHtml(objectName)}','${MC._escHtml(recordId)}','${MC._escHtml(col)}')"
                 >${MC._escHtml(display)}</td>`;
@@ -1111,6 +1212,7 @@ MC.soql = {
     try {
       const data = await MC.api(`/soql/objects/${encodeURIComponent(objectName)}/fields`);
       const fields = data.fields || data || [];
+      this._renderHelperFields(objectName, fields);
       if (fieldsEl) {
         fieldsEl.innerHTML = fields.map(f => {
           const name = f.name || f;
@@ -1254,7 +1356,7 @@ MC.soql = {
           <div class="font-monospace small text-truncate me-2" style="max-width:80%;"
                title="${MC._escHtml(h.query)}">${MC._escHtml(h.query)}</div>
           <div class="text-end text-muted" style="white-space:nowrap;font-size:0.75rem;">
-            <span class="badge badge-navy me-1">${h.row_count ?? '?'} rows</span>
+            <span class="badge badge-slate me-1">${h.row_count ?? '?'} rows</span>
             <button class="btn btn-sm p-0 text-muted" style="font-size:0.75rem;"
                     onclick="event.stopPropagation(); MC.soql._deleteHistory(${h.id}, this)">✕</button>
           </div>
@@ -1467,14 +1569,86 @@ MC.crosswalk = {
 // ── Org Diff ──────────────────────────────────────────────────────────────────
 
 MC.orgDiff = {
+  _defaultObjects: [
+    'Account', 'ContactPointEmail', 'ContactPointPhone',
+    'ContactPointAddress', 'IndividualApplication', 'Opportunity',
+  ],
+  _selectedObjects: [],
+
   init() {
     document.getElementById('btnRunDiff')?.addEventListener('click', () => this.run());
+    document.getElementById('btnResetObjects')?.addEventListener('click', () => this._resetObjects());
+    this._initTagInput();
+  },
+
+  _initTagInput() {
+    this._selectedObjects = [...this._defaultObjects];
+    this._renderTags();
+    const input = document.getElementById('objectTagInput');
+    if (!input) return;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const val = input.value.trim().replace(/,$/, '');
+        if (val) this._addObject(val);
+        input.value = '';
+      } else if (e.key === 'Backspace' && input.value === '' && this._selectedObjects.length > 0) {
+        this._selectedObjects.pop();
+        this._renderTags();
+      }
+    });
+  },
+
+  _addObject(name) {
+    const clean = name.trim();
+    if (!clean || this._selectedObjects.includes(clean)) return;
+    this._selectedObjects.push(clean);
+    this._renderTags();
+  },
+
+  _removeObject(name) {
+    this._selectedObjects = this._selectedObjects.filter(o => o !== name);
+    this._renderTags();
+  },
+
+  _resetObjects() {
+    this._selectedObjects = [...this._defaultObjects];
+    this._renderTags();
+    const input = document.getElementById('objectTagInput');
+    if (input) input.value = '';
+  },
+
+  _renderTags() {
+    const container = document.getElementById('objectTagContainer');
+    const input = document.getElementById('objectTagInput');
+    if (!container || !input) return;
+    // Remove existing tags (everything except the input)
+    Array.from(container.children).forEach(el => {
+      if (el !== input) el.remove();
+    });
+    // Prepend tags before the input
+    [...this._selectedObjects].reverse().forEach(obj => {
+      const tag = document.createElement('span');
+      tag.className = 'badge bg-secondary d-flex align-items-center gap-1';
+      tag.style.fontSize = '0.75rem';
+      tag.innerHTML = `${MC._escHtml(obj)}<button type="button" class="btn-close btn-close-white" style="font-size:0.55rem;" aria-label="Remove"></button>`;
+      tag.querySelector('.btn-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._removeObject(obj);
+      });
+      container.insertBefore(tag, input);
+    });
   },
 
   async run() {
     const rightOrg = document.getElementById('rightOrgSelect')?.value;
-    const objectsRaw = document.getElementById('objectMultiSelect')?.value?.trim();
-    const objects = objectsRaw ? objectsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    // Flush any pending text in the tag input
+    const tagInput = document.getElementById('objectTagInput');
+    if (tagInput?.value.trim()) {
+      this._addObject(tagInput.value.trim());
+      tagInput.value = '';
+    }
+    const objects = [...this._selectedObjects];
 
     const diffEmpty = document.getElementById('diffEmpty');
     const diffLoading = document.getElementById('diffLoading');
@@ -1579,13 +1753,173 @@ MC.orgDiff = {
 // ── Join Builder ──────────────────────────────────────────────────────────────
 
 MC.joinBuilder = {
+  _sfObjects: [],
+  _sqlTables: [],
+
   init() {
     document.getElementById('btnBuild')?.addEventListener('click', () => this.buildQuery());
     document.getElementById('btnRun')?.addEventListener('click', () => this.runPython());
+    document.getElementById('btnCheckFields')?.addEventListener('click', () => this.checkFields());
     document.getElementById('btnCopy')?.addEventListener('click', () => {
       const sql = document.getElementById('generatedSql')?.textContent || '';
       MC.copyToClipboard(sql);
     });
+    this._attachTypeahead('sfObject', 'sfObjectMenu', () => this._sfObjects);
+    this._attachTypeahead('sqlTable', 'sqlTableMenu', () => this._sqlTables);
+    this.loadSfObjects();
+    this.loadSqlSchema();
+  },
+
+  // ── Typeahead ───────────────────────────────────────────────────────────────
+  // A custom dropdown so the menu width matches the input. Native <datalist>
+  // popups are browser-positioned and overflow the field, which looks off.
+
+  _attachTypeahead(inputId, menuId, getItems) {
+    const input = document.getElementById(inputId);
+    const menu  = document.getElementById(menuId);
+    if (!input || !menu) return;
+    let activeIdx = -1;
+
+    const render = () => {
+      const q = input.value.trim().toLowerCase();
+      const all = getItems() || [];
+      const matches = (q ? all.filter(n => n.toLowerCase().includes(q)) : all).slice(0, 50);
+      activeIdx = -1;
+      if (matches.length === 0) {
+        menu.classList.add('d-none');
+        return;
+      }
+      menu.innerHTML = matches.map(n =>
+        `<div class="mc-typeahead-item" data-val="${MC._escHtml(n)}">${MC._escHtml(n)}</div>`
+      ).join('');
+      menu.classList.remove('d-none');
+    };
+
+    const choose = (val) => {
+      input.value = val;
+      menu.classList.add('d-none');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', () => setTimeout(() => menu.classList.add('d-none'), 150));
+    input.addEventListener('keydown', (e) => {
+      const items = Array.from(menu.querySelectorAll('.mc-typeahead-item'));
+      if (menu.classList.contains('d-none') || items.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, items.length - 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+      } else if (e.key === 'Enter') {
+        if (activeIdx >= 0) {
+          e.preventDefault();
+          choose(items[activeIdx].dataset.val);
+        }
+        return;
+      } else if (e.key === 'Escape') {
+        menu.classList.add('d-none');
+        return;
+      } else {
+        return;
+      }
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      items[activeIdx]?.scrollIntoView({ block: 'nearest' });
+    });
+    // mousedown (not click) so it fires before the input's blur
+    menu.addEventListener('mousedown', (e) => {
+      const item = e.target.closest('.mc-typeahead-item');
+      if (item) {
+        e.preventDefault();
+        choose(item.dataset.val);
+      }
+    });
+  },
+
+  // ── Typeahead data sources ──────────────────────────────────────────────────
+
+  async loadSfObjects() {
+    const status = document.getElementById('sfObjectStatus');
+    try {
+      const objects = await MC.api('/data-ops/sf-objects') || [];
+      const names = objects.map(o => (typeof o === 'string' ? o : (o.name || ''))).filter(Boolean);
+      this._sfObjects = names;
+      if (status) status.textContent = `${names.length.toLocaleString()} objects — type to filter.`;
+    } catch (err) {
+      if (status) status.textContent = 'Could not load objects: ' + err.message;
+    }
+  },
+
+  async loadSqlSchema() {
+    const status = document.getElementById('sqlSchemaStatus');
+    try {
+      const d = await MC.api('/data-ops/sql-schema');
+      this._sqlTables = d.tables || [];
+      if (status) {
+        if (d.table_count) {
+          const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
+          status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}) — type to filter.`;
+        } else {
+          status.textContent = 'No SQL schema cached yet — refresh it from Settings → SQL Server Schema Cache.';
+        }
+      }
+    } catch (err) {
+      if (status) status.textContent = 'Could not load SQL schema: ' + err.message;
+    }
+  },
+
+  // ── Field checker ───────────────────────────────────────────────────────────
+
+  async checkFields() {
+    const cfg = this._collectConfig();
+    const box = document.getElementById('joinCheckResult');
+    if (!box) return;
+    box.className = 'mb-3';
+    box.innerHTML = '<div class="text-muted small">Checking fields…</div>';
+    const problems = [];
+    const oks = [];
+
+    // SF side — validate against the object's describe
+    if (cfg.sf_object && cfg.sf_fields.length) {
+      try {
+        const fields = await MC.api(`/data-ops/sf-object-fields?object=${encodeURIComponent(cfg.sf_object)}`);
+        const known = new Set((fields || []).map(f => (f.name || f).toLowerCase()));
+        const bad = cfg.sf_fields.filter(f => !known.has(f.toLowerCase()));
+        if (bad.length) problems.push(`Salesforce ${cfg.sf_object}: unknown field(s) — ${bad.join(', ')}`);
+        else oks.push(`Salesforce ${cfg.sf_object}: all ${cfg.sf_fields.length} field(s) valid`);
+      } catch (err) {
+        problems.push(`Salesforce ${cfg.sf_object}: could not verify — ${err.message}`);
+      }
+    }
+
+    // SQL side — validate against the cached schema
+    if (cfg.sql_table && cfg.sql_fields.length) {
+      try {
+        const d = await MC.api(`/data-ops/sql-schema?table=${encodeURIComponent(cfg.sql_table)}`);
+        const cols = d.columns || [];
+        if (!cols.length) {
+          problems.push(`SQL ${cfg.sql_table}: not in the cached schema — refresh, or check the name`);
+        } else {
+          const known = new Set(cols.map(c => c.toLowerCase()));
+          const bad = cfg.sql_fields.filter(f => !known.has(f.toLowerCase()));
+          if (bad.length) problems.push(`SQL ${cfg.sql_table}: unknown column(s) — ${bad.join(', ')}`);
+          else oks.push(`SQL ${cfg.sql_table}: all ${cfg.sql_fields.length} column(s) valid`);
+        }
+      } catch (err) {
+        problems.push(`SQL ${cfg.sql_table}: could not verify — ${err.message}`);
+      }
+    }
+
+    if (!problems.length && !oks.length) {
+      box.innerHTML = '<div class="alert alert-secondary mb-0 small">Enter an object/table and fields to check.</div>';
+      return;
+    }
+    const okHtml = oks.map(o => `<div class="text-success small">&#10003; ${MC._escHtml(o)}</div>`).join('');
+    const badHtml = problems.map(p => `<div class="text-danger small">&#10007; ${MC._escHtml(p)}</div>`).join('');
+    box.className = `mb-3 alert ${problems.length ? 'alert-warning' : 'alert-success'}`;
+    box.innerHTML = okHtml + badHtml;
   },
 
   _collectConfig() {
@@ -1724,7 +2058,40 @@ MC.settings = {
       if (colId) this.runCollection(colId);
     });
 
+    // SQL Server schema cache
+    document.getElementById('btnRefreshSqlSchema')?.addEventListener('click', () => this.refreshSqlSchema());
+
     this.listCollections();
+    this.loadSqlSchemaStatus();
+  },
+
+  async loadSqlSchemaStatus() {
+    const status = document.getElementById('sqlSchemaCacheStatus');
+    if (!status) return;
+    try {
+      const d = await MC.api('/data-ops/sql-schema');
+      if (d.table_count) {
+        const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
+        status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}).`;
+      } else {
+        status.textContent = 'No SQL schema cached yet — click Refresh to build it.';
+      }
+    } catch (err) {
+      status.textContent = 'Could not read SQL schema cache: ' + err.message;
+    }
+  },
+
+  async refreshSqlSchema() {
+    const status = document.getElementById('sqlSchemaCacheStatus');
+    if (status) status.textContent = 'Refreshing SQL schema…';
+    try {
+      const d = await MC.api('/data-ops/sql-schema/refresh', 'POST');
+      MC.showToast(`SQL schema refreshed — ${d.table_count} tables`, 'success');
+      await this.loadSqlSchemaStatus();
+    } catch (err) {
+      MC.showToast('Schema refresh failed: ' + err.message, 'danger');
+      if (status) status.textContent = 'Refresh failed: ' + err.message;
+    }
   },
 
   async testOrg(orgName) {
@@ -1919,26 +2286,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ── SF Quick Links ────────────────────────────────────────────────────────────
-
-/** Build a Salesforce Lightning URL for a record. Returns '' when no instance known. */
-MC.sfUrl = (recordId, objectType = 'Account') => {
-  const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance || instance === 'mock.salesforce.com') return '';
-  return `https://${instance}/lightning/r/${encodeURIComponent(objectType)}/${encodeURIComponent(recordId)}/view`;
-};
-
-/**
- * Return an anchor tag opening the record in Salesforce, or plain text if mock.
- * label defaults to recordId.
- */
-MC.sfLinkHtml = (recordId, objectType = 'Account', label = null) => {
-  const url = MC.sfUrl(recordId, objectType);
-  const display = MC._escHtml(label || recordId);
-  if (!url) return `<code class="small">${display}</code>`;
-  return `<a href="${url}" target="_blank" rel="noopener" class="font-monospace small"
-             title="Open in Salesforce">${display} &#8599;</a>`;
-};
+// ── Mock-mode helpers ─────────────────────────────────────────────────────────
 
 /** Return true when Salesforce is in mock mode. */
 MC.isMock = () => document.querySelector('meta[name="sf-mock"]')?.content === 'true';
@@ -2004,10 +2352,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-'use strict';
-
 // ── Logs ──────────────────────────────────────────────────────────────────────
-// Paste this object into mission-control.js after the last MC.* namespace block.
 
 MC.logs = {
   _activeTab: 'apex',
@@ -2025,7 +2370,22 @@ MC.logs = {
     document.getElementById('btnRefreshApex')?.addEventListener('click', () => this.loadApexLogs());
     document.getElementById('btnRefreshFlows')?.addEventListener('click', () => this.loadFlowErrors());
     document.getElementById('btnRefreshCpuSummary')?.addEventListener('click', () => this.loadCpuSummary());
+    document.getElementById('btnRefreshTraceFlags')?.addEventListener('click', () => this.loadTraceFlags());
+    document.getElementById('btnDeleteExpired')?.addEventListener('click', () => this.deleteExpiredFlags());
+    document.getElementById('btnCreateTraceFlag')?.addEventListener('click', () => this.createTraceFlag());
     document.getElementById('btnCloseDetail')?.addEventListener('click', () => this._closeDetail());
+
+    // User search datalist population
+    document.getElementById('traceFlagEntitySearch')?.addEventListener('input', (e) => {
+      this._populateUserDatalist(e.target.value);
+    });
+    // Clear hidden entity ID when user types (requires re-selection)
+    document.getElementById('traceFlagEntitySearch')?.addEventListener('change', (e) => {
+      const val = e.target.value;
+      const dl = document.getElementById('traceFlagUserList');
+      const match = dl ? Array.from(dl.options).find(o => o.value === val) : null;
+      document.getElementById('traceFlagEntityId').value = match ? match.dataset.id : '';
+    });
 
     // Time-range toolbar
     document.getElementById('logTimeRange')?.addEventListener('change', (e) => {
@@ -2051,13 +2411,16 @@ MC.logs = {
     const showApex = tab === 'apex';
     const showFlows = tab === 'flows';
     const showCpu = tab === 'cpu';
+    const showTrace = tab === 'trace';
 
     document.getElementById('panelApex')?.classList.toggle('d-none', !showApex);
     document.getElementById('panelFlows')?.classList.toggle('d-none', !showFlows);
     document.getElementById('panelCpuSummary')?.classList.toggle('d-none', !showCpu);
+    document.getElementById('panelTrace')?.classList.toggle('d-none', !showTrace);
 
     if (tab === 'flows') this.loadFlowErrors();
     if (tab === 'cpu') this.loadCpuSummary();
+    if (tab === 'trace') this.loadTraceFlags();
   },
 
   async loadApexLogs() {
@@ -2228,7 +2591,7 @@ MC.logs = {
       if (tmList) {
         tmList.innerHTML = timeline.map(ev => `
           <li class="list-group-item small py-1">
-            <span class="badge badge-navy me-1">${MC._escHtml(ev.event)}</span>
+            <span class="badge badge-slate me-1">${MC._escHtml(ev.event)}</span>
             <span class="text-muted">${MC._escHtml(ev.detail)}</span>
           </li>`).join('');
       }
@@ -2374,10 +2737,10 @@ MC.logs = {
     const tbody = document.getElementById('flowsBody');
     if (!tbody) return;
     tbody.innerHTML = flows.map(f => `<tr>
-      <td><code class="small">${MC._escHtml(f.current_element)}</code></td>
-      <td class="small text-danger">${MC._escHtml(f.error_message)}</td>
-      <td class="text-muted small">${MC._fmtTime(f.start_time)}</td>
-      <td class="text-muted small">${MC._fmtTime(f.end_time)}</td>
+      <td class="small fw-semibold">${MC._escHtml(f.flow_label) || '—'}</td>
+      <td><code class="small">${MC._escHtml(f.current_element) || '—'}</code></td>
+      <td><span class="badge badge-red">${MC._escHtml(f.status)}</span></td>
+      <td class="text-muted small">${MC._fmtTime(f.created_date)}</td>
     </tr>`).join('');
   },
 
@@ -2391,6 +2754,181 @@ MC.logs = {
       <td>${MC.statusBadge(ex.status)}</td>
       <td class="small text-muted">${MC._fmtTime(ex.created_date)}</td>
     </tr>`).join('');
+  },
+
+  // ── Trace Flags ─────────────────────────────────────────────────────────────
+
+  _debugLevels: [],
+
+  async loadTraceFlags() {
+    const loading = document.getElementById('traceFlagsLoading');
+    const empty   = document.getElementById('traceFlagsEmpty');
+    const table   = document.getElementById('traceFlagsTable');
+
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    table?.classList.add('d-none');
+
+    try {
+      const [flags, levels] = await Promise.all([
+        MC.api('/logs/trace-flags'),
+        MC.api('/logs/trace-flags/debug-levels'),
+      ]);
+
+      // Populate debug level select
+      this._debugLevels = levels || [];
+      const levelSel = document.getElementById('traceFlagDebugLevel');
+      if (levelSel && levels && levels.length > 0) {
+        levelSel.innerHTML = levels.map(l =>
+          `<option value="${MC._escHtml(l.id)}">${MC._escHtml(l.label || l.name)}</option>`
+        ).join('');
+      }
+
+      // Populate also the user datalist with initial top users
+      await this._populateUserDatalist('');
+
+      if (!flags || flags.length === 0) {
+        empty?.classList.remove('d-none');
+      } else {
+        this._renderTraceFlagsTable(flags);
+        table?.classList.remove('d-none');
+      }
+    } catch (err) {
+      MC.showToast(`Failed to load trace flags: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderTraceFlagsTable(flags) {
+    const tbody = document.getElementById('traceFlagsTbody');
+    if (!tbody) return;
+    tbody.innerHTML = flags.map(f => {
+      const expired = f.expired;
+      const rowCls = expired ? 'table-secondary text-muted' : '';
+      let statusCell;
+      if (expired) {
+        statusCell = '<span class="badge bg-secondary">Expired</span>';
+      } else {
+        const mins = f.expires_in_minutes;
+        const color = (mins !== null && mins < 5) ? 'text-warning fw-semibold' : 'text-success fw-semibold';
+        statusCell = `<span class="${color}">${mins !== null ? mins + 'm remaining' : 'Active'}</span>`;
+      }
+      const deleteBtn = `<button class="btn btn-outline-danger btn-sm py-0"
+                                 onclick="MC.logs.deleteTraceFlag('${MC._escHtml(f.id)}')">
+                           &times; Delete
+                         </button>`;
+      return `<tr class="${rowCls}">
+        <td class="small font-monospace">${MC.sfLinkTag(f.traced_entity_id, f.traced_entity_type)}</td>
+        <td class="small">${MC._escHtml(f.traced_entity_type)}</td>
+        <td class="small">${MC._escHtml(f.debug_level_name)}</td>
+        <td class="small">${MC._escHtml(f.log_type)}</td>
+        <td class="small text-muted">${MC._fmtTime(f.expiration_date)}</td>
+        <td>${statusCell}</td>
+        <td class="no-print">${deleteBtn}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  async deleteTraceFlag(flagId) {
+    if (!confirm('Delete this trace flag?')) return;
+    try {
+      await MC.api(`/logs/trace-flags/${encodeURIComponent(flagId)}`, 'DELETE');
+      MC.showToast('Trace flag deleted', 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Delete failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async deleteExpiredFlags() {
+    try {
+      const result = await MC.api('/logs/trace-flags/delete-expired', 'DELETE');
+      const count = result ? result.deleted_count : 0;
+      MC.showToast(`Deleted ${count} expired trace flag${count !== 1 ? 's' : ''}`, 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Delete expired failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async createTraceFlag() {
+    const entityId      = document.getElementById('traceFlagEntityId')?.value.trim();
+    const entityType    = document.getElementById('traceFlagEntityType')?.value || 'User';
+    const debugLevelId  = document.getElementById('traceFlagDebugLevel')?.value.trim();
+    const durationSel   = document.getElementById('traceFlagDuration');
+    let duration = parseInt(durationSel?.value, 10);
+
+    // Handle "until midnight" option
+    if (durationSel?.options[durationSel.selectedIndex]?.dataset?.dynamic === 'true') {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      duration = Math.ceil((midnight - now) / 60000);
+    }
+
+    if (!entityId) {
+      MC.showToast('Please select a user or class first', 'warning');
+      return;
+    }
+    if (!debugLevelId) {
+      MC.showToast('Please select a debug level', 'warning');
+      return;
+    }
+
+    try {
+      await MC.api('/logs/trace-flags', 'POST', {
+        entity_id: entityId,
+        entity_type: entityType,
+        debug_level_id: debugLevelId,
+        duration_minutes: duration,
+      });
+      MC.showToast('Trace flag created successfully', 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Create failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async traceMe() {
+    try {
+      const [users, levels] = await Promise.all([
+        MC.api('/logs/trace-flags/users'),
+        MC.api('/logs/trace-flags/debug-levels'),
+      ]);
+      const user  = users && users.length > 0 ? users[0] : null;
+      const level = levels && levels.length > 0 ? levels[0] : null;
+      if (!user || !level) {
+        MC.showToast('Could not find user or debug level to trace', 'warning');
+        return;
+      }
+      await MC.api('/logs/trace-flags', 'POST', {
+        entity_id: user.id,
+        entity_type: 'User',
+        debug_level_id: level.id,
+        duration_minutes: 30,
+      });
+      MC.showToast('Trace flag active for 30 minutes — logs will appear in Apex Logs tab', 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Trace Me failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async _populateUserDatalist(search) {
+    try {
+      const url = search ? `/logs/trace-flags/users?q=${encodeURIComponent(search)}` : '/logs/trace-flags/users';
+      const users = await MC.api(url);
+      const dl = document.getElementById('traceFlagUserList');
+      if (dl && users) {
+        dl.innerHTML = users.map(u =>
+          `<option value="${MC._escHtml(u.name + ' <' + u.username + '>')}" data-id="${MC._escHtml(u.id)}">`
+        ).join('');
+      }
+    } catch (_) {
+      // ignore datalist population errors silently
+    }
   },
 };
 'use strict';
@@ -2484,7 +3022,7 @@ MC.observe = {
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body py-3 px-3">
             <div class="d-flex justify-content-between align-items-start mb-2">
-              <span class="fw-semibold small" style="color:var(--doane-navy);">${MC._escHtml(lim.name)}</span>
+              <span class="fw-semibold small" style="color:var(--doane-slate);">${MC._escHtml(lim.name)}</span>
               <span class="badge ${badgeCls}">${pct.toFixed(1)}%</span>
             </div>
             <div class="progress mb-2" style="height:8px;" title="${usedFmt} used of ${maxFmt}">
@@ -2544,7 +3082,7 @@ MC.observe = {
     if (emptyEl) emptyEl.classList.add('d-none');
 
     const palette = [
-      '#FF7900', '#1F3864', '#28a745', '#dc3545',
+      '#FF7900', '#0063B0', '#28a745', '#dc3545',
       '#ffc107', '#17a2b8', '#6610f2', '#e83e8c',
     ];
 
@@ -2637,8 +3175,8 @@ MC.observe = {
     }
 
     headEl.innerHTML = `<tr>
-      <th style="background:var(--doane-navy);color:#fff;">Query</th>
-      ${orgs.map(o => `<th style="background:var(--doane-navy);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
+      <th style="background:var(--doane-slate);color:#fff;">Query</th>
+      ${orgs.map(o => `<th style="background:var(--doane-slate);color:#fff;">${MC._escHtml(o.toUpperCase())}</th>`).join('')}
     </tr>`;
 
     bodyEl.innerHTML = queries.map(label => {
@@ -2663,7 +3201,7 @@ MC.observe = {
       }).join('');
 
       return `<tr>
-        <td class="small fw-semibold" style="color:var(--doane-navy);">${MC._escHtml(label)}</td>
+        <td class="small fw-semibold" style="color:var(--doane-slate);">${MC._escHtml(label)}</td>
         ${cells}
       </tr>`;
     }).join('');
@@ -3149,7 +3687,7 @@ MC.admin = {
       s === 'EXECUTING' ? 'badge-green' :
       s === 'PAUSED'    ? 'badge-amber' :
       s === 'ERROR'     ? 'badge-red'   :
-      'badge-navy';
+      'badge-slate';
     return `<span class="badge ${cls}">${MC._escHtml(s)}</span>`;
   },
 
@@ -3341,7 +3879,7 @@ MC.admin = {
         ? (u.flag === 'never_logged_in' ? '<span class="badge badge-red">NEVER</span>'
          : u.flag === 'inactive_90d'    ? '<span class="badge badge-amber">STALE</span>'
          :                               '<span class="badge badge-green">ACTIVE</span>')
-        : '<span class="badge badge-navy">INACTIVE</span>';
+        : '<span class="badge badge-slate">INACTIVE</span>';
       return `<tr class="${rowCls}">
         <td>${MC._escHtml(u.name)}</td>
         <td class="small text-muted"><code>${MC._escHtml(u.username)}</code></td>

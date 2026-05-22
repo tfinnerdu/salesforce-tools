@@ -52,6 +52,50 @@ def test_mock_bulk_jobs_bj003_is_failed():
     assert jobs['BJ003']['state'] == 'Failed'
 
 
+class _StubSF:
+    def __init__(self, records=None, raise_exc=None):
+        self._records = records or []
+        self._raise = raise_exc
+
+    def restful(self, path, **kw):
+        if self._raise:
+            raise self._raise
+        return {'records': self._records}
+
+
+def test_get_bulk_jobs_real_org_empty_does_not_leak_mock(monkeypatch):
+    """Regression: with SF_MOCK off, an empty org returns [] — never the 4 mock rows.
+
+    bulk_job_history previously fell back to _mock_bulk_jobs() on any failure,
+    so a real sandbox could silently show fabricated job history.
+    """
+    monkeypatch.setattr(bulk_job_history.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(bulk_job_history, 'get_sf', lambda org: _StubSF(records=[]))
+    assert bulk_job_history.get_bulk_jobs(org='prod') == []
+
+
+def test_get_bulk_jobs_real_org_error_propagates(monkeypatch):
+    """With SF_MOCK off, a Bulk API failure surfaces — it is not masked with mock data."""
+    monkeypatch.setattr(bulk_job_history.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(bulk_job_history, 'get_sf',
+                        lambda org: _StubSF(raise_exc=RuntimeError('Bulk API 500')))
+    with pytest.raises(RuntimeError, match='Bulk API 500'):
+        bulk_job_history.get_bulk_jobs(org='prod')
+
+
+def test_get_bulk_jobs_real_org_maps_records(monkeypatch):
+    """With SF_MOCK off, real ingest-job records are mapped to the UI shape."""
+    monkeypatch.setattr(bulk_job_history.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(bulk_job_history, 'get_sf', lambda org: _StubSF(records=[
+        {'id': '750xx', 'operation': 'insert', 'object': 'Account', 'state': 'JobComplete',
+         'numberRecordsProcessed': 10, 'numberRecordsFailed': 0},
+    ]))
+    jobs = bulk_job_history.get_bulk_jobs(org='prod')
+    assert len(jobs) == 1
+    assert jobs[0]['id'] == '750xx'
+    assert jobs[0]['object'] == 'Account'
+
+
 # ── Route integration tests ───────────────────────────────────────────────────
 
 def test_get_api_record_locks_returns_200(session_client):

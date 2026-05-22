@@ -54,6 +54,13 @@ MC.admin = {
     document.getElementById('emailTemplateSearch')?.addEventListener('input', (e) => {
       this._filterEmailTemplates(e.target.value.trim().toLowerCase());
     });
+    document.getElementById('btnEmailTemplatesPrev')?.addEventListener('click', () => {
+      if (this._emailTemplatesPage > 1) this._renderEmailTemplatesPage(this._emailTemplatesPage - 1);
+    });
+    document.getElementById('btnEmailTemplatesNext')?.addEventListener('click', () => {
+      const maxPage = Math.ceil(this._emailTemplatesView.length / this._emailTemplatesPageSize);
+      if (this._emailTemplatesPage < maxPage) this._renderEmailTemplatesPage(this._emailTemplatesPage + 1);
+    });
 
     // Wire all Refresh buttons inside the integrations tab
     document.querySelectorAll('.integ-refresh-btn').forEach(btn => {
@@ -74,6 +81,12 @@ MC.admin = {
     MC.customSettings.init();
     document.getElementById('loginHistorySearch')?.addEventListener('input', e => this._filterTable('loginHistoryTbody', e.target.value));
     document.getElementById('jobQueueAutoRefresh')?.addEventListener('change', e => this._setJobQueueAutoRefresh(e.target.checked));
+
+    document.getElementById('tab-permissions-btn')?.addEventListener('shown.bs.tab', () => MC.permissions.init());
+    document.getElementById('btnRefreshPermissions')?.addEventListener('click', () => MC.permissions.reload());
+
+    document.getElementById('tab-automation-btn')?.addEventListener('shown.bs.tab', () => MC.automation.init());
+    document.getElementById('btnRefreshAutomation')?.addEventListener('click', () => MC.automation.reload());
 
     // Status filter pills for job queue
     document.getElementById('jobQueueFilters')?.addEventListener('click', e => {
@@ -134,7 +147,7 @@ MC.admin = {
       s === 'EXECUTING' ? 'badge-green' :
       s === 'PAUSED'    ? 'badge-amber' :
       s === 'ERROR'     ? 'badge-red'   :
-      'badge-navy';
+      'badge-slate';
     return `<span class="badge ${cls}">${MC._escHtml(s)}</span>`;
   },
 
@@ -326,9 +339,9 @@ MC.admin = {
         ? (u.flag === 'never_logged_in' ? '<span class="badge badge-red">NEVER</span>'
          : u.flag === 'inactive_90d'    ? '<span class="badge badge-amber">STALE</span>'
          :                               '<span class="badge badge-green">ACTIVE</span>')
-        : '<span class="badge badge-navy">INACTIVE</span>';
+        : '<span class="badge badge-slate">INACTIVE</span>';
       return `<tr class="${rowCls}">
-        <td>${MC._escHtml(u.name)}</td>
+        <td>${MC.sfLinkTag(u.id, 'User', u.name)}</td>
         <td class="small text-muted"><code>${MC._escHtml(u.username)}</code></td>
         <td class="small">${MC._escHtml(u.profile_name)}</td>
         <td class="small">${loginText}</td>
@@ -602,7 +615,7 @@ MC.admin = {
   _eventTypeBadge(type) {
     const t = (type || '').trim();
     const cls =
-      t === 'Flow'          ? 'badge-navy'  :
+      t === 'Flow'          ? 'badge-slate'  :
       t === 'ApexTrigger'   ? 'badge-blue'  :
       t === 'WorkflowAlert' ? 'badge-amber' :
       'badge-secondary';
@@ -658,6 +671,9 @@ MC.admin = {
   // ── Email Templates ─────────────────────────────────────────────────────────
 
   _emailTemplates: [],
+  _emailTemplatesView: [],
+  _emailTemplatesPage: 1,
+  _emailTemplatesPageSize: 25,
 
   async loadEmailTemplates() {
     const loading = document.getElementById('emailTemplatesLoading');
@@ -671,11 +687,12 @@ MC.admin = {
     try {
       const data = await MC.api('/admin/email-templates');
       this._emailTemplates = data || [];
+      this._emailTemplatesView = this._emailTemplates;
       if (this._emailTemplates.length === 0) {
         empty?.classList.remove('d-none');
         return;
       }
-      this._renderEmailTemplatesTable(this._emailTemplates);
+      this._renderEmailTemplatesPage(1);
       card?.classList.remove('d-none');
     } catch (err) {
       MC.showToast(`Failed to load email templates: ${err.message}`, 'danger');
@@ -685,13 +702,36 @@ MC.admin = {
     }
   },
 
+  _renderEmailTemplatesPage(page) {
+    this._emailTemplatesPage = page;
+    const view = this._emailTemplatesView;
+    const size = this._emailTemplatesPageSize;
+    const total = view.length;
+    const start = (page - 1) * size;
+    const end = Math.min(start + size, total);
+    this._renderEmailTemplatesTable(view.slice(start, end));
+
+    const pag  = document.getElementById('emailTemplatesPagination');
+    const info = document.getElementById('emailTemplatesPageInfo');
+    const prev = document.getElementById('btnEmailTemplatesPrev');
+    const next = document.getElementById('btnEmailTemplatesNext');
+    if (total > size) {
+      pag?.classList.remove('d-none');
+      if (info) info.textContent = `Showing ${start + 1}–${end} of ${total}`;
+      if (prev) prev.disabled = page === 1;
+      if (next) next.disabled = end >= total;
+    } else {
+      pag?.classList.add('d-none');
+    }
+  },
+
   _renderEmailTemplatesTable(templates) {
     const tbody = document.getElementById('emailTemplatesTbody');
     if (!tbody) return;
     tbody.innerHTML = templates.map(t => {
       const activeBadge = t.is_active
         ? '<span class="badge badge-green">ACTIVE</span>'
-        : '<span class="badge badge-navy">INACTIVE</span>';
+        : '<span class="badge badge-slate">INACTIVE</span>';
       const encodingCell = (t.encoding || '').toUpperCase() === 'UTF-8'
         ? `<span class="small">${MC._escHtml(t.encoding)}</span>`
         : `<span class="badge badge-amber">${MC._escHtml(t.encoding || '—')}</span>`;
@@ -709,16 +749,13 @@ MC.admin = {
   },
 
   _filterEmailTemplates(query) {
-    if (!query) {
-      this._renderEmailTemplatesTable(this._emailTemplates);
-      return;
-    }
-    const filtered = this._emailTemplates.filter(t =>
-      (t.name || '').toLowerCase().includes(query) ||
-      (t.folder_name || '').toLowerCase().includes(query) ||
-      (t.subject || '').toLowerCase().includes(query)
-    );
-    this._renderEmailTemplatesTable(filtered);
+    this._emailTemplatesView = query
+      ? this._emailTemplates.filter(t =>
+          (t.name || '').toLowerCase().includes(query) ||
+          (t.folder_name || '').toLowerCase().includes(query) ||
+          (t.subject || '').toLowerCase().includes(query))
+      : this._emailTemplates;
+    this._renderEmailTemplatesPage(1);
   },
 
   // ── Setup Audit Trail ───────────────────────────────────────────────────────
@@ -777,7 +814,7 @@ MC.admin = {
       a === 'Created'   ? 'badge-green'  :
       a === 'Changed'   ? 'badge-amber'  :
       a === 'Deleted'   ? 'badge-red'    :
-      a === 'Installed' ? 'badge-navy'   :
+      a === 'Installed' ? 'badge-slate'   :
       a === 'Activated' ? 'badge-blue'   :
       'badge-secondary';
     return `<span class="badge ${cls}">${MC._escHtml(a || '—')}</span>`;
@@ -1164,7 +1201,7 @@ MC.customSettings = {
       }
       tbody.innerHTML = records.map(r => {
         const ownerBadgeCls =
-          r._owner_type === 'Org'     ? 'badge-navy'  :
+          r._owner_type === 'Org'     ? 'badge-slate'  :
           r._owner_type === 'Profile' ? 'badge-blue'  :
           'badge-secondary';
         return `<tr>
@@ -1176,6 +1213,509 @@ MC.customSettings = {
     } catch (err) {
       MC.showToast(`Failed to load records for ${settingName}: ${err.message}`, 'danger');
       if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-danger small text-center py-3">Error loading records.</td></tr>';
+    }
+  },
+};
+
+// ── Permissions Audit ─────────────────────────────────────────────────────────
+
+MC.permissions = {
+  _initialized: false,
+  _permSets: [],
+
+  init() {
+    if (this._initialized) return;
+    this._initialized = true;
+    this._wireEvents();
+    this.loadPermSets();
+  },
+
+  reload() {
+    this._initialized = false;
+    this.init();
+  },
+
+  _wireEvents() {
+    document.getElementById('permSetSearch')?.addEventListener('input', e =>
+      this._filterList('permSetsList', e.target.value));
+
+    document.getElementById('btnPermUserSearch')?.addEventListener('click', () => {
+      const q = document.getElementById('permUserSearch')?.value.trim() || '';
+      this.loadUsers(q);
+    });
+    document.getElementById('permUserSearch')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btnPermUserSearch')?.click();
+    });
+
+    document.getElementById('btnPermObjectLoad')?.addEventListener('click', () => {
+      const obj = document.getElementById('permObjectName')?.value.trim();
+      if (obj) this.loadObjectMatrix(obj);
+    });
+
+    document.getElementById('btnPermFieldLoad')?.addEventListener('click', () => {
+      const obj = document.getElementById('permFieldObject')?.value.trim();
+      if (obj) this.loadFieldMatrix(obj);
+    });
+
+    document.getElementById('permFieldFilter')?.addEventListener('input', e =>
+      this._filterTable('permFieldTbody', e.target.value));
+  },
+
+  // ── Permission Sets ──────────────────────────────────────────────────────
+
+  async loadPermSets() {
+    const loading = document.getElementById('permSetsLoading');
+    const empty   = document.getElementById('permSetsEmpty');
+    const content = document.getElementById('permSetsContent');
+    try {
+      this._permSets = await MC.api('/admin/permissions/sets') || [];
+      loading?.classList.add('d-none');
+      if (this._permSets.length === 0) { empty?.classList.remove('d-none'); return; }
+      content?.classList.remove('d-none');
+      this._renderPermSetList(this._permSets);
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load permission sets: ' + err.message, 'danger');
+    }
+  },
+
+  _renderPermSetList(sets) {
+    const list = document.getElementById('permSetsList');
+    if (!list) return;
+    list.innerHTML = sets.map(ps =>
+      `<button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2"
+               data-pset-id="${MC._escHtml(ps.id)}" onclick="MC.permissions.loadPermSetDetail('${MC._escHtml(ps.id)}')">
+        <span class="small fw-semibold">${MC._escHtml(ps.label || ps.name)}</span>
+        <span class="badge ${ps.user_count > 0 ? 'badge-slate' : 'badge-secondary'} ms-2">${ps.user_count}</span>
+       </button>`
+    ).join('');
+  },
+
+  async loadPermSetDetail(psetId) {
+    // Highlight selected
+    document.querySelectorAll('#permSetsList button').forEach(b =>
+      b.classList.toggle('active', b.dataset.psetId === psetId));
+
+    const detail = document.getElementById('permSetDetail');
+    if (!detail) return;
+    detail.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+    try {
+      const d = await MC.api(`/admin/permissions/set/${encodeURIComponent(psetId)}`);
+      const sfLink = MC.sfLink(psetId, 'PermissionSet');
+      const linkHtml = sfLink ? `<a href="${sfLink}" target="_blank" class="ms-2 small text-muted">↗ Open in SF</a>` : '';
+      detail.innerHTML = `
+        <div class="card shadow-sm">
+          <div class="card-header py-2">
+            <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">${MC._escHtml(d.label)}${linkHtml}</h6>
+            ${d.description ? `<small class="text-muted">${MC._escHtml(d.description)}</small>` : ''}
+          </div>
+          <div class="card-body p-0">
+            <ul class="nav nav-tabs px-3 pt-2" id="psetDetailTabs">
+              <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pset-users-pane">Users (${d.users.length})</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pset-objs-pane">Object Perms (${d.object_permissions.length})</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pset-fields-pane">Field Perms (${d.field_permissions.length})</button></li>
+            </ul>
+            <div class="tab-content p-2">
+              <div class="tab-pane fade show active" id="pset-users-pane">
+                ${this._renderUserMini(d.users)}
+              </div>
+              <div class="tab-pane fade" id="pset-objs-pane">
+                ${this._renderObjPermsTable(d.object_permissions)}
+              </div>
+              <div class="tab-pane fade" id="pset-fields-pane">
+                ${this._renderFieldPermsTable(d.field_permissions)}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } catch (err) {
+      detail.innerHTML = `<div class="alert alert-danger">${MC._escHtml(err.message)}</div>`;
+    }
+  },
+
+  _renderUserMini(users) {
+    if (!users.length) return '<p class="text-muted small py-3 text-center">No users assigned.</p>';
+    return `<table class="table table-sm table-hover mb-0">
+      <thead class="table-light"><tr><th>Name</th><th>Username</th></tr></thead>
+      <tbody>${users.map(u => {
+        const link = MC.sfLink(u.id, 'User');
+        const nameCell = link ? `<a href="${link}" target="_blank">${MC._escHtml(u.name)}</a>` : MC._escHtml(u.name);
+        return `<tr><td class="small">${nameCell}</td><td class="small text-muted">${MC._escHtml(u.username)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  },
+
+  _renderObjPermsTable(rows) {
+    if (!rows.length) return '<p class="text-muted small py-3 text-center">No object permissions.</p>';
+    const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+    return `<table class="table table-sm table-hover mb-0">
+      <thead class="table-light"><tr><th>Object</th><th class="text-center">R</th><th class="text-center">C</th><th class="text-center">E</th><th class="text-center">D</th><th class="text-center">VA</th><th class="text-center">MA</th></tr></thead>
+      <tbody>${rows.map(r =>
+        `<tr><td class="small font-monospace">${MC._escHtml(r.object)}</td>
+         <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.create)}</td>
+         <td class="text-center">${check(r.edit)}</td><td class="text-center">${check(r.delete)}</td>
+         <td class="text-center">${check(r.view_all)}</td><td class="text-center">${check(r.modify_all)}</td></tr>`
+      ).join('')}</tbody></table>`;
+  },
+
+  _renderFieldPermsTable(rows) {
+    if (!rows.length) return '<p class="text-muted small py-3 text-center">No field permissions.</p>';
+    const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+    return `<table class="table table-sm table-hover mb-0">
+      <thead class="table-light"><tr><th>Object</th><th>Field</th><th class="text-center">Read</th><th class="text-center">Edit</th></tr></thead>
+      <tbody>${rows.map(r =>
+        `<tr><td class="small font-monospace">${MC._escHtml(r.object)}</td>
+         <td class="small font-monospace">${MC._escHtml(r.field)}</td>
+         <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.edit)}</td></tr>`
+      ).join('')}</tbody></table>`;
+  },
+
+  _filterList(listId, query) {
+    const q = (query || '').toLowerCase();
+    document.querySelectorAll(`#${listId} button`).forEach(btn => {
+      const text = btn.textContent.toLowerCase();
+      btn.classList.toggle('d-none', !!q && !text.includes(q));
+    });
+  },
+
+  // ── By User ──────────────────────────────────────────────────────────────
+
+  async loadUsers(search = '') {
+    const loading = document.getElementById('permUsersLoading');
+    const list    = document.getElementById('permUsersList');
+    loading?.classList.remove('d-none');
+    if (list) list.innerHTML = '';
+    try {
+      const users = await MC.api(`/admin/permissions/users?q=${encodeURIComponent(search)}`) || [];
+      loading?.classList.add('d-none');
+      if (!users.length) { if (list) list.innerHTML = '<div class="text-muted small p-2">No users found.</div>'; return; }
+      list.innerHTML = users.map(u =>
+        `<button class="list-group-item list-group-item-action py-2"
+                 data-user-id="${MC._escHtml(u.id)}" onclick="MC.permissions.loadUserDetail('${MC._escHtml(u.id)}')">
+          <div class="small fw-semibold">${MC._escHtml(u.name)}</div>
+          <div class="small text-muted">${MC._escHtml(u.username)}</div>
+         </button>`
+      ).join('');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('User search failed: ' + err.message, 'danger');
+    }
+  },
+
+  async loadUserDetail(userId) {
+    document.querySelectorAll('#permUsersList button').forEach(b =>
+      b.classList.toggle('active', b.dataset.userId === userId));
+
+    const detail = document.getElementById('permUserDetail');
+    if (!detail) return;
+    detail.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+    try {
+      const d = await MC.api(`/admin/permissions/user/${encodeURIComponent(userId)}`);
+      const sfLink = MC.sfLink(userId, 'User');
+      const nameLink = sfLink ? `<a href="${sfLink}" target="_blank">${MC._escHtml(d.name)}</a>` : MC._escHtml(d.name);
+      const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+
+      const psetRows = d.permission_sets.map(ps => {
+        const psLink = MC.sfLink(ps.id, 'PermissionSet');
+        const cell = psLink ? `<a href="${psLink}" target="_blank">${MC._escHtml(ps.label)}</a>` : MC._escHtml(ps.label);
+        return `<tr><td class="small">${cell}</td><td class="small text-muted">${MC._escHtml(ps.name)}</td></tr>`;
+      }).join('') || '<tr><td colspan="2" class="text-muted small">None</td></tr>';
+
+      const objRows = d.object_permissions.map(o =>
+        `<tr><td class="small font-monospace">${MC._escHtml(o.object)}</td>
+         <td class="text-center">${check(o.read)}</td><td class="text-center">${check(o.create)}</td>
+         <td class="text-center">${check(o.edit)}</td><td class="text-center">${check(o.delete)}</td>
+         <td class="text-center">${check(o.view_all)}</td><td class="text-center">${check(o.modify_all)}</td></tr>`
+      ).join('') || '<tr><td colspan="7" class="text-muted small text-center">No object permissions via perm sets</td></tr>';
+
+      detail.innerHTML = `
+        <div class="card shadow-sm">
+          <div class="card-header py-2">
+            <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">${nameLink}</h6>
+            <small class="text-muted">${MC._escHtml(d.username)} &nbsp;·&nbsp; Profile: ${MC._escHtml(d.profile_name)} &nbsp;·&nbsp; License: ${MC._escHtml(d.license || '—')}</small>
+          </div>
+          <div class="card-body p-0">
+            <ul class="nav nav-tabs px-3 pt-2">
+              <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ud-psets-pane">Perm Sets (${d.permission_sets.length})</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ud-objs-pane">Object Access (${d.object_permissions.length})</button></li>
+            </ul>
+            <div class="tab-content p-2">
+              <div class="tab-pane fade show active" id="ud-psets-pane">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light"><tr><th>Label</th><th>API Name</th></tr></thead>
+                  <tbody>${psetRows}</tbody>
+                </table>
+              </div>
+              <div class="tab-pane fade" id="ud-objs-pane">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light"><tr><th>Object</th><th class="text-center">R</th><th class="text-center">C</th><th class="text-center">E</th><th class="text-center">D</th><th class="text-center">VA</th><th class="text-center">MA</th></tr></thead>
+                  <tbody>${objRows}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } catch (err) {
+      detail.innerHTML = `<div class="alert alert-danger">${MC._escHtml(err.message)}</div>`;
+    }
+  },
+
+  // ── Object Matrix ────────────────────────────────────────────────────────
+
+  async loadObjectMatrix(objectName) {
+    const loading = document.getElementById('permObjectLoading');
+    const empty   = document.getElementById('permObjectEmpty');
+    const card    = document.getElementById('permObjectCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const d = await MC.api(`/admin/permissions/object-matrix?object=${encodeURIComponent(objectName)}`);
+      loading?.classList.add('d-none');
+      if (!d.rows.length) { empty?.classList.remove('d-none'); return; }
+      const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+      const tbody = document.getElementById('permObjectTbody');
+      if (tbody) {
+        tbody.innerHTML = d.rows.map(r => {
+          const link = MC.sfLink(r.pset_id, 'PermissionSet');
+          const cell = link ? `<a href="${link}" target="_blank">${MC._escHtml(r.pset_label)}</a>` : MC._escHtml(r.pset_label);
+          return `<tr><td class="small">${cell}</td>
+            <td class="text-center">${check(r.read)}</td><td class="text-center">${check(r.create)}</td>
+            <td class="text-center">${check(r.edit)}</td><td class="text-center">${check(r.delete)}</td>
+            <td class="text-center">${check(r.view_all)}</td><td class="text-center">${check(r.modify_all)}</td></tr>`;
+        }).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load object matrix: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Field Coverage ───────────────────────────────────────────────────────
+
+  async loadFieldMatrix(objectName) {
+    const loading = document.getElementById('permFieldLoading');
+    const empty   = document.getElementById('permFieldEmpty');
+    const content = document.getElementById('permFieldContent');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    content?.classList.add('d-none');
+    try {
+      const d = await MC.api(`/admin/permissions/field-matrix?object=${encodeURIComponent(objectName)}`);
+      loading?.classList.add('d-none');
+      if (!d.fields.length) { empty?.classList.remove('d-none'); return; }
+      const check = v => v ? '<span class="text-success fw-bold">✓</span>' : '<span class="text-muted">—</span>';
+      const tbody = document.getElementById('permFieldTbody');
+      if (tbody) {
+        tbody.innerHTML = d.fields.flatMap(f =>
+          f.access.map((a, i) => {
+            const link = MC.sfLink(a.pset_id, 'PermissionSet');
+            const cell = link ? `<a href="${link}" target="_blank">${MC._escHtml(a.pset_label)}</a>` : MC._escHtml(a.pset_label);
+            return `<tr data-field="${MC._escHtml(f.field.toLowerCase())}">
+              ${i === 0 ? `<td class="small font-monospace fw-semibold" rowspan="${f.access.length}">${MC._escHtml(f.field)}</td>` : ''}
+              <td class="small">${cell}</td>
+              <td class="text-center">${check(a.read)}</td>
+              <td class="text-center">${check(a.edit)}</td>
+            </tr>`;
+          })
+        ).join('');
+      }
+      content?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load field coverage: ' + err.message, 'danger');
+    }
+  },
+
+  _filterTable(tbodyId, query) {
+    const q = (query || '').toLowerCase();
+    document.querySelectorAll(`#${tbodyId} tr`).forEach(row => {
+      row.classList.toggle('d-none', !!q && !row.textContent.toLowerCase().includes(q));
+    });
+  },
+};
+
+// ── Automation & Sharing ──────────────────────────────────────────────────────
+
+MC.automation = {
+  _initialized: false,
+
+  init() {
+    if (this._initialized) return;
+    this._initialized = true;
+    this._wireFilters();
+    this.loadValidationRules();
+    document.getElementById('auto-tab-flows')?.addEventListener('shown.bs.tab', () => this.loadFlows());
+    document.getElementById('auto-tab-triggers')?.addEventListener('shown.bs.tab', () => this.loadTriggers());
+    document.getElementById('auto-tab-sharing')?.addEventListener('shown.bs.tab', () => this.loadSharing());
+  },
+
+  reload() {
+    this._initialized = false;
+    this._loaded = {};
+    this.init();
+  },
+
+  _loaded: {},
+
+  _wireFilters() {
+    const f = (inputId, tbodyId) =>
+      document.getElementById(inputId)?.addEventListener('input', e =>
+        MC.permissions._filterTable(tbodyId, e.target.value));
+    f('autoVrFilter', 'autoVrTbody');
+    f('autoFlowFilter', 'autoFlowTbody');
+    f('autoTriggerFilter', 'autoTriggerTbody');
+    f('autoSharingFilter', 'autoSharingTbody');
+  },
+
+  _statusBadge(status) {
+    const s = (status || '').toLowerCase();
+    const cls = (s === 'active') ? 'badge-green'
+              : (s === 'inactive' || s === 'obsolete' || s === 'draft') ? 'badge-secondary'
+              : 'badge-amber';
+    return `<span class="badge ${cls}">${MC._escHtml(status || '—')}</span>`;
+  },
+
+  // ── Validation Rules ─────────────────────────────────────────────────────
+
+  async loadValidationRules() {
+    if (this._loaded.vr) return;
+    const loading = document.getElementById('autoVrLoading');
+    const empty   = document.getElementById('autoVrEmpty');
+    const card    = document.getElementById('autoVrCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const rules = await MC.api('/admin/automation/validation-rules') || [];
+      loading?.classList.add('d-none');
+      this._loaded.vr = true;
+      if (!rules.length) { empty?.classList.remove('d-none'); return; }
+      const tbody = document.getElementById('autoVrTbody');
+      if (tbody) {
+        tbody.innerHTML = rules.map(r =>
+          `<tr>
+            <td class="small font-monospace fw-semibold">${MC._escHtml(r.object)}</td>
+            <td class="small">${MC._escHtml(r.name)}</td>
+            <td>${this._statusBadge(r.active ? 'Active' : 'Inactive')}</td>
+            <td class="small font-monospace text-muted">${MC._escHtml(r.error_field || '—')}</td>
+            <td class="small">${MC._escHtml(r.error_message)}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load validation rules: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Flows ────────────────────────────────────────────────────────────────
+
+  async loadFlows() {
+    if (this._loaded.flows) return;
+    const loading = document.getElementById('autoFlowLoading');
+    const empty   = document.getElementById('autoFlowEmpty');
+    const card    = document.getElementById('autoFlowCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const flows = await MC.api('/admin/automation/flows') || [];
+      loading?.classList.add('d-none');
+      this._loaded.flows = true;
+      if (!flows.length) { empty?.classList.remove('d-none'); return; }
+      const tbody = document.getElementById('autoFlowTbody');
+      if (tbody) {
+        tbody.innerHTML = flows.map(f =>
+          `<tr>
+            <td class="small fw-semibold">${MC._escHtml(f.label)}</td>
+            <td><span class="badge badge-slate">${MC._escHtml(f.type || '—')}</span></td>
+            <td>${this._statusBadge(f.status)}</td>
+            <td class="small text-muted">${MC._escHtml(f.description || '—')}</td>
+            <td class="small text-nowrap">${MC._fmtTime(f.last_modified)}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load flows: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Apex Triggers ────────────────────────────────────────────────────────
+
+  async loadTriggers() {
+    if (this._loaded.triggers) return;
+    const loading = document.getElementById('autoTriggerLoading');
+    const empty   = document.getElementById('autoTriggerEmpty');
+    const card    = document.getElementById('autoTriggerCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const triggers = await MC.api('/admin/automation/triggers') || [];
+      loading?.classList.add('d-none');
+      this._loaded.triggers = true;
+      if (!triggers.length) { empty?.classList.remove('d-none'); return; }
+      const tbody = document.getElementById('autoTriggerTbody');
+      if (tbody) {
+        tbody.innerHTML = triggers.map(t =>
+          `<tr>
+            <td class="small font-monospace fw-semibold">${MC._escHtml(t.object || '—')}</td>
+            <td class="small">${MC._escHtml(t.name)}</td>
+            <td>${this._statusBadge(t.status)}</td>
+            <td class="small text-end">${MC._escHtml(t.api_version)}</td>
+            <td class="small text-end text-muted">${(t.length || 0).toLocaleString()}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load triggers: ' + err.message, 'danger');
+    }
+  },
+
+  // ── Sharing Model ────────────────────────────────────────────────────────
+
+  async loadSharing() {
+    if (this._loaded.sharing) return;
+    const loading = document.getElementById('autoSharingLoading');
+    const empty   = document.getElementById('autoSharingEmpty');
+    const card    = document.getElementById('autoSharingCard');
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    card?.classList.add('d-none');
+    try {
+      const rows = await MC.api('/admin/automation/sharing-model') || [];
+      loading?.classList.add('d-none');
+      this._loaded.sharing = true;
+      if (!rows.length) { empty?.classList.remove('d-none'); return; }
+      const accessBadge = (val, label) => {
+        const v = (val || '').toLowerCase();
+        const cls = v === 'private' ? 'badge-red'
+                  : v.startsWith('read') && v !== 'readwrite' && v !== 'readwritetransfer' ? 'badge-amber'
+                  : v.startsWith('controlledby') ? 'badge-secondary'
+                  : 'badge-green';
+        return `<span class="badge ${cls}">${MC._escHtml(label || val || '—')}</span>`;
+      };
+      const tbody = document.getElementById('autoSharingTbody');
+      if (tbody) {
+        tbody.innerHTML = rows.map(r =>
+          `<tr>
+            <td class="small fw-semibold">${MC._escHtml(r.label)}</td>
+            <td class="small font-monospace text-muted">${MC._escHtml(r.object)}</td>
+            <td>${accessBadge(r.internal, r.internal_label)}</td>
+            <td>${accessBadge(r.external, r.external_label)}</td>
+          </tr>`
+        ).join('');
+      }
+      card?.classList.remove('d-none');
+    } catch (err) {
+      loading?.classList.add('d-none');
+      MC.showToast('Failed to load sharing model: ' + err.message, 'danger');
     }
   },
 };

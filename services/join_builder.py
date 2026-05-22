@@ -14,7 +14,12 @@ def build_query(
     sf_fields: list,
     join_mapping: dict,
 ) -> dict:
-    """Build OPENQUERY T-SQL, SOQL, and plain SQL strings for a SF-to-SQL join."""
+    """Build OPENQUERY T-SQL, SOQL, and plain SQL strings for a SF-to-SQL join.
+
+    ``sql_table`` is used verbatim. Pass a schema-qualified name
+    (``schema.table``) when the table is not in the connection's default
+    schema; a bare name resolves via that default (usually ``dbo``).
+    """
     join_field_sql = join_mapping.get('sql_field', '')
     join_field_sf = join_mapping.get('sf_field', '')
 
@@ -29,7 +34,7 @@ def build_query(
     openquery_sql = (
         f"SELECT {sql_fields_csv},\n"
         f"       {', '.join(f'sf.{f}' for f in sf_fields)}\n"
-        f"FROM dbo.{sql_table} s\n"
+        f"FROM {sql_table} s WITH (NOLOCK)\n"
         f"JOIN OPENQUERY(SALESFORCE, '\n"
         f"    SELECT {sf_fields_csv_bare}\n"
         f"    FROM {sf_object}\n"
@@ -39,7 +44,7 @@ def build_query(
 
     sql_only = (
         f"SELECT {', '.join(sql_fields)}\n"
-        f"FROM dbo.{sql_table}\n"
+        f"FROM {sql_table} WITH (NOLOCK)\n"
         f"WHERE {join_field_sql} IS NOT NULL"
     )
 

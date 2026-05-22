@@ -231,7 +231,7 @@ def get_record_types(org: str) -> list:
         "SELECT Id, Name, DeveloperName, SobjectType, IsActive, Description "
         "FROM RecordType ORDER BY SobjectType, Name"
     )
-    result = sf.query(rt_soql)
+    result = sf.query_all(rt_soql)
     record_types = []
     for r in result.get('records', []):
         record_types.append({
@@ -255,7 +255,7 @@ def get_record_types(org: str) -> list:
             continue
         try:
             count_soql = f"SELECT RecordTypeId, COUNT(Id) cnt FROM {sobject} GROUP BY RecordTypeId"
-            count_result = sf.query(count_soql)
+            count_result = sf.query_all(count_soql)
             counts = {r.get('RecordTypeId'): r.get('cnt', 0) for r in count_result.get('records', [])}
             for rt in rts:
                 rt['record_count'] = counts.get(rt['id'], 0)
@@ -286,9 +286,9 @@ def get_email_templates(org: str) -> list:
     soql = (
         "SELECT Id, Name, DeveloperName, FolderId, FolderName, Subject, "
         "Encoding, IsActive, LastModifiedDate, LastModifiedBy.Name "
-        "FROM EmailTemplate ORDER BY FolderName, Name LIMIT 200"
+        "FROM EmailTemplate ORDER BY FolderName, Name"
     )
-    result = sf.query(soql)
+    result = sf.query_all(soql)
     templates = []
     for r in result.get('records', []):
         modifier = r.get('LastModifiedBy') or {}

@@ -8,18 +8,19 @@
   <nav class="sub-nav mb-3">
     <div class="container-fluid">
       <ul class="nav nav-pills gap-1">
-        <li class="nav-item">
-          <a class="nav-link active" href="/data-ops/join">Join Builder</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/data-ops/record-locks">Record Locks</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a>
-        </li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
       </ul>
     </div>
   </nav>
@@ -49,21 +50,26 @@
     <!-- Left: SQL Server -->
     <div class="col-md-6">
       <div class="card shadow-sm h-100">
-        <div class="card-header fw-semibold" style="background-color: var(--doane-navy); color:#fff;">
+        <div class="card-header fw-semibold" style="background-color: var(--doane-slate); color:#fff;">
           &#128421; SQL Server
         </div>
         <div class="card-body">
           <div class="mb-3">
-            <label for="sqlTable" class="form-label small fw-semibold">Table Name
+            <label for="sqlTable" class="form-label small fw-semibold">
+              Table Name
               <span class="mc-info-icon"
                     data-bs-toggle="popover"
                     data-bs-trigger="focus"
                     tabindex="0"
                     data-bs-title="SQL Server Table"
-                    data-bs-content="The SQL Server table to join against. Uses the SQLSERVER_CONN connection string from environment variables via pyodbc.">ⓘ</span>
+                    data-bs-content="Start typing to filter the cached table list. The schema is cached so this works even when the ODBC/Devart link is down — refresh it from Settings → SQL Server Schema Cache when tables change. The generated query is verbatim and uses WITH (NOLOCK).">ⓘ</span>
             </label>
-            <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
-                   placeholder="dbo.Students">
+            <div class="position-relative">
+              <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
+                     autocomplete="off" placeholder="dbo.STUDENTS">
+              <div id="sqlTableMenu" class="mc-typeahead-menu d-none"></div>
+            </div>
+            <div class="form-text" id="sqlSchemaStatus">SQL schema not loaded.</div>
           </div>
           <div class="mb-3">
             <label for="sqlFields" class="form-label small fw-semibold">
@@ -98,13 +104,12 @@
                     data-bs-title="SF Object"
                     data-bs-content="The Salesforce object to query. Uses SELECT {fields} FROM {object} LIMIT {n}. The result set is aliased as the SF side of the join.">ⓘ</span>
             </label>
-            <select id="sfObject" class="form-select form-select-sm">
-              <option value="">-- Select SF Object --</option>
-              <option value="Account">Account</option>
-              <option value="Contact">Contact</option>
-              <option value="hed__Application__c">hed__Application__c</option>
-              <option value="hed__Course_Enrollment__c">hed__Course_Enrollment__c</option>
-            </select>
+            <div class="position-relative">
+              <input id="sfObject" type="text" class="form-control form-control-sm font-monospace"
+                     autocomplete="off" placeholder="Account">
+              <div id="sfObjectMenu" class="mc-typeahead-menu d-none"></div>
+            </div>
+            <div class="form-text" id="sfObjectStatus">Loading objects…</div>
           </div>
           <div class="mb-3">
             <label for="sfFields" class="form-label small fw-semibold">
@@ -134,8 +139,12 @@
   <!-- Action buttons -->
   <div class="d-flex flex-wrap gap-2 mb-3 no-print">
     <button id="btnBuild" class="btn btn-doane btn-sm">&#9881; Build Query</button>
-    <button id="btnRun" class="btn btn-navy btn-sm">&#9654; Run (Python fallback)</button>
+    <button id="btnCheckFields" class="btn btn-outline-secondary btn-sm">&#10003; Check Fields</button>
+    <button id="btnRun" class="btn btn-slate btn-sm">&#9654; Run (Python fallback)</button>
   </div>
+
+  <!-- Field-check result -->
+  <div id="joinCheckResult" class="d-none mb-3"></div>
 
   <!-- Generated SQL -->
   <div class="card shadow-sm mb-3">

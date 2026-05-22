@@ -1,13 +1,44 @@
 /* ── Doane SF Mission Control — mission-control.css ─────────────────────── */
 
+/* Doane brand palette — sourced from doane.edu's live marketing CSS.
+   The design language is orange + grayscale + a single link-blue.
+   The Doane site uses NO navy; the dark UI chrome is near-black ink and
+   a mid-tone slate accent. */
 :root {
-  --doane-orange: #FF7900;
-  --doane-navy:   #1F3864;
+  --doane-orange:       #FF7900;   /* --c-primary on doane.edu */
+  --doane-orange-dark:  #D86600;
+  --doane-orange-light: #FF9A40;
+
+  --doane-ink:          #161C21;   /* near-black — navbar, strong headings */
+  --doane-slate:        #47545D;   /* slate accent — table/card headers, titles */
+  --doane-muted:        #67737A;   /* secondary / muted text */
+
+  --doane-page:         #F4F5F5;   /* body background */
+  --doane-section:      #E5EBED;   /* subtle section fill */
+  --doane-border:       #C4C8C9;   /* hairline borders */
+
+  --doane-link:         #0063B0;   /* the only blue */
+}
+
+body {
+  background-color: var(--doane-page);
+  color: var(--doane-ink);
+}
+
+/* In-content links use Doane's single link-blue. Component classes
+   (.nav-link, .btn, .mc-brand) set their own colour and override this. */
+a {
+  color: var(--doane-link);
+}
+
+/* Cards sit on the grey page background with a hairline Doane border. */
+.card {
+  border-color: var(--doane-border);
 }
 
 /* ── Navbar ──────────────────────────────────────────────────────────────── */
 .mc-navbar {
-  background-color: var(--doane-navy);
+  background-color: var(--doane-ink);
   border-bottom: 3px solid var(--doane-orange);
 }
 
@@ -56,7 +87,7 @@
 /* ── Org Picker & Badge ──────────────────────────────────────────────────── */
 .mc-org-picker {
   font-size: 0.8rem;
-  border: 1px solid var(--doane-navy);
+  border: 1px solid var(--doane-slate);
   border-color: rgba(255, 255, 255, 0.4);
   background-color: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -65,7 +96,7 @@
 }
 
 .mc-org-picker option {
-  background-color: var(--doane-navy);
+  background-color: var(--doane-slate);
   color: #fff;
 }
 
@@ -160,8 +191,35 @@
   font-weight: 600;
 }
 
-.badge-navy {
-  background-color: var(--doane-navy);
+.badge-slate {
+  background-color: var(--doane-slate);
+  color: #fff;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-blue {
+  background-color: var(--doane-link);
+  color: #fff;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-secondary {
+  background-color: #6c757d;
+  color: #fff;
+  padding: 0.3em 0.65em;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-purple {
+  background-color: #6f42c1;
   color: #fff;
   padding: 0.3em 0.65em;
   border-radius: 0.375rem;
@@ -177,7 +235,7 @@
 }
 
 .scorecard-table th {
-  background-color: var(--doane-navy);
+  background-color: var(--doane-slate);
   color: #fff;
   padding: 0.6rem 1rem;
   text-align: left;
@@ -330,7 +388,7 @@
   font-size: 0.9rem;
   background-color: #1e1e1e;
   color: #d4d4d4;
-  border: 2px solid var(--doane-navy);
+  border: 2px solid var(--doane-slate);
   border-radius: 0.375rem;
   resize: vertical;
   min-height: 160px;
@@ -351,7 +409,7 @@
 }
 
 .results-table th {
-  background-color: var(--doane-navy);
+  background-color: var(--doane-slate);
   color: #fff;
   white-space: nowrap;
   font-weight: 600;
@@ -397,7 +455,7 @@
 }
 
 .sub-nav .nav-link {
-  color: var(--doane-navy);
+  color: var(--doane-slate);
   font-size: 0.875rem;
   font-weight: 500;
   padding: 0.35rem 1rem;
@@ -425,7 +483,7 @@
 
 .cp-card-title {
   font-weight: 700;
-  color: var(--doane-navy);
+  color: var(--doane-slate);
   margin-bottom: 0.75rem;
   font-size: 1rem;
 }
@@ -539,7 +597,7 @@
 }
 
 .object-explorer-item.selected {
-  background-color: var(--doane-navy);
+  background-color: var(--doane-slate);
   color: #fff;
 }
 
@@ -611,7 +669,7 @@
   min-height: 80px;
   white-space: pre-wrap;
   word-break: break-all;
-  border: 2px solid var(--doane-navy);
+  border: 2px solid var(--doane-slate);
 }
 
 /* ── Info Box ────────────────────────────────────────────────────────────── */
@@ -633,7 +691,7 @@
 }
 
 .mc-page-title {
-  color: var(--doane-navy);
+  color: var(--doane-slate);
   font-weight: 700;
   margin: 0;
 }
@@ -647,19 +705,19 @@
 }
 
 .btn-doane:hover {
-  background-color: #e06a00;
+  background-color: var(--doane-orange-dark);
   color: #fff;
 }
 
-.btn-navy {
-  background-color: var(--doane-navy);
+.btn-slate {
+  background-color: var(--doane-slate);
   color: #fff;
   border: none;
   font-weight: 600;
 }
 
-.btn-navy:hover {
-  background-color: #162a4f;
+.btn-slate:hover {
+  background-color: var(--doane-ink);
   color: #fff;
 }
 
@@ -675,7 +733,7 @@
 }
 
 .settings-section-title {
-  color: var(--doane-navy);
+  color: var(--doane-slate);
   font-weight: 700;
   font-size: 1rem;
   border-bottom: 2px solid var(--doane-orange);
@@ -692,7 +750,7 @@
 /* ── Info Icon (ⓘ popovers) ─────────────────────────────────────────────── */
 .mc-info-icon {
   cursor: pointer;
-  color: var(--doane-navy);
+  color: var(--doane-slate);
   opacity: 0.55;
   font-size: 0.8rem;
   margin-left: 0.3rem;
@@ -772,4 +830,85 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+/* ── Import Wizard Step Nav ───────────────────────────────────────────────── */
+#importStepNav {
+  border-bottom: 2px solid #dee2e6;
+  margin-bottom: 1.5rem;
+}
+
+.import-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6c757d;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.import-step:hover {
+  color: var(--doane-slate);
+}
+
+.import-step.active {
+  color: var(--doane-slate);
+  border-bottom-color: var(--doane-orange);
+}
+
+.import-step .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #dee2e6;
+  color: #495057;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.import-step.active .step-num {
+  background: var(--doane-orange);
+  color: #fff;
+}
+
+/* ── Typeahead dropdown ──────────────────────────────────────────────────── */
+/* Custom dropdown so the menu width matches the input. Native <datalist>
+   popups are browser-positioned and overflow the field. */
+.mc-typeahead-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+
+.mc-typeahead-item {
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-family: var(--bs-font-monospace, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mc-typeahead-item:hover,
+.mc-typeahead-item.active {
+  background: var(--doane-orange);
+  color: #fff;
 }

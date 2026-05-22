@@ -57,12 +57,131 @@ def dml_guard(sf, bypass: bool = False) -> Generator:
             set_bypass_triggers(sf, False)
 
 
+# ── Bulk API 2.0 helpers ──────────────────────────────────────────────────────
+
+def bulk2_dml(sf, object_name: str, operation: str, records: list,
+              external_id_field: str = '') -> dict:
+    """Run a Bulk API 2.0 (``sf.bulk2``) DML operation on a list of record dicts.
+
+    Returns ``{total, succeeded, failed, job_ids}``.
+
+    Note: simple_salesforce 1.12.5's bulk2 ``delete`` cannot accept ``records=``
+    (its delete branch unconditionally opens ``csv_file``) — delete IDs are
+    written to a temporary single-column CSV and passed as ``csv_file=``.
+    """
+    bulk_obj = getattr(sf.bulk2, object_name)
+    op = (operation or '').lower()
+
+    if op == 'delete':
+        import csv as _csv
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix='.csv')
+        try:
+            with os.fdopen(fd, 'w', newline='', encoding='utf-8') as fh:
+                writer = _csv.writer(fh)
+                writer.writerow(['Id'])
+                for r in records:
+                    writer.writerow([r.get('Id', '')])
+            job_results = bulk_obj.delete(csv_file=path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    elif op == 'insert':
+        job_results = bulk_obj.insert(records=records)
+    elif op == 'update':
+        job_results = bulk_obj.update(records=records)
+    elif op == 'upsert':
+        if not external_id_field:
+            raise ValueError('external_id_field is required for upsert')
+        job_results = bulk_obj.upsert(records=records, external_id_field=external_id_field)
+    else:
+        raise ValueError(f"Unknown bulk operation '{operation}'")
+
+    job_results = job_results or []
+    total     = sum(int(j.get('numberRecordsTotal', 0) or 0) for j in job_results)
+    processed = sum(int(j.get('numberRecordsProcessed', 0) or 0) for j in job_results)
+    failed    = sum(int(j.get('numberRecordsFailed', 0) or 0) for j in job_results)
+    return {
+        'total': total or processed,
+        'succeeded': max(processed - failed, 0),
+        'failed': failed,
+        'job_ids': [j.get('job_id') for j in job_results if j.get('job_id')],
+    }
+
+
+def bulk2_failed_records(sf, object_name: str, job_ids: list) -> str:
+    """Return the combined failed-record CSV across Bulk API 2.0 ingest jobs.
+
+    The CSV columns are ``sf__Id``, ``sf__Error``, and the original request
+    fields. Best-effort — returns '' if the detail cannot be fetched.
+    """
+    bulk_obj = getattr(sf.bulk2, object_name)
+    parts = []
+    for jid in job_ids:
+        try:
+            text = bulk_obj.get_failed_records(jid)
+            if text and text.strip():
+                parts.append(text.strip())
+        except Exception as exc:
+            logger.warning('bulk2 get_failed_records failed for %s: %s', jid, exc)
+    if not parts:
+        return ''
+    combined = [parts[0]]
+    for p in parts[1:]:
+        combined.extend(p.splitlines()[1:])  # drop repeated header
+    return '\n'.join(combined)
+
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _configured(org: str) -> bool:
     """Return True when real SF credentials are present for this org."""
     cfg = get_org_config(org)
     return bool(cfg['username'] and cfg['password'])
+
+
+def org_is_mocked(org: str) -> bool:
+    """Return True when get_sf(org) yields a MockSalesforce, not a real client.
+
+    Mirrors the decision in get_sf(): a mock is used when SF_MOCK is set
+    globally, or when the org has no real credentials configured.
+    """
+    return Config.SF_MOCK or not _configured(org)
+
+
+def assert_orgs_comparable(left_org: str, right_org: str) -> None:
+    """Raise ValueError when a diff would silently mix real and mock data.
+
+    If one org resolves to a real client and the other falls back to mock, the
+    diff is meaningless — every component differs. Surface that as a clear
+    configuration error instead of a misleading result.
+    """
+    left_mock = org_is_mocked(left_org)
+    right_mock = org_is_mocked(right_org)
+    if left_mock == right_mock:
+        return
+    bad = right_org if right_mock else left_org
+    raise ValueError(
+        f"Org '{bad}' has no Salesforce credentials configured "
+        f"(SF_{bad.upper()}_USERNAME / SF_{bad.upper()}_PASSWORD). Comparing it "
+        f"would diff a real org against mock data and report every component as "
+        f"different. Configure the org, or pick one that is."
+    )
+
+
+def available_orgs() -> list:
+    """Org names to offer in diff pickers.
+
+    With SF_MOCK on, every demo org is valid. In real mode only orgs that have
+    credentials are offered, so an unconfigured name can't be picked by mistake.
+    """
+    candidates = ['dev', 'prod', 'sandbox']
+    if Config.SF_MOCK:
+        return candidates
+    configured = [o for o in candidates if _configured(o)]
+    return configured or candidates
 
 
 def _parse_mock_count(soql: str) -> int:
@@ -386,6 +505,12 @@ def _make_process_exception(idx: int) -> dict:
 
 
 def _build_describe(obj: str) -> dict:
+    # Real Salesforce resolves sObject names case-insensitively in REST paths;
+    # mirror that so a lowercase 'account' yields the Account describe.
+    _canonical = {'account': 'Account', 'contactpointemail': 'ContactPointEmail',
+                  'contactpointphone': 'ContactPointPhone',
+                  'contactpointaddress': 'ContactPointAddress'}
+    obj = _canonical.get(obj.lower(), obj)
     if obj == 'Account':
         fields = [
             _describe_field('Id', 'Record ID', 'id'),
@@ -669,15 +794,29 @@ class MockSalesforce:
                     'TableEnumOrId': 'Account' if i == 1 else 'ContactPointEmail',
                     'attributes': {'type': 'ApexTrigger'},
                 })
-        elif 'flowdefinition' in soql_lower:
+        elif 'flowdefinitionview' in soql_lower or 'flowdefinition' in soql_lower:
+            _flow_types = ['AutoLaunchedFlow', 'Flow', 'Workflow']
             for i in range(1, min(limit, 5) + 1):
                 records.append({
-                    'Id': f'301{i:015d}',
-                    'DeveloperName': f'Sync_Student_Record_{i}',
-                    'MasterLabel': f'Sync Student Record {i}',
-                    'ProcessType': 'AutoLaunchedFlow',
-                    'Status': 'Active',
-                    'attributes': {'type': 'FlowDefinition'},
+                    'DurableId': f'301{i:015d}',
+                    'ApiName': f'Sync_Student_Record_{i}',
+                    'Label': f'Sync Student Record {i}',
+                    'ProcessType': _flow_types[i % 3],
+                    'TriggerType': 'RecordAfterSave' if i % 2 else '',
+                    'IsActive': i % 4 != 0,
+                    'Description': f'Mock flow {i}',
+                    'LastModifiedDate': '2026-05-19T10:00:00.000+0000',
+                    'attributes': {'type': 'FlowDefinitionView'},
+                })
+        elif 'flowinterview' in soql_lower:
+            for i in range(1, min(limit, 2) + 1):
+                records.append({
+                    'Id': f'0if{i:015d}',
+                    'InterviewLabel': f'Student Update Flow {i}',
+                    'CurrentElement': f'Update_Account_{i}',
+                    'InterviewStatus': 'Error',
+                    'CreatedDate': '2026-05-20T09:00:00.000+0000',
+                    'attributes': {'type': 'FlowInterview'},
                 })
         elif 'permissionset' in soql_lower and 'assignment' not in soql_lower:
             for i in range(1, min(limit, 6) + 1):

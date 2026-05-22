@@ -74,7 +74,7 @@ MC.validation = {
     const cards = checks.map(check => {
       const isOk = check.status === 'ok';
       const isError = check.status === 'error';
-      const badgeCls = isOk ? 'badge-green' : isError ? 'badge-navy' : 'badge-amber';
+      const badgeCls = isOk ? 'badge-green' : isError ? 'badge-slate' : 'badge-amber';
       const badgeText = isOk ? 'OK' : isError ? 'ERROR' : `${(check.count || 0).toLocaleString()} orphans`;
       const collapseId = `orphanCollapse_${MC._escHtml(check.key)}`;
       const objectType = this._orphanObjectType(check.key);
@@ -83,7 +83,7 @@ MC.validation = {
       if (!isOk && !isError && check.samples && check.samples.length > 0) {
         const rows = check.samples.map(s => {
           const id = s.Id || '';
-          return `<tr><td>${MC.sfLinkHtml(id, objectType)}</td></tr>`;
+          return `<tr><td class="font-monospace small">${MC.sfLinkTag(id, objectType)}</td></tr>`;
         }).join('');
         sampleHtml = `
           <div class="table-responsive mt-2">
@@ -189,8 +189,8 @@ MC.validation = {
     const dateStr = m.merged_at
       ? new Date(m.merged_at).toLocaleString()
       : '—';
-    const masterLink = MC.sfLinkHtml ? MC.sfLinkHtml(m.master_id, 'Account') : MC._escHtml(m.master_id);
-    const victimLink = MC.sfLinkHtml ? MC.sfLinkHtml(m.victim_id, 'Account') : MC._escHtml(m.victim_id);
+    const masterLink = MC.sfLinkTag(m.master_id, 'Account');
+    const victimLink = MC.sfLinkTag(m.victim_id, 'Account');
     return `<tr${rowCls}${errorTitle}>
       <td class="small text-muted">${idx}</td>
       <td class="small">${MC._escHtml(dateStr)}</td>
@@ -264,7 +264,7 @@ MC.validation = {
       const badgeCls =
         row.status === 'green' ? 'badge-green' :
         row.status === 'amber' ? 'badge-amber' :
-        row.status === 'error' ? 'badge-navy' : 'badge-red';
+        row.status === 'error' ? 'badge-slate' : 'badge-red';
       const totalFmt = (row.total || 0).toLocaleString();
       const populatedFmt = (row.populated || 0).toLocaleString();
       const missingFmt = (row.missing || 0).toLocaleString();

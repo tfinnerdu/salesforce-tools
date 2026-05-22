@@ -68,10 +68,12 @@ def bulk_update(org: str, sobject: str, where_clause: str,
                 'errors': [],
             }
 
-        # Real execution path
+        # Real execution path. query_all() follows nextRecordsUrl — a plain
+        # query() caps at the first 2000-record batch and would silently
+        # update only a fraction of a large match set.
         sf = get_sf(org)
         id_soql = f"SELECT Id FROM {sobject} WHERE {where_clause} LIMIT {MAX_RECORDS}"
-        id_result = sf.query(id_soql)
+        id_result = sf.query_all(id_soql)
         records = id_result.get('records', [])
         update_list = [{'Id': r['Id'], field: value} for r in records]
 
