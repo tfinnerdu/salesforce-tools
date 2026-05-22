@@ -192,6 +192,15 @@ def get_connected_apps(org: str) -> list:
     except Exception as exc:
         if Config.SF_MOCK:
             return _mock_connected_apps()
+        # ConnectedApplication needs an elevated permission ("Manage Connected
+        # Apps" / "Customize Application"). Without it the query fails with
+        # INSUFFICIENT_ACCESS; if the object is unavailable it fails with
+        # INVALID_TYPE. Either way, degrade to an empty list so the rest of the
+        # Integration Inventory page still loads.
+        text = str(exc)
+        if 'INSUFFICIENT_ACCESS' in text or 'INVALID_TYPE' in text:
+            logger.warning('connected apps unavailable for org %s: %s', org, exc)
+            return []
         raise
 
 

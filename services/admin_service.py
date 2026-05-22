@@ -286,9 +286,9 @@ def get_email_templates(org: str) -> list:
     soql = (
         "SELECT Id, Name, DeveloperName, FolderId, FolderName, Subject, "
         "Encoding, IsActive, LastModifiedDate, LastModifiedBy.Name "
-        "FROM EmailTemplate ORDER BY FolderName, Name LIMIT 200"
+        "FROM EmailTemplate ORDER BY FolderName, Name"
     )
-    result = sf.query(soql)
+    result = sf.query_all(soql)
     templates = []
     for r in result.get('records', []):
         modifier = r.get('LastModifiedBy') or {}

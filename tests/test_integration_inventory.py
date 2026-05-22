@@ -76,6 +76,35 @@ def test_connected_apps_fields():
         assert 'description' in app
 
 
+def test_connected_apps_degrades_on_insufficient_access(monkeypatch):
+    """A real-org INSUFFICIENT_ACCESS error degrades to [] so the rest of the
+    Integration Inventory page still loads."""
+    import services.integration_inventory as inv
+
+    class _DeniedSF:
+        def query(self, soql):
+            raise Exception('INSUFFICIENT_ACCESS: insufficient access rights '
+                            'on cross-reference id')
+
+    monkeypatch.setattr(inv, 'get_sf', lambda org: _DeniedSF())
+    monkeypatch.setattr(inv.Config, 'SF_MOCK', False)
+    assert inv.get_connected_apps('dev') == []
+
+
+def test_connected_apps_reraises_unexpected_error(monkeypatch):
+    """A non-access error still propagates — only the known cases are swallowed."""
+    import services.integration_inventory as inv
+
+    class _BrokenSF:
+        def query(self, soql):
+            raise RuntimeError('connection reset')
+
+    monkeypatch.setattr(inv, 'get_sf', lambda org: _BrokenSF())
+    monkeypatch.setattr(inv.Config, 'SF_MOCK', False)
+    with pytest.raises(RuntimeError, match='connection reset'):
+        inv.get_connected_apps('dev')
+
+
 def test_remote_sites_is_active_bool():
     """is_active should be a boolean in mock data."""
     from services import integration_inventory

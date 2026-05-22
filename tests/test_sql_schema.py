@@ -124,6 +124,43 @@ def test_friendly_odbc_error_login_failure():
     assert 'cached schema is still in use' in msg
 
 
+# ── ODBC driver auto-detection ────────────────────────────────────────────────
+
+def test_ensure_driver_prepends_when_connection_string_omits_one(monkeypatch):
+    """A driverless connection string gets an installed SQL Server driver prepended.
+
+    A generic 'server=...;database=...;user id=...;password=...' string has no
+    DRIVER clause, which is what triggers the IM002 error.
+    """
+    import sys
+    import types
+    fake_pyodbc = types.SimpleNamespace(
+        drivers=lambda: ['SQL Server', 'ODBC Driver 17 for SQL Server',
+                         'ODBC Driver 18 for SQL Server'])
+    monkeypatch.setitem(sys.modules, 'pyodbc', fake_pyodbc)
+    out = sql_schema._ensure_driver('server=db1;database=Colleague;user id=svc;password=p')
+    assert out.startswith('DRIVER={ODBC Driver 18 for SQL Server};')
+    assert 'server=db1' in out
+
+
+def test_ensure_driver_leaves_an_explicit_driver_untouched(monkeypatch):
+    import sys
+    import types
+    monkeypatch.setitem(sys.modules, 'pyodbc',
+                        types.SimpleNamespace(drivers=lambda: ['ODBC Driver 18 for SQL Server']))
+    conn = 'DRIVER={ODBC Driver 18 for SQL Server};server=db1;database=Colleague'
+    assert sql_schema._ensure_driver(conn) == conn
+
+
+def test_ensure_driver_leaves_a_dsn_string_untouched(monkeypatch):
+    import sys
+    import types
+    monkeypatch.setitem(sys.modules, 'pyodbc',
+                        types.SimpleNamespace(drivers=lambda: ['ODBC Driver 18 for SQL Server']))
+    conn = 'DSN=ColleagueProd;uid=svc;pwd=p'
+    assert sql_schema._ensure_driver(conn) == conn
+
+
 def test_friendly_odbc_error_falls_back_to_raw_text():
     msg = sql_schema._friendly_odbc_error(Exception('something obscure'))
     assert 'something obscure' in msg

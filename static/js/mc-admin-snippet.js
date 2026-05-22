@@ -54,6 +54,13 @@ MC.admin = {
     document.getElementById('emailTemplateSearch')?.addEventListener('input', (e) => {
       this._filterEmailTemplates(e.target.value.trim().toLowerCase());
     });
+    document.getElementById('btnEmailTemplatesPrev')?.addEventListener('click', () => {
+      if (this._emailTemplatesPage > 1) this._renderEmailTemplatesPage(this._emailTemplatesPage - 1);
+    });
+    document.getElementById('btnEmailTemplatesNext')?.addEventListener('click', () => {
+      const maxPage = Math.ceil(this._emailTemplatesView.length / this._emailTemplatesPageSize);
+      if (this._emailTemplatesPage < maxPage) this._renderEmailTemplatesPage(this._emailTemplatesPage + 1);
+    });
 
     // Wire all Refresh buttons inside the integrations tab
     document.querySelectorAll('.integ-refresh-btn').forEach(btn => {
@@ -664,6 +671,9 @@ MC.admin = {
   // ── Email Templates ─────────────────────────────────────────────────────────
 
   _emailTemplates: [],
+  _emailTemplatesView: [],
+  _emailTemplatesPage: 1,
+  _emailTemplatesPageSize: 25,
 
   async loadEmailTemplates() {
     const loading = document.getElementById('emailTemplatesLoading');
@@ -677,17 +687,41 @@ MC.admin = {
     try {
       const data = await MC.api('/admin/email-templates');
       this._emailTemplates = data || [];
+      this._emailTemplatesView = this._emailTemplates;
       if (this._emailTemplates.length === 0) {
         empty?.classList.remove('d-none');
         return;
       }
-      this._renderEmailTemplatesTable(this._emailTemplates);
+      this._renderEmailTemplatesPage(1);
       card?.classList.remove('d-none');
     } catch (err) {
       MC.showToast(`Failed to load email templates: ${err.message}`, 'danger');
       empty?.classList.remove('d-none');
     } finally {
       loading?.classList.add('d-none');
+    }
+  },
+
+  _renderEmailTemplatesPage(page) {
+    this._emailTemplatesPage = page;
+    const view = this._emailTemplatesView;
+    const size = this._emailTemplatesPageSize;
+    const total = view.length;
+    const start = (page - 1) * size;
+    const end = Math.min(start + size, total);
+    this._renderEmailTemplatesTable(view.slice(start, end));
+
+    const pag  = document.getElementById('emailTemplatesPagination');
+    const info = document.getElementById('emailTemplatesPageInfo');
+    const prev = document.getElementById('btnEmailTemplatesPrev');
+    const next = document.getElementById('btnEmailTemplatesNext');
+    if (total > size) {
+      pag?.classList.remove('d-none');
+      if (info) info.textContent = `Showing ${start + 1}–${end} of ${total}`;
+      if (prev) prev.disabled = page === 1;
+      if (next) next.disabled = end >= total;
+    } else {
+      pag?.classList.add('d-none');
     }
   },
 
@@ -715,16 +749,13 @@ MC.admin = {
   },
 
   _filterEmailTemplates(query) {
-    if (!query) {
-      this._renderEmailTemplatesTable(this._emailTemplates);
-      return;
-    }
-    const filtered = this._emailTemplates.filter(t =>
-      (t.name || '').toLowerCase().includes(query) ||
-      (t.folder_name || '').toLowerCase().includes(query) ||
-      (t.subject || '').toLowerCase().includes(query)
-    );
-    this._renderEmailTemplatesTable(filtered);
+    this._emailTemplatesView = query
+      ? this._emailTemplates.filter(t =>
+          (t.name || '').toLowerCase().includes(query) ||
+          (t.folder_name || '').toLowerCase().includes(query) ||
+          (t.subject || '').toLowerCase().includes(query))
+      : this._emailTemplates;
+    this._renderEmailTemplatesPage(1);
   },
 
   // ── Setup Audit Trail ───────────────────────────────────────────────────────

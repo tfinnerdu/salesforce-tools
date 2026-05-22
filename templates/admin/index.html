@@ -650,10 +650,10 @@
     <div class="tab-pane fade" id="tab-email-templates" role="tabpanel" aria-labelledby="tab-email-templates-btn">
       <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
         <small class="text-muted">
-          EmailTemplate records from the active org (LIMIT 200)
+          EmailTemplate records from the active org
           <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
                 tabindex="0" data-bs-title="Email Templates"
-                data-bs-content="Queries EmailTemplate (LIMIT 200) sorted by folder. Inactive templates are grayed out. Encoding other than UTF-8 may need review before migration.">ⓘ</span>
+                data-bs-content="Queries EmailTemplate sorted by folder. Inactive templates are grayed out. Encoding other than UTF-8 may need review before migration.">ⓘ</span>
         </small>
         <div class="d-flex gap-2">
           <input id="emailTemplateSearch" type="text" class="form-control form-control-sm"
@@ -685,6 +685,13 @@
             </thead>
             <tbody id="emailTemplatesTbody"></tbody>
           </table>
+        </div>
+        <div id="emailTemplatesPagination" class="d-none card-footer d-flex justify-content-between align-items-center py-2">
+          <small class="text-muted" id="emailTemplatesPageInfo"></small>
+          <div class="btn-group btn-group-sm">
+            <button id="btnEmailTemplatesPrev" class="btn btn-outline-secondary" disabled>&laquo; Prev</button>
+            <button id="btnEmailTemplatesNext" class="btn btn-outline-secondary">Next &raquo;</button>
+          </div>
         </div>
       </div>
     </div>

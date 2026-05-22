@@ -113,9 +113,10 @@ def _friendly_odbc_error(exc: Exception) -> str:
     text = str(exc)
     tail = 'The last cached schema is still in use.'
     if 'IM002' in text:
-        return ('SQL Server ODBC driver/DSN not found on this server. Install the '
-                'Microsoft ODBC Driver for SQL Server, or fix the DSN named in '
-                f'SQLSERVER_CONN, then retry. {tail} [IM002]')
+        return ('SQL Server ODBC driver not found on this server. Install the '
+                'Microsoft ODBC Driver for SQL Server, or add an explicit '
+                'DRIVER={...} clause to SQLSERVER_CONN, then retry. '
+                f'{tail} [IM002]')
     if 'IM003' in text or 'specified driver could not be loaded' in text.lower():
         return ('The ODBC driver named in SQLSERVER_CONN is registered but could '
                 f'not be loaded (architecture or install issue). {tail} [IM003]')
@@ -124,6 +125,27 @@ def _friendly_odbc_error(exc: Exception) -> str:
     if 'timeout' in text.lower() or 'HYT00' in text or 'HYT01' in text:
         return f'SQL Server did not respond before the connection timed out. {tail}'
     return f'SQL Server refresh failed: {text}. {tail}'
+
+
+def _ensure_driver(conn_str: str) -> str:
+    """Prepend an installed SQL Server ODBC driver when the connection string
+    names neither a DRIVER nor a DSN.
+
+    A generic 'server=...;database=...;user id=...;password=...' string omits
+    the driver, so pyodbc fails with IM002. Most admins write the string this
+    way, so detect an installed driver and prepend it rather than failing.
+    """
+    import pyodbc  # noqa: lazy — only needed for a live refresh
+    lowered = conn_str.lower()
+    if 'driver=' in lowered or 'dsn=' in lowered:
+        return conn_str
+    sql_drivers = [d for d in pyodbc.drivers() if 'sql server' in d.lower()]
+    if not sql_drivers:
+        return conn_str  # none installed — let pyodbc raise its own IM002
+    # Prefer the highest-numbered "ODBC Driver NN for SQL Server".
+    odbc = sorted((d for d in sql_drivers if 'odbc driver' in d.lower()), reverse=True)
+    driver = odbc[0] if odbc else sql_drivers[0]
+    return f'DRIVER={{{driver}}};{conn_str}'
 
 
 def refresh_schema() -> dict:
@@ -147,7 +169,7 @@ def refresh_schema() -> dict:
                 'still in use.'
             )
         try:
-            conn = pyodbc.connect(conn_str, timeout=15)
+            conn = pyodbc.connect(_ensure_driver(conn_str), timeout=15)
         except pyodbc.Error as exc:
             raise RuntimeError(_friendly_odbc_error(exc)) from exc
         try:

@@ -69,7 +69,7 @@ MC.logs = {
 
     if (tab === 'flows') this.loadFlowErrors();
     if (tab === 'cpu') this.loadCpuSummary();
-    if (tab === 'trace' && !this._traceFlagsLoaded) this.loadTraceFlags();
+    if (tab === 'trace') this.loadTraceFlags();
   },
 
   async loadCpuSummary() {
@@ -407,7 +407,6 @@ MC.logs = {
 
   // ── Trace Flags ─────────────────────────────────────────────────────────────
 
-  _traceFlagsLoaded: false,
   _debugLevels: [],
 
   async loadTraceFlags() {
@@ -443,8 +442,6 @@ MC.logs = {
         this._renderTraceFlagsTable(flags);
         table?.classList.remove('d-none');
       }
-
-      this._traceFlagsLoaded = true;
     } catch (err) {
       MC.showToast(`Failed to load trace flags: ${err.message}`, 'danger');
       empty?.classList.remove('d-none');

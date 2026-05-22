@@ -69,9 +69,11 @@ def get_log_body(org: str, log_id: str) -> str:
     except Exception:
         # simple_salesforce failed to parse the plain-text response as JSON.
         # Use the underlying requests session to fetch the raw text directly.
+        # sf.session carries no auth on its own — the bearer token lives in
+        # sf.headers, so it must be passed explicitly or the fetch 401s.
         if hasattr(sf, 'session') and hasattr(sf, 'base_url'):
             url = sf.base_url + path
-            resp = sf.session.get(url)
+            resp = sf.session.get(url, headers=getattr(sf, 'headers', None))
             resp.raise_for_status()
             return resp.text
         raise
