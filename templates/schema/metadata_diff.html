@@ -46,10 +46,11 @@
         </div>
         <div class="col-sm-3 col-lg-2">
           <label for="rightOrgSelect" class="form-label small fw-semibold mb-1">Right Org</label>
+          {% set default_right = (available_orgs | reject('equalto', active_org) | first) or active_org %}
           <select id="rightOrgSelect" class="form-select form-select-sm">
-            <option value="dev">dev</option>
-            <option value="prod" selected>prod</option>
-            <option value="sandbox">sandbox</option>
+            {% for o in available_orgs %}
+            <option value="{{ o }}"{% if o == default_right %} selected{% endif %}>{{ o }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="col-sm">

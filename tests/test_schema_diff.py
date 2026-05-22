@@ -82,3 +82,26 @@ def test_run_diff_uses_default_objects_when_none():
     result = run_diff('dev', 'prod')
     for obj in ED_CLOUD_OBJECTS:
         assert obj in result['objects']
+
+
+def test_get_object_schema_object_name_is_case_insensitive(mock_sf):
+    """A lowercase object name resolves to the same describe as the canonical name.
+
+    Real Salesforce treats sObject names case-insensitively in REST paths; the
+    mock must too, or a lowercase 'account' would diff against a stub describe.
+    """
+    from services.schema_diff import get_object_schema
+    lower = get_object_schema(mock_sf, 'account')
+    proper = get_object_schema(mock_sf, 'Account')
+    assert set(lower) == set(proper)
+    assert 'SIS_ID__c' in lower
+
+
+def test_run_diff_rejects_real_vs_mock_org(monkeypatch):
+    """Real mode + an unconfigured org must raise — never diff real vs mock."""
+    import services.schema_diff as sd
+    import sf_provider
+    monkeypatch.setattr(sf_provider.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(sf_provider, '_configured', lambda org: org == 'sandbox')
+    with pytest.raises(ValueError, match='no Salesforce credentials'):
+        sd.run_diff('sandbox', 'prod', ['Account'])

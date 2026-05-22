@@ -24,14 +24,20 @@ def crosswalk():
 
 @schema_bp.route('/org-diff')
 def org_diff():
-    return render_template('schema/org_diff.html')
+    from sf_provider import available_orgs
+    return render_template('schema/org_diff.html',
+                           available_orgs=available_orgs(),
+                           active_org=session.get('active_org', 'dev'))
 
 
 @schema_bp.route('/metadata-diff')
 def metadata_diff_page():
     from services import metadata_diff
+    from sf_provider import available_orgs
     return render_template('schema/metadata_diff.html',
-                           metadata_types=metadata_diff.METADATA_TYPES)
+                           metadata_types=metadata_diff.METADATA_TYPES,
+                           available_orgs=available_orgs(),
+                           active_org=session.get('active_org', 'dev'))
 
 
 @schema_bp.route('/field-usage')
@@ -205,7 +211,7 @@ def api_snapshots_delete(snap_id):
 def api_org_diff_run():
     left_org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
-    right_org = body.get('compare_org') or request.args.get('compare_org', 'prod')
+    right_org = body.get('compare_org') or body.get('right_org') or 'prod'
     objects = body.get('objects', [])
     try:
         result = schema_diff.run_diff(
@@ -214,6 +220,8 @@ def api_org_diff_run():
             objects=objects,
         )
         return jsonify({'success': True, 'data': result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 400
     except Exception as exc:
         logger.exception('org diff failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
@@ -229,6 +237,8 @@ def api_metadata_diff_run():
     try:
         result = metadata_diff.run_metadata_diff(left_org, right_org, types)
         return jsonify({'success': True, 'data': result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 400
     except Exception as exc:
         logger.exception('metadata diff failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500

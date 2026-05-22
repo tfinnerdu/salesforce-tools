@@ -17,7 +17,7 @@ import logging
 from datetime import datetime, timezone
 
 from config import Config
-from sf_provider import get_sf
+from sf_provider import get_sf, assert_orgs_comparable
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +269,7 @@ def run_metadata_diff(left_org: str, right_org: str, types=None) -> dict:
     ``types`` is an optional list of metadata-type keys (see METADATA_TYPES);
     when omitted or empty, every type is compared.
     """
+    assert_orgs_comparable(left_org, right_org)
     requested = [t for t in (types or []) if t in _TYPE_KEYS]
     selected = requested if requested else list(_TYPE_KEYS)
 

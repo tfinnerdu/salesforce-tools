@@ -142,6 +142,48 @@ def _configured(org: str) -> bool:
     return bool(cfg['username'] and cfg['password'])
 
 
+def org_is_mocked(org: str) -> bool:
+    """Return True when get_sf(org) yields a MockSalesforce, not a real client.
+
+    Mirrors the decision in get_sf(): a mock is used when SF_MOCK is set
+    globally, or when the org has no real credentials configured.
+    """
+    return Config.SF_MOCK or not _configured(org)
+
+
+def assert_orgs_comparable(left_org: str, right_org: str) -> None:
+    """Raise ValueError when a diff would silently mix real and mock data.
+
+    If one org resolves to a real client and the other falls back to mock, the
+    diff is meaningless — every component differs. Surface that as a clear
+    configuration error instead of a misleading result.
+    """
+    left_mock = org_is_mocked(left_org)
+    right_mock = org_is_mocked(right_org)
+    if left_mock == right_mock:
+        return
+    bad = right_org if right_mock else left_org
+    raise ValueError(
+        f"Org '{bad}' has no Salesforce credentials configured "
+        f"(SF_{bad.upper()}_USERNAME / SF_{bad.upper()}_PASSWORD). Comparing it "
+        f"would diff a real org against mock data and report every component as "
+        f"different. Configure the org, or pick one that is."
+    )
+
+
+def available_orgs() -> list:
+    """Org names to offer in diff pickers.
+
+    With SF_MOCK on, every demo org is valid. In real mode only orgs that have
+    credentials are offered, so an unconfigured name can't be picked by mistake.
+    """
+    candidates = ['dev', 'prod', 'sandbox']
+    if Config.SF_MOCK:
+        return candidates
+    configured = [o for o in candidates if _configured(o)]
+    return configured or candidates
+
+
 def _parse_mock_count(soql: str) -> int:
     """Best-effort count extraction from a COUNT() SOQL query."""
     soql_lower = soql.lower()
@@ -463,6 +505,12 @@ def _make_process_exception(idx: int) -> dict:
 
 
 def _build_describe(obj: str) -> dict:
+    # Real Salesforce resolves sObject names case-insensitively in REST paths;
+    # mirror that so a lowercase 'account' yields the Account describe.
+    _canonical = {'account': 'Account', 'contactpointemail': 'ContactPointEmail',
+                  'contactpointphone': 'ContactPointPhone',
+                  'contactpointaddress': 'ContactPointAddress'}
+    obj = _canonical.get(obj.lower(), obj)
     if obj == 'Account':
         fields = [
             _describe_field('Id', 'Record ID', 'id'),

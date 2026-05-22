@@ -1,4 +1,6 @@
 """Tests for services.metadata_diff — org-to-org metadata comparison."""
+import pytest
+
 from services import metadata_diff
 
 
@@ -77,6 +79,30 @@ def test_run_metadata_diff_respects_type_filter():
 def test_run_metadata_diff_ignores_unknown_types_and_falls_back_to_all():
     result = metadata_diff.run_metadata_diff('dev', 'prod', types=['bogus'])
     assert len(result['types']) == len(metadata_diff.METADATA_TYPES)
+
+
+# ── Real/mock mixing guard ────────────────────────────────────────────────────
+
+def test_run_metadata_diff_rejects_real_vs_mock_org(monkeypatch):
+    """Real mode + an unconfigured org must raise — never diff real vs mock."""
+    import sf_provider
+    monkeypatch.setattr(sf_provider.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(sf_provider, '_configured', lambda org: org == 'sandbox')
+    with pytest.raises(ValueError, match='no Salesforce credentials'):
+        metadata_diff.run_metadata_diff('sandbox', 'prod')
+
+
+def test_available_orgs_filters_to_configured_in_real_mode(monkeypatch):
+    import sf_provider
+    monkeypatch.setattr(sf_provider.Config, 'SF_MOCK', False)
+    monkeypatch.setattr(sf_provider, '_configured', lambda org: org == 'sandbox')
+    assert sf_provider.available_orgs() == ['sandbox']
+
+
+def test_available_orgs_offers_all_demo_orgs_in_mock_mode(monkeypatch):
+    import sf_provider
+    monkeypatch.setattr(sf_provider.Config, 'SF_MOCK', True)
+    assert sf_provider.available_orgs() == ['dev', 'prod', 'sandbox']
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
