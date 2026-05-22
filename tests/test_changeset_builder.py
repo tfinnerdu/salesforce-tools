@@ -1,6 +1,66 @@
 """Tests for services.changeset_builder and routes.deploy."""
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch
+from flask import Flask
+
+
+# ── Salesforce double ─────────────────────────────────────────────────────────
+
+# Rows keyed by the SOQL fragment that selects them; query_all / restful route
+# by the object name appearing in the SOQL string.
+_QUERY_ALL_ROWS = {
+    'ApexClass': [
+        {'Name': 'AccountTriggerHandler', 'LastModifiedDate': '2026-01-01T00:00:00Z'},
+        {'Name': 'StudentSyncService', 'LastModifiedDate': '2026-02-01T00:00:00Z'},
+    ],
+    'ApexTrigger': [
+        {'Name': 'AccountTrigger', 'TableEnumOrId': 'Account'},
+        {'Name': 'ContactPointEmailTrigger', 'TableEnumOrId': 'ContactPointEmail'},
+    ],
+    'FlowDefinitionView': [
+        {'ApiName': 'Student_Onboarding', 'Label': 'Student Onboarding',
+         'ProcessType': 'Flow', 'IsActive': True},
+        {'ApiName': 'Lead_Routing', 'Label': 'Lead Routing',
+         'ProcessType': 'AutoLaunchedFlow', 'IsActive': False},
+    ],
+    'PermissionSet': [
+        {'Name': 'Migration_Admin', 'Label': 'Migration Admin'},
+        {'Name': 'SOQL_Runner', 'Label': 'SOQL Runner'},
+    ],
+}
+_RESTFUL_ROWS = {
+    'CustomField': [
+        {'DeveloperName': 'SIS_ID', 'EntityDefinition': {'QualifiedApiName': 'Account'}},
+        {'DeveloperName': 'Ethos_Guid', 'EntityDefinition': {'QualifiedApiName': 'Account'}},
+    ],
+    'ValidationRule': [
+        {'ValidationName': 'Require_SIS_ID', 'EntityDefinition': {'QualifiedApiName': 'Account'}},
+        {'ValidationName': 'Phone_Format', 'EntityDefinition': {'QualifiedApiName': 'ContactPointPhone'}},
+    ],
+}
+
+
+def _fake_sf():
+    """A Salesforce double serving changeset_builder's query_all / restful calls."""
+    sf = MagicMock()
+
+    def query_all(soql):
+        for obj, rows in _QUERY_ALL_ROWS.items():
+            if f'FROM {obj}' in soql:
+                return {'records': rows, 'totalSize': len(rows), 'done': True}
+        return {'records': [], 'totalSize': 0, 'done': True}
+
+    def restful(path, params=None):
+        q = (params or {}).get('q', '')
+        for obj, rows in _RESTFUL_ROWS.items():
+            if f'FROM {obj}' in q:
+                return {'records': rows, 'totalSize': len(rows), 'done': True}
+        return {'records': [], 'totalSize': 0, 'done': True}
+
+    sf.query_all.side_effect = query_all
+    sf.restful.side_effect = restful
+    return sf
 
 
 # ── Service unit tests ────────────────────────────────────────────────────────
@@ -8,9 +68,10 @@ from unittest.mock import patch
 class TestListComponents:
     """list_components returns correct structure for each metadata type."""
 
-    def setup_method(self):
-        from services.changeset_builder import list_components
-        self.list = list_components
+    def _list(self, component_type):
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            from services.changeset_builder import list_components
+            return list_components('dev', component_type)
 
     def _check_shape(self, items, expected_type):
         assert isinstance(items, list)
@@ -23,66 +84,69 @@ class TestListComponents:
             assert item['member']  # non-empty
 
     def test_apex_class_returns_list(self):
-        items = self.list('dev', 'ApexClass')
+        items = self._list('ApexClass')
         self._check_shape(items, 'ApexClass')
 
     def test_apex_class_member_has_no_extension(self):
-        items = self.list('dev', 'ApexClass')
+        items = self._list('ApexClass')
         for item in items:
             assert '.' not in item['member']
 
     def test_apex_trigger_returns_list(self):
-        items = self.list('dev', 'ApexTrigger')
+        items = self._list('ApexTrigger')
         self._check_shape(items, 'ApexTrigger')
 
     def test_apex_trigger_label_contains_object(self):
-        items = self.list('dev', 'ApexTrigger')
+        items = self._list('ApexTrigger')
         # At least one trigger label should mention the sObject
         labels = [item['label'] for item in items]
         assert any('Account' in lbl or 'ContactPoint' in lbl for lbl in labels)
 
     def test_flow_returns_list(self):
-        items = self.list('dev', 'Flow')
+        items = self._list('Flow')
         self._check_shape(items, 'Flow')
 
     def test_flow_member_is_developer_name(self):
-        items = self.list('dev', 'Flow')
+        items = self._list('Flow')
         for item in items:
-            # DeveloperName must not contain spaces
+            # ApiName must not contain spaces
             assert ' ' not in item['member']
 
     def test_permission_set_returns_list(self):
-        items = self.list('dev', 'PermissionSet')
+        items = self._list('PermissionSet')
         self._check_shape(items, 'PermissionSet')
 
     def test_custom_field_returns_list(self):
-        items = self.list('dev', 'CustomField')
+        items = self._list('CustomField')
         self._check_shape(items, 'CustomField')
 
     def test_custom_field_member_format(self):
-        items = self.list('dev', 'CustomField')
+        items = self._list('CustomField')
         for item in items:
             # member must be ObjectName.FieldName__c
             assert '.' in item['member']
             assert item['member'].endswith('__c')
 
     def test_validation_rule_returns_list(self):
-        items = self.list('dev', 'ValidationRule')
+        items = self._list('ValidationRule')
         self._check_shape(items, 'ValidationRule')
 
     def test_validation_rule_member_format(self):
-        items = self.list('dev', 'ValidationRule')
+        items = self._list('ValidationRule')
         for item in items:
             # member must be ObjectName.RuleName
             assert '.' in item['member']
 
     def test_unsupported_type_returns_empty(self):
-        items = self.list('dev', 'Profile')
+        items = self._list('Profile')
         assert items == []
 
 
 class TestBuildPackage:
-    """build_package produces correct XML and checklist."""
+    """build_package produces correct XML and checklist.
+
+    build_package is pure logic — it never touches Salesforce.
+    """
 
     def setup_method(self):
         from services.changeset_builder import build_package
@@ -189,17 +253,11 @@ class TestBuildPackage:
 # These tests use a dedicated minimal Flask app with only the deploy blueprint
 # registered, so they do not depend on app.py being updated yet.
 
-import pytest
-from flask import Flask
-
 
 @pytest.fixture(scope='module')
 def deploy_client():
     """Minimal Flask test client with only the deploy blueprint registered."""
-    import os
-    os.environ.setdefault('SF_MOCK', 'true')
     from routes.deploy import deploy_bp
-    from config import Config
 
     mini_app = Flask(__name__, template_folder='../templates')
     mini_app.secret_key = 'test-deploy-secret'
@@ -209,8 +267,7 @@ def deploy_client():
     # Provide the context processors that base.html needs
     @mini_app.context_processor
     def _inject():
-        from flask import session
-        return {'sf_mock_mode': True, 'sf_instance': ''}
+        return {'sf_instance': ''}
 
     with mini_app.test_client() as c:
         yield c
@@ -228,7 +285,8 @@ class TestDeployRoutes:
         assert resp.status_code in (200, 301, 308)
 
     def test_components_apex_class(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=ApexClass')
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=ApexClass')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -236,33 +294,39 @@ class TestDeployRoutes:
         assert len(data['data']) > 0
 
     def test_components_apex_trigger(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=ApexTrigger')
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=ApexTrigger')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_custom_field(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=CustomField')
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=CustomField')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         items = data['data']
+        assert len(items) > 0
         assert all('.' in item['member'] for item in items)
 
     def test_components_flow(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=Flow')
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=Flow')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_permission_set(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=PermissionSet')
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=PermissionSet')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_validation_rule(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=ValidationRule')
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=ValidationRule')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True

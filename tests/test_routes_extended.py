@@ -71,9 +71,23 @@ def test_migration_readiness_history_exception_returns_500(client):
     assert data['success'] is False
 
 
+def _conductor():
+    """A Conductor double for routes that fan out to batch_tracker/error_reconciler."""
+    c = MagicMock()
+    c.get_batch_status.return_value = {
+        'completed': 1, 'failed': 0, 'running': 0, 'timed_out': 0,
+        'queued': 0, 'total': 1,
+    }
+    c.search_workflows.return_value = []
+    c.retry_workflow.return_value = {'workflow_id': 'wf-001', 'status_code': 200}
+    return c
+
+
 def test_migration_batch_status_invalid_start_time(client):
     """Lines 64-68: invalid start_time_ms is silently set to None."""
-    resp = client.get('/migration/batch/status?workflow_name=Test&start_time_ms=not_an_int')
+    with patch('services.batch_tracker.get_conductor_client', return_value=_conductor()):
+        resp = client.get(
+            '/migration/batch/status?workflow_name=Test&start_time_ms=not_an_int')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -106,7 +120,9 @@ def test_migration_batch_rerun_exception_returns_500(client):
 
 def test_migration_reconciler_errors_invalid_hours_back(client):
     """Lines 103-105: non-numeric hours_back is coerced to 24."""
-    resp = client.get('/migration/reconciler/errors?workflow_name=Test&hours_back=abc')
+    with patch('services.error_reconciler.get_conductor_client', return_value=_conductor()):
+        resp = client.get(
+            '/migration/reconciler/errors?workflow_name=Test&hours_back=abc')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -131,7 +147,9 @@ def test_migration_reconciler_rerun_no_ids_returns_400(client):
 
 
 def test_migration_reconciler_rerun_with_ids_succeeds(client):
-    resp = client.post('/migration/reconciler/rerun', json={'workflow_ids': ['wf-001']})
+    with patch('services.error_reconciler.get_conductor_client', return_value=_conductor()):
+        resp = client.post('/migration/reconciler/rerun',
+                           json={'workflow_ids': ['wf-001']})
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -285,7 +303,8 @@ def test_schema_crosswalk_upload_exception_returns_500(client):
 
 
 def test_schema_crosswalk_run_succeeds(client):
-    resp = client.post('/schema/crosswalk/run', json={'mappings': []})
+    with patch('services.crosswalk_diff.get_sf', return_value=MagicMock()):
+        resp = client.post('/schema/crosswalk/run', json={'mappings': []})
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -579,15 +598,16 @@ def test_soql_update_missing_fields_returns_400(client):
 
 
 def test_soql_update_succeeds(client):
-    resp = client.post(
-        '/soql/update',
-        json={
-            'object_name': 'Account',
-            'record_id': '001ABC',
-            'field_name': 'Name',
-            'value': 'New Name',
-        },
-    )
+    with patch('services.soql_workbench.get_sf', return_value=MagicMock()):
+        resp = client.post(
+            '/soql/update',
+            json={
+                'object_name': 'Account',
+                'record_id': '001ABC',
+                'field_name': 'Name',
+                'value': 'New Name',
+            },
+        )
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True

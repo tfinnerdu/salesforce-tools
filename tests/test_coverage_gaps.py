@@ -2,6 +2,9 @@
 
 Covers: app.py, config.py, db.py, scheduler.py, sf_provider.py,
 conductor_provider.py, and all service-layer exception/edge-case branches.
+
+There is no mock-data layer — every Salesforce / Conductor interaction here is
+exercised through a `unittest.mock` double patched into the service under test.
 """
 import json
 import os
@@ -36,7 +39,6 @@ class TestAppInitDb:
             mock_conn.cursor.return_value.__enter__.return_value = mock_cur
             mock_conn.cursor.return_value.__exit__.return_value = False
             mock_connect.return_value = mock_conn
-            import logging
             with patch('app.logger') as mock_logger:
                 from app import create_app
                 create_app()
@@ -276,7 +278,6 @@ class TestScheduler:
         # readiness_validator is imported inside the function body; patch via services package
         mock_rv = MagicMock()
         mock_rv.run_full_readiness_check.return_value = mock_result
-        import sys
         # Inject mock into sys.modules so the local import picks it up
         with patch.dict('sys.modules', {'services.readiness_validator': mock_rv,
                                          'services': MagicMock(readiness_validator=mock_rv)}):
@@ -296,7 +297,6 @@ class TestScheduler:
 
         mock_rv = MagicMock()
         mock_rv.run_full_readiness_check.side_effect = Exception("SF down")
-        import sys
         with patch.dict('sys.modules', {'services.readiness_validator': mock_rv,
                                          'services': MagicMock(readiness_validator=mock_rv)}):
             # Should not raise — exception is caught internally
@@ -309,17 +309,14 @@ class TestScheduler:
 
 class TestSfProviderConfigured:
     def test_configured_returns_false_without_credentials(self):
-        """Lines 16-17: _configured returns False when env vars are absent."""
+        """_configured returns False when env vars are absent."""
         from sf_provider import _configured
-        with patch.dict(os.environ, {}, clear=False):
-            # Default env has no SF_DEV_USERNAME set to a real value
-            # We patch get_org_config to return empty strings
-            with patch('sf_provider.get_org_config', return_value={'username': '', 'password': ''}):
-                result = _configured('dev')
+        with patch('sf_provider.get_org_config', return_value={'username': '', 'password': ''}):
+            result = _configured('dev')
         assert result is False
 
     def test_configured_returns_true_with_credentials(self):
-        """Lines 16-17: _configured returns True when both username and password are present."""
+        """_configured returns True when both username and password are present."""
         from sf_provider import _configured
         with patch('sf_provider.get_org_config', return_value={
             'username': 'u@test.com', 'password': 'pass123'
@@ -328,131 +325,52 @@ class TestSfProviderConfigured:
         assert result is True
 
 
-class TestParseMockCountIndividualApplication:
-    def test_individual_application_sis_null(self):
-        """Line 59: IndividualApplication with SIS_ID__c = null returns 185."""
-        from sf_provider import _parse_mock_count
-        result = _parse_mock_count(
-            "SELECT COUNT() FROM IndividualApplication WHERE SIS_ID__c = null"
-        )
-        assert result == 185
-
-    def test_individual_application_ethos_null(self):
-        """Line 63: IndividualApplication with Ethos_Guid__c = null returns 200."""
-        from sf_provider import _parse_mock_count
-        result = _parse_mock_count(
-            "SELECT COUNT() FROM IndividualApplication WHERE Ethos_Guid__c = null"
-        )
-        assert result == 200
+class TestGetSfUnconfigured:
+    def test_get_sf_raises_when_org_has_no_credentials(self):
+        """get_sf raises RuntimeError for an org with no credentials — never fakes data."""
+        import sf_provider
+        with patch('sf_provider._configured', return_value=False):
+            with pytest.raises(RuntimeError, match='no Salesforce credentials'):
+                sf_provider.get_sf('dev')
 
 
-class TestParseMockCountUnknown:
-    def test_unknown_object_returns_100(self):
-        """Line 86: catch-all for unknown objects returns 100."""
-        from sf_provider import _parse_mock_count
-        result = _parse_mock_count("SELECT COUNT() FROM CustomObject__c WHERE Status__c = null")
-        assert result == 100
-
-
-class TestMockSFObject:
-    def test_get_returns_record_dict(self):
-        """Line 222: _MockSFObject.get returns a dict with the record id."""
-        from sf_provider import _MockSFObject
-        obj = _MockSFObject('Account')
-        result = obj.get('001ABC')
-        assert result['Id'] == '001ABC'
-        assert result['attributes']['type'] == 'Account'
-
-    def test_update_returns_204(self):
-        """Line 230: _MockSFObject.update returns 204."""
-        from sf_provider import _MockSFObject
-        obj = _MockSFObject('Account')
-        result = obj.update('001ABC', {'Name': 'New Name'})
-        assert result == 204
-
-
-class TestMockSalesforceQueryMore:
-    def test_query_more_returns_empty(self):
-        """Line 272: MockSalesforce.query_more returns empty result."""
-        from sf_provider import MockSalesforce
-        sf = MockSalesforce()
-        result = sf.query_more('/services/data/v59.0/query/next-page')
-        assert result['done'] is True
-        assert result['records'] == []
-        assert result['totalSize'] == 0
-
-
-class TestMockSalesforceRestful:
-    def test_restful_describe_global(self):
-        """Lines 285-286: restful('sobjects') returns DescribeGlobal with sobjects list."""
-        from sf_provider import MockSalesforce
-        sf = MockSalesforce()
-        result = sf.restful('sobjects')
-        assert 'sobjects' in result
-        names = [o['name'] for o in result['sobjects']]
-        assert 'Account' in names
-
-    def test_restful_explain(self):
-        """Lines 299-312: restful with 'explain' returns plans list."""
-        from sf_provider import MockSalesforce
-        sf = MockSalesforce()
-        result = sf.restful('query/explain?q=SELECT+Id+FROM+Account')
-        assert 'plans' in result
-        assert len(result['plans']) > 0
-
-    def test_restful_unknown_path_returns_empty_dict(self):
-        """Line 312: restful with unrecognized path returns {}."""
-        from sf_provider import MockSalesforce
-        sf = MockSalesforce()
-        result = sf.restful('some/unknown/path')
-        assert result == {}
-
-
-class TestMockRecordsGenericElse:
-    def test_mock_records_generic_object(self):
-        """Lines 299-312 (_mock_records else branch): unknown object returns generic records."""
-        from sf_provider import MockSalesforce
-        sf = MockSalesforce()
-        result = sf.query("SELECT Id FROM SomeOtherObject__c LIMIT 5")
-        assert isinstance(result['records'], list)
-        # Generic records have Id and attributes
-        if result['records']:
-            assert 'Id' in result['records'][0]
-
-
-class TestGetSfRealPath:
-    def test_get_sf_real_path_when_mock_false(self):
-        """Lines 347-350: get_sf takes real Salesforce path when SF_MOCK=false and configured."""
-        import importlib
+class TestGetSfRealConnection:
+    def test_get_sf_builds_real_salesforce_client_when_configured(self):
+        """get_sf connects via simple_salesforce.Salesforce when the org is configured."""
         import sys
         import sf_provider
-        import config as config_mod
 
-        # Salesforce is imported locally inside get_sf(), so we inject a mock
-        # into sys.modules under 'simple_salesforce' before the import runs.
+        # Salesforce is imported locally inside get_sf(); inject a stub module
+        # so no real network connection is attempted.
         mock_sf_instance = MagicMock()
         mock_sf_class = MagicMock(return_value=mock_sf_instance)
         mock_simple_sf_module = MagicMock()
         mock_simple_sf_module.Salesforce = mock_sf_class
 
-        with patch.dict(os.environ, {
-            'SF_MOCK': 'false',
-            'SF_DEV_USERNAME': 'u@test.com',
-            'SF_DEV_PASSWORD': 'pass',
-            'SF_DEV_TOKEN': 'tok',
-        }):
-            importlib.reload(config_mod)
-            importlib.reload(sf_provider)
+        cfg = {
+            'username': 'u@test.com', 'password': 'pass', 'security_token': 'tok',
+            'domain': 'login', 'api_version': '59.0',
+        }
+        with patch('sf_provider._configured', return_value=True), \
+             patch('sf_provider.get_org_config', return_value=cfg), \
+             patch.dict(sys.modules, {'simple_salesforce': mock_simple_sf_module}):
+            result = sf_provider.get_sf('dev')
 
-            with patch.dict(sys.modules, {'simple_salesforce': mock_simple_sf_module}):
-                result = sf_provider.get_sf('dev')
+        mock_sf_class.assert_called_once()
+        assert result is mock_sf_instance
 
-            mock_sf_class.assert_called_once()
-            assert result is mock_sf_instance
 
-        # Restore mock mode
-        importlib.reload(config_mod)
-        importlib.reload(sf_provider)
+class TestAvailableOrgs:
+    def test_available_orgs_only_returns_configured_orgs(self):
+        """available_orgs filters the candidate list to orgs with credentials."""
+        import sf_provider
+        with patch('sf_provider._configured', side_effect=lambda o: o == 'prod'):
+            assert sf_provider.available_orgs() == ['prod']
+
+    def test_available_orgs_empty_when_nothing_configured(self):
+        import sf_provider
+        with patch('sf_provider._configured', return_value=False):
+            assert sf_provider.available_orgs() == []
 
 
 # ---------------------------------------------------------------------------
@@ -711,47 +629,27 @@ class TestConductorClientRetryWorkflow:
         assert result['status_code'] == 200
 
 
-class TestMockConductorClientGetWorkflowDetail:
-    def test_get_workflow_detail_found_by_id(self):
-        """Lines 199-202: MockConductorClient.get_workflow_detail returns detail for known id."""
-        from conductor_provider import MockConductorClient, _MOCK_WORKFLOWS
-        client = MockConductorClient()
-        known_id = _MOCK_WORKFLOWS[0]['workflowId']
-        result = client.get_workflow_detail(known_id)
-        assert result['workflowId'] == known_id
-        assert 'tasks' in result
-
-    def test_get_workflow_detail_unknown_id_returns_fallback(self):
-        """Lines 199-209: get_workflow_detail returns fallback dict for unknown id."""
-        from conductor_provider import MockConductorClient
-        client = MockConductorClient()
-        result = client.get_workflow_detail('wf-nonexistent-99999')
-        assert result['workflowId'] == 'wf-nonexistent-99999'
-        assert result['status'] == 'FAILED'
+class TestGetConductorClientUnconfigured:
+    def test_get_conductor_client_raises_when_not_configured(self):
+        """get_conductor_client raises RuntimeError when Conductor is not configured."""
+        import conductor_provider
+        with patch('conductor_provider._configured', return_value=False):
+            with pytest.raises(RuntimeError, match='not configured'):
+                conductor_provider.get_conductor_client()
 
 
 class TestGetConductorClientRealPath:
-    def test_get_conductor_client_real_path(self):
-        """Lines 223-224: get_conductor_client returns real ConductorClient when mock=false."""
-        import importlib
+    def test_get_conductor_client_returns_real_client_when_configured(self):
+        """get_conductor_client returns a live ConductorClient when configured."""
         import conductor_provider
-        import config as config_mod
-
-        with patch.dict(os.environ, {
-            'CONDUCTOR_MOCK': 'false',
-            'CONDUCTOR_URL': 'http://conductor:8080',
-            'CONDUCTOR_API_KEY': 'real-key',
-        }):
-            importlib.reload(config_mod)
-            importlib.reload(conductor_provider)
-
+        from conductor_provider import ConductorClient
+        with patch('conductor_provider._configured', return_value=True), \
+             patch('conductor_provider.Config') as mock_cfg:
+            mock_cfg.CONDUCTOR_URL = 'http://conductor:8080'
+            mock_cfg.CONDUCTOR_API_KEY = 'real-key'
             result = conductor_provider.get_conductor_client()
-            from conductor_provider import ConductorClient
-            assert isinstance(result, ConductorClient)
-
-        # Restore
-        importlib.reload(config_mod)
-        importlib.reload(conductor_provider)
+        assert isinstance(result, ConductorClient)
+        assert result.base_url == 'http://conductor:8080'
 
 
 # ---------------------------------------------------------------------------
@@ -840,15 +738,15 @@ class TestDuplicateRadarNameDobDupes:
 
 
 class TestDuplicateRadarMergeExceptions:
-    def test_merge_attribute_error_treated_as_success(self):
-        """Line 111: AttributeError during merge is treated as success (mock has no merge)."""
+    def test_merge_attribute_error_returns_failure(self):
+        """An AttributeError raised by Account.merge is caught and reported as a failure."""
         from services.duplicate_radar import merge
         mock_sf = MagicMock()
         # Make Account.merge raise AttributeError
         mock_sf.Account.merge.side_effect = AttributeError("no merge method")
         with patch('services.duplicate_radar.get_sf', return_value=mock_sf):
             result = merge('dev', '001AAA', '001BBB')
-        assert result['success'] is True
+        assert result['success'] is False
 
     def test_merge_general_exception_returns_failure(self):
         """Lines 115-117: general exception sets success=False."""
@@ -979,7 +877,9 @@ class TestSchemaDiffRunDiffException:
         from services.schema_diff import run_diff
         mock_sf = MagicMock()
         mock_sf.restful.side_effect = Exception("describe failed")
-        with patch('services.schema_diff.get_sf', return_value=mock_sf):
+        # run_diff calls assert_orgs_comparable first — both orgs must look configured.
+        with patch('sf_provider._configured', return_value=True), \
+             patch('services.schema_diff.get_sf', return_value=mock_sf):
             result = run_diff('dev', 'prod', objects=['Account'])
         assert 'Account' in result['objects']
         assert 'error' in result['objects']['Account']
@@ -987,37 +887,8 @@ class TestSchemaDiffRunDiffException:
 
 
 # ---------------------------------------------------------------------------
-# Additional gap closures — remaining uncovered lines after first run
+# Additional readiness status branches
 # ---------------------------------------------------------------------------
-
-class TestMockSFObjectUpsert:
-    def test_upsert_returns_success_dict(self):
-        """sf_provider.py line 222: _MockSFObject.upsert returns success dict."""
-        from sf_provider import _MockSFObject
-        obj = _MockSFObject('Account')
-        result = obj.upsert('SIS_ID__c/STU12345', {'Name': 'Test'})
-        assert result['success'] is True
-        assert result['id'] == 'mock-Account-001'
-        assert result['errors'] == []
-        assert result['created'] is True
-
-
-class TestMockSalesforceRestfulDescribeIndexError:
-    def test_restful_describe_path_index_error_branch(self):
-        """sf_provider.py lines 285-286: describe path where IndexError occurs on parts[obj_idx].
-
-        Trigger: path='describe/sobjects' → parts=['describe','sobjects'],
-        index('sobjects')=1, obj_idx=2, parts[2] raises IndexError.
-        """
-        from sf_provider import MockSalesforce
-        sf = MockSalesforce()
-        # 'describe/sobjects' has both 'sobjects' and 'describe' in it.
-        # parts=['describe','sobjects']: index('sobjects')=1, +1=2, parts[2] → IndexError
-        result = sf.restful('describe/sobjects')
-        # Fallback obj_name='Unknown' → _build_describe('Unknown') → just Id field
-        assert 'fields' in result
-        assert result['name'] == 'Unknown'
-
 
 class TestReadinessValidatorAmberAndGreenStatus:
     def _make_amber_sf(self):
@@ -1030,13 +901,11 @@ class TestReadinessValidatorAmberAndGreenStatus:
             'records': [{'Id': f'001{i:015d}', 'SIS_ID__c': f'STU{i:05d}'} for i in range(100)],
         }
         # All sf.query() calls: total COUNT returns 100, covered-count queries return 95
-        # (i.e. queries with WHERE clause return 95; queries without return 100)
         def mock_query(soql):
             soql_lower = soql.lower()
             if 'where' not in soql_lower:
                 return {'totalSize': 100, 'done': True, 'records': []}
-            # Covered: 95%; missing: 5%
-            # Queries using "!= null" or "= null" both return 5 for missing, 95 for covered
+            # Queries using "= null" (missing) return 5; "!= null" (covered) return 95
             if '= null' in soql_lower and '!= null' not in soql_lower:
                 return {'totalSize': 5, 'done': True, 'records': []}
             return {'totalSize': 95, 'done': True, 'records': []}
@@ -1044,19 +913,17 @@ class TestReadinessValidatorAmberAndGreenStatus:
         return mock_sf
 
     def test_run_full_readiness_check_amber_status(self):
-        """readiness_validator.py line 181-182: overall_status='amber' when no red but some amber."""
+        """overall_status='amber' when no red but some amber."""
         from services.readiness_validator import run_full_readiness_check
         mock_sf = self._make_amber_sf()
         with patch('services.readiness_validator.get_sf', return_value=mock_sf):
             result = run_full_readiness_check('dev')
-        # With 95% coverage and 0 duplicate groups, status should be amber
         assert result['overall_status'] == 'amber'
 
     def test_run_full_readiness_check_green_status(self):
-        """readiness_validator.py lines 183-184: overall_status='green' when all 100%."""
+        """overall_status='green' when all checks are 100%."""
         from services.readiness_validator import run_full_readiness_check
         mock_sf = MagicMock()
-        # All queries return 100% covered: no missing links, no dupes
         def mock_query_green(soql):
             soql_lower = soql.lower()
             if 'where' not in soql_lower:
@@ -1066,7 +933,6 @@ class TestReadinessValidatorAmberAndGreenStatus:
                 return {'totalSize': 0, 'done': True, 'records': []}
             return {'totalSize': 100, 'done': True, 'records': []}
         mock_sf.query.side_effect = mock_query_green
-        # No duplicate SIS IDs
         mock_sf.query_all.return_value = {
             'totalSize': 100,
             'done': True,
@@ -1095,8 +961,8 @@ class TestDuplicateRadarMergeSuccessLine111:
 # ---------------------------------------------------------------------------
 
 def test_session_client_fixture_sets_active_org(session_client):
-    """tests/conftest.py lines 41-43: session_client fixture sets active_org in session."""
-    # Simply using the fixture exercises lines 41-43
+    """tests/conftest.py: session_client fixture sets active_org in session."""
+    # Simply using the fixture exercises the fixture body
     resp = session_client.get('/migration/readiness')
     assert resp.status_code == 200
 

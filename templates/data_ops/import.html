@@ -169,7 +169,10 @@
       <div class="card-header py-2 d-flex justify-content-between align-items-center">
         <span class="fw-semibold" style="color:var(--doane-slate)">Step 4 — Import</span>
         <div class="d-flex gap-2">
-          <button id="btnExecuteImport" class="btn btn-danger btn-sm">&#9654; Execute Import</button>
+          <button id="btnExecuteImport" class="btn btn-danger btn-sm"
+                  data-mc-confirm="This imports the CSV into Salesforce, creating or updating live records."
+                  data-mc-confirm-title="Execute import"
+                  data-mc-confirm-btn="Execute import">&#9654; Execute Import</button>
           <button id="btnImportStep4Back" class="btn btn-outline-secondary btn-sm">← Back</button>
         </div>
       </div>

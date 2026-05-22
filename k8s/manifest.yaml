@@ -26,10 +26,6 @@ spec:
           env:
             - name: PORT
               value: "5000"
-            - name: SF_MOCK
-              value: "false"
-            - name: CONDUCTOR_MOCK
-              value: "false"
             - name: SCHEDULER_ENABLED
               value: "true"
             - name: DEFAULT_ORG

@@ -96,24 +96,18 @@ def categorize_conductor_failures(workflow_name: str, hours_back: int = 24) -> l
 
 
 def requeue_batch(batch_id: str, org: str) -> dict:
-    """Attempt to requeue a failed Conductor batch.
+    """Requeue a failed Conductor batch.
 
-    Returns {batch_id, status, message}.
-    Uses conductor_provider to POST a retry request.
+    The Conductor client exposes per-workflow retry (``retry_workflow``) but no
+    batch-level requeue endpoint. Until a real batch-requeue API is wired up,
+    this raises rather than reporting a fabricated success — retry the
+    individual failed workflows instead.
     """
-    from conductor_provider import get_conductor_client
-    client = get_conductor_client()
-    try:
-        # Real conductor call would be: client.post(f'/batches/{batch_id}/requeue')
-        # For now: call client's requeue method if available, else mock success
-        if hasattr(client, 'requeue_batch'):
-            result = client.requeue_batch(batch_id)
-        else:
-            # Mock: simulate requeue success
-            result = {'status': 'queued', 'batch_id': batch_id, 'message': f'Batch {batch_id} requeued successfully'}
-        return result
-    except Exception as exc:
-        return {'batch_id': batch_id, 'status': 'error', 'message': str(exc)}
+    raise RuntimeError(
+        f"Batch requeue is not available — the Conductor client has no "
+        f"batch-level requeue endpoint (batch_id={batch_id}, org={org}). "
+        f"Retry the individual failed workflows via /migration/reconciler/rerun."
+    )
 
 
 def rerun_workflows(workflow_ids: list) -> list:

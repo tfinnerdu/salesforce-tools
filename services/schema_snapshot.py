@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 import psycopg2.extras
 from db import get_cursor, db_available
 from sf_provider import get_sf
-from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -24,23 +23,20 @@ def _ensure_table():
 def take_snapshot(org: str, sobject: str, label: str = None) -> dict:
     """Describe sobject and store field metadata as a snapshot."""
     sf = get_sf(org)
-    if Config.SF_MOCK:
-        fields = _mock_fields(sobject)
-    else:
-        desc = sf.Account.describe() if sobject == 'Account' else getattr(sf, sobject).describe()
-        fields = [
-            {
-                'name': f['name'],
-                'label': f['label'],
-                'type': f['type'],
-                'length': f.get('length'),
-                'required': not f['nillable'] and not f['defaultedOnCreate'],
-                'unique': f.get('unique', False),
-                'externalId': f.get('externalId', False),
-                'custom': f.get('custom', False),
-            }
-            for f in desc['fields']
-        ]
+    desc = sf.Account.describe() if sobject == 'Account' else getattr(sf, sobject).describe()
+    fields = [
+        {
+            'name': f['name'],
+            'label': f['label'],
+            'type': f['type'],
+            'length': f.get('length'),
+            'required': not f['nillable'] and not f['defaultedOnCreate'],
+            'unique': f.get('unique', False),
+            'externalId': f.get('externalId', False),
+            'custom': f.get('custom', False),
+        }
+        for f in desc['fields']
+    ]
     _ensure_table()
     label = label or datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     if db_available():
@@ -57,7 +53,7 @@ def take_snapshot(org: str, sobject: str, label: str = None) -> dict:
 def list_snapshots(org: str = None, sobject: str = None) -> list:
     _ensure_table()
     if not db_available():
-        return _mock_snapshot_list()
+        return []
     with get_cursor() as cur:
         conditions, params = [], []
         if org: conditions.append('org=%s'); params.append(org)
@@ -70,7 +66,7 @@ def diff_snapshots(snap_id_a: int, snap_id_b: int) -> dict:
     """Return added/removed/changed fields between two snapshots."""
     _ensure_table()
     if not db_available():
-        return _mock_diff()
+        raise RuntimeError('Snapshot history requires a database connection.')
     with get_cursor() as cur:
         cur.execute("SELECT org, sobject, snapshot_label, captured_at, fields_json FROM schema_snapshots WHERE id=%s", (snap_id_a,))
         row_a = cur.fetchone()
@@ -100,33 +96,3 @@ def delete_snapshot(snap_id: int) -> bool:
     with get_cursor() as cur:
         cur.execute("DELETE FROM schema_snapshots WHERE id=%s", (snap_id,))
     return True
-
-def _mock_fields(sobject: str) -> list:
-    base = [
-        {'name': 'Id', 'label': 'Record ID', 'type': 'id', 'length': 18, 'required': True, 'unique': True, 'externalId': False, 'custom': False},
-        {'name': 'Name', 'label': 'Full Name', 'type': 'string', 'length': 255, 'required': True, 'unique': False, 'externalId': False, 'custom': False},
-        {'name': 'CreatedDate', 'label': 'Created Date', 'type': 'datetime', 'length': None, 'required': False, 'unique': False, 'externalId': False, 'custom': False},
-    ]
-    if sobject == 'Account':
-        base += [
-            {'name': 'SIS_ID__c', 'label': 'SIS ID', 'type': 'string', 'length': 64, 'required': False, 'unique': True, 'externalId': True, 'custom': True},
-            {'name': 'Ethos_Guid__c', 'label': 'Ethos GUID', 'type': 'string', 'length': 36, 'required': False, 'unique': True, 'externalId': True, 'custom': True},
-        ]
-    return base
-
-def _mock_snapshot_list() -> list:
-    return [
-        {'id': 1, 'org': 'prod', 'sobject': 'Account', 'snapshot_label': '2026-05-01 06:00 UTC', 'captured_at': '2026-05-01T06:00:00Z', 'size': 4200},
-        {'id': 2, 'org': 'prod', 'sobject': 'Account', 'snapshot_label': '2026-05-15 06:00 UTC', 'captured_at': '2026-05-15T06:00:00Z', 'size': 4312},
-    ]
-
-def _mock_diff() -> dict:
-    return {
-        'snap_a': {'id': 1, 'label': '2026-05-01 06:00 UTC', 'captured_at': '2026-05-01T06:00:00Z'},
-        'snap_b': {'id': 2, 'label': '2026-05-15 06:00 UTC', 'captured_at': '2026-05-15T06:00:00Z'},
-        'sobject': 'Account',
-        'added': [{'name': 'New_Field__c', 'label': 'New Field', 'type': 'string', 'length': 128, 'required': False, 'unique': False, 'externalId': False, 'custom': True}],
-        'removed': [],
-        'changed': [{'name': 'SIS_ID__c', 'before': {'unique': False}, 'after': {'unique': True}}],
-        'summary': {'added': 1, 'removed': 0, 'changed': 1},
-    }

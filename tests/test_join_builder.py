@@ -1,6 +1,31 @@
-"""Tests for services.join_builder."""
+"""Tests for services.join_builder.
+
+run_join fetches SF records via a `unittest.mock` Salesforce double whose
+query_all returns the records each test needs.
+"""
 import pytest
 from unittest.mock import MagicMock, patch
+
+
+# ── Salesforce double ─────────────────────────────────────────────────────────
+
+_SF_RECORDS = [
+    {'attributes': {'type': 'Account'}, 'Id': '001000000000001',
+     'SIS_ID__c': 'STU00001'},
+    {'attributes': {'type': 'Account'}, 'Id': '001000000000002',
+     'SIS_ID__c': 'STU00002'},
+    {'attributes': {'type': 'Account'}, 'Id': '001000000000003',
+     'SIS_ID__c': 'STU00003'},
+]
+
+
+def _join_sf(records=None):
+    """SF double whose query_all returns the given account records."""
+    records = _SF_RECORDS if records is None else records
+    sf = MagicMock()
+    sf.query_all.return_value = {
+        'records': records, 'totalSize': len(records), 'done': True}
+    return sf
 
 
 # ── build_query ───────────────────────────────────────────────────────────────
@@ -14,7 +39,8 @@ def test_build_query_returns_all_keys():
         sf_fields=['Id', 'SIS_ID__c', 'Name'],
         join_mapping={'sql_field': 'sis_id', 'sf_field': 'SIS_ID__c'},
     )
-    assert set(result.keys()) == {'openquery_sql', 'soql', 'sql_only', 'join_field_sql', 'join_field_sf'}
+    assert set(result.keys()) == {'openquery_sql', 'soql', 'sql_only',
+                                  'join_field_sql', 'join_field_sf'}
 
 
 def test_build_query_openquery_contains_table_name():
@@ -111,9 +137,9 @@ def test_build_query_join_field_in_openquery_on_clause():
 
 # ── run_join ──────────────────────────────────────────────────────────────────
 
-def test_run_join_no_conn_str_returns_hint(mock_sf):
+def test_run_join_no_conn_str_returns_hint():
     from services.join_builder import run_join
-    with patch('services.join_builder.get_sf', return_value=mock_sf), \
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
          patch('services.join_builder.Config') as mock_cfg:
         mock_cfg.SQLSERVER_CONN = ''
         result = run_join(
@@ -127,22 +153,22 @@ def test_run_join_no_conn_str_returns_hint(mock_sf):
     assert 'sf_records_fetched' in result
 
 
-def test_run_join_no_conn_str_sf_records_fetched(mock_sf):
+def test_run_join_no_conn_str_sf_records_fetched():
     from services.join_builder import run_join
-    with patch('services.join_builder.get_sf', return_value=mock_sf), \
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
          patch('services.join_builder.Config') as mock_cfg:
         mock_cfg.SQLSERVER_CONN = ''
         result = run_join('dev', 'SELECT x FROM t', 'SELECT Id FROM Account', {})
-    assert result['sf_records_fetched'] > 0
+    assert result['sf_records_fetched'] == 3
 
 
-def test_run_join_pyodbc_failure_returns_error(mock_sf):
+def test_run_join_pyodbc_failure_returns_error():
     from services.join_builder import run_join
 
     mock_pyodbc = MagicMock()
     mock_pyodbc.connect.side_effect = Exception("cannot connect")
 
-    with patch('services.join_builder.get_sf', return_value=mock_sf), \
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
          patch('services.join_builder.Config') as mock_cfg, \
          patch.dict('sys.modules', {'pyodbc': mock_pyodbc}):
         mock_cfg.SQLSERVER_CONN = 'Driver=SQL Server;Server=localhost'
@@ -153,12 +179,13 @@ def test_run_join_pyodbc_failure_returns_error(mock_sf):
     assert 'hint' in result
 
 
-def test_run_join_success_merges_rows(mock_sf):
+def test_run_join_success_merges_rows():
     from services.join_builder import run_join
 
     mock_cursor = MagicMock()
     mock_cursor.description = [('sis_id',), ('email',)]
-    mock_cursor.fetchall.return_value = [('STU00001', 'a@b.com'), ('STU00002', 'c@d.com')]
+    mock_cursor.fetchall.return_value = [('STU00001', 'a@b.com'),
+                                         ('STU00002', 'c@d.com')]
 
     mock_conn = MagicMock()
     mock_conn.cursor.return_value = mock_cursor
@@ -166,7 +193,7 @@ def test_run_join_success_merges_rows(mock_sf):
     mock_pyodbc = MagicMock()
     mock_pyodbc.connect.return_value = mock_conn
 
-    with patch('services.join_builder.get_sf', return_value=mock_sf), \
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
          patch('services.join_builder.Config') as mock_cfg, \
          patch.dict('sys.modules', {'pyodbc': mock_pyodbc}):
         mock_cfg.SQLSERVER_CONN = 'Driver=SQL Server;Server=localhost'
@@ -182,15 +209,16 @@ def test_run_join_success_merges_rows(mock_sf):
     assert 'sf_count' in result
     assert 'sql_count' in result
     assert result['sql_count'] == 2
+    assert result['sf_count'] == 3
 
 
-def test_run_join_success_matched_keys(mock_sf):
-    """SF records whose SIS_ID__c matches sql sis_id get merged."""
+def test_run_join_success_matched_keys():
+    """SF records whose SIS_ID__c matches the sql sis_id get merged."""
     from services.join_builder import run_join
 
     mock_cursor = MagicMock()
     mock_cursor.description = [('sis_id',)]
-    # STU00001 matches mock record at index 1 (SIS_ID__c = STU00001)
+    # STU00001 matches the first SF record's SIS_ID__c value.
     mock_cursor.fetchall.return_value = [('STU00001',)]
 
     mock_conn = MagicMock()
@@ -199,7 +227,7 @@ def test_run_join_success_matched_keys(mock_sf):
     mock_pyodbc = MagicMock()
     mock_pyodbc.connect.return_value = mock_conn
 
-    with patch('services.join_builder.get_sf', return_value=mock_sf), \
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
          patch('services.join_builder.Config') as mock_cfg, \
          patch.dict('sys.modules', {'pyodbc': mock_pyodbc}):
         mock_cfg.SQLSERVER_CONN = 'conn'
@@ -213,12 +241,14 @@ def test_run_join_success_matched_keys(mock_sf):
     assert result['success'] is True
     joined_row = result['rows'][0]
     assert 'sis_id' in joined_row
-    # SF fields are prefixed with sf_
+    assert joined_row['sis_id'] == 'STU00001'
+    # SF fields are prefixed with sf_; the matched record's Id comes through.
     assert any(k.startswith('sf_') for k in joined_row.keys())
+    assert joined_row['sf_Id'] == '001000000000001'
 
 
-def test_run_join_no_matching_keys(mock_sf):
-    """SQL rows with no matching SF record still appear in results (empty SF fields)."""
+def test_run_join_no_matching_keys():
+    """SQL rows with no matching SF record still appear (empty SF fields)."""
     from services.join_builder import run_join
 
     mock_cursor = MagicMock()
@@ -231,7 +261,7 @@ def test_run_join_no_matching_keys(mock_sf):
     mock_pyodbc = MagicMock()
     mock_pyodbc.connect.return_value = mock_conn
 
-    with patch('services.join_builder.get_sf', return_value=mock_sf), \
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
          patch('services.join_builder.Config') as mock_cfg, \
          patch.dict('sys.modules', {'pyodbc': mock_pyodbc}):
         mock_cfg.SQLSERVER_CONN = 'conn'
@@ -244,5 +274,6 @@ def test_run_join_no_matching_keys(mock_sf):
 
     assert result['success'] is True
     assert result['joined_count'] == 1
-    # Row exists but SF fields are empty dict merge
     assert result['rows'][0]['sis_id'] == 'NOMATCH99999'
+    # No matching SF record → no sf_ prefixed keys merged in.
+    assert not any(k.startswith('sf_') for k in result['rows'][0].keys())

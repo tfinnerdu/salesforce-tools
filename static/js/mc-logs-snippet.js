@@ -196,7 +196,8 @@ MC.logs = {
   },
 
   async deleteAllLogs() {
-    if (!confirm('Delete ALL Apex logs for this org? This cannot be undone.')) return;
+    // Confirmation is handled declaratively by the data-mc-confirm attribute
+    // on #btnDeleteAllLogs (see MC.confirm in mission-control.js).
     try {
       await MC.api('/logs/apex/delete-all', 'DELETE');
       MC.showToast('All logs deleted', 'success');

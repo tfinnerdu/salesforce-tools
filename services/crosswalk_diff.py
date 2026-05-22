@@ -32,26 +32,6 @@ def _count_populated(sf, obj: str, field: str) -> tuple:
         return 0, 0
 
 
-def _mock_coverage(obj: str, field: str, side: str) -> tuple:
-    """Return realistic mock (covered, total) — EDA coverage typically higher than EC."""
-    base_totals = {
-        'Account': 4312,
-        'ContactPointEmail': 4100,
-        'ContactPointPhone': 3800,
-        'ContactPointAddress': 3204,
-        'IndividualApplication': 1850,
-        'Opportunity': 620,
-    }
-    total = base_totals.get(obj, 500)
-    if side == 'eda':
-        # EDA source has higher coverage — migration source of truth
-        covered = int(total * 0.97)
-    else:
-        # EC target has lower coverage — migration still in progress
-        covered = int(total * 0.82)
-    return covered, total
-
-
 def run_live_check(org: str, mappings: list) -> list:
     """For each Mapped row, query both sides and compute coverage gap."""
     sf = get_sf(org)
@@ -69,17 +49,12 @@ def run_live_check(org: str, mappings: list) -> list:
         if not (eda_obj and eda_field and ec_obj and ec_field):
             continue
 
-        # Query EDA side (same org in mock scenario)
+        # Query the EDA side
         eda_covered, eda_total = _count_populated(sf, eda_obj, eda_field)
-        # EC side — in mock use realistic diverged numbers
+        # Query the EC side
         ec_covered, ec_total = _count_populated(sf, ec_obj, ec_field)
 
-        # If mock returned same numbers for both sides, apply divergence
         total = max(eda_total, ec_total, 1)
-        if eda_covered == ec_covered and eda_total == ec_total:
-            eda_covered, eda_total = _mock_coverage(eda_obj, eda_field, 'eda')
-            ec_covered, ec_total = _mock_coverage(ec_obj, ec_field, 'ec')
-            total = max(eda_total, ec_total, 1)
 
         eda_pct = round(100 * eda_covered / eda_total, 1) if eda_total else 0.0
         ec_pct = round(100 * ec_covered / ec_total, 1) if ec_total else 0.0

@@ -20,20 +20,23 @@ def _make_sf_mock(total=1000, populated=950):
 
 
 def test_run_returns_list():
-    from services.field_completeness import run
-    result = run('dev')
+    with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
+        from services.field_completeness import run
+        result = run('dev')
     assert isinstance(result, list)
 
 
 def test_run_has_correct_number_of_checks():
     from services.field_completeness import run, CHECKS
-    result = run('dev')
+    with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
+        result = run('dev')
     assert len(result) == len(CHECKS)
 
 
 def test_run_result_structure():
-    from services.field_completeness import run
-    result = run('dev')
+    with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
+        from services.field_completeness import run
+        result = run('dev')
     for item in result:
         assert 'object' in item
         assert 'field' in item
@@ -120,10 +123,12 @@ def test_run_handles_per_check_exception():
         assert 'error' in errored[0]
 
 
-def test_run_with_real_mock_sf():
-    """End-to-end test using the actual MockSalesforce (SF_MOCK=true)."""
+def test_run_end_to_end_with_mocked_sf():
+    """End-to-end run over a configured SF double — every row has a valid shape."""
     from services.field_completeness import run
-    result = run('dev')
+    with patch('services.field_completeness.get_sf',
+               return_value=_make_sf_mock(total=1000, populated=900)):
+        result = run('dev')
     assert isinstance(result, list)
     assert len(result) > 0
     for r in result:
@@ -140,7 +145,8 @@ def test_completeness_page_returns_200(client):
 
 
 def test_completeness_run_returns_success(session_client):
-    resp = session_client.get('/validation/completeness/run')
+    with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
+        resp = session_client.get('/validation/completeness/run')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -148,7 +154,8 @@ def test_completeness_run_returns_success(session_client):
 
 
 def test_completeness_run_data_structure(session_client):
-    resp = session_client.get('/validation/completeness/run')
+    with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
+        resp = session_client.get('/validation/completeness/run')
     data = resp.get_json()
     for item in data['data']:
         assert 'object' in item

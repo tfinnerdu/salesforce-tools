@@ -30,12 +30,11 @@ def get_batch_status(workflow_name: str, start_time_ms: Optional[int] = None) ->
     total = status.get('total', 0) or 1
     done = status.get('completed', 0) + status.get('failed', 0)
     status['progress_pct'] = round(100 * done / total, 1)
-    running = status.get('running', 0)
-    queued = status.get('queued', 0)
-    rate_per_min = 48  # mock estimate
-    remaining = running + queued
-    status['eta_minutes'] = round(remaining / rate_per_min, 0) if rate_per_min > 0 else None
-    status['rate_per_min'] = rate_per_min
+    # The Conductor status response carries no throughput data, so a processing
+    # rate and ETA cannot be computed without fabricating one. Left null until a
+    # real rate source is available.
+    status['rate_per_min'] = None
+    status['eta_minutes'] = None
     return status
 
 

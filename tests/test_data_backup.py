@@ -1,5 +1,4 @@
 """Tests for services.data_backup — CSV snapshot capture, storage, archive."""
-import csv
 import gzip
 import io
 import zipfile
@@ -33,7 +32,7 @@ class _FakeCursor:
         return self._fetchall
 
 
-# ── _export_object ────────────────────────────────────────────────────────────
+# ── Fake Salesforce client ────────────────────────────────────────────────────
 
 class _StubSF:
     """Returns a controlled describe + query result."""
@@ -47,6 +46,15 @@ class _StubSF:
     def query_all(self, soql):
         return {'records': self._records}
 
+
+def _default_sf():
+    return _StubSF(
+        fields=[{'name': 'Id', 'type': 'id'}, {'name': 'Name', 'type': 'string'}],
+        records=[{'Id': '001', 'Name': 'Acme'}],
+    )
+
+
+# ── _export_object ────────────────────────────────────────────────────────────
 
 def test_export_object_skips_compound_and_base64_fields():
     sf = _StubSF(
@@ -65,9 +73,10 @@ def test_export_object_skips_compound_and_base64_fields():
     assert 'Photo' not in header and 'BillingAddress' not in header
 
 
-# ── run_backup — mock mode (no DB) ────────────────────────────────────────────
+# ── run_backup — no DB ────────────────────────────────────────────────────────
 
-def test_run_backup_mock_mode_builds_manifest():
+def test_run_backup_builds_manifest(monkeypatch):
+    monkeypatch.setattr(data_backup, 'get_sf', lambda org: _default_sf())
     result = data_backup.run_backup('dev', ['Account'])
     assert result['status'] in ('success', 'partial')
     assert result['object_count'] >= 1
@@ -78,6 +87,7 @@ def test_run_backup_mock_mode_builds_manifest():
 
 def test_run_backup_records_per_object_failures(monkeypatch):
     """An object whose export fails is reported in errors, others still run."""
+    monkeypatch.setattr(data_backup, 'get_sf', lambda org: _default_sf())
     real_export = data_backup._export_object
 
     def _flaky(sf, obj):
@@ -95,6 +105,7 @@ def test_run_backup_records_per_object_failures(monkeypatch):
 # ── run_backup — with DB (mocked) ─────────────────────────────────────────────
 
 def test_run_backup_persists_when_db_available(monkeypatch):
+    monkeypatch.setattr(data_backup, 'get_sf', lambda org: _default_sf())
     monkeypatch.setattr(data_backup, '_export_object',
                         lambda sf, obj: ('Id\n001\n', 1))
     import db
@@ -149,7 +160,8 @@ def test_backup_objects_route(client):
     assert 'Account' in resp.get_json()['data']
 
 
-def test_backup_run_route(client):
+def test_backup_run_route(client, monkeypatch):
+    monkeypatch.setattr(data_backup, 'get_sf', lambda org: _default_sf())
     resp = client.post('/data-ops/backup/run', json={'objects': ['Account']})
     assert resp.status_code == 200
     body = resp.get_json()

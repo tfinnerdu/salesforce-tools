@@ -1,25 +1,16 @@
-"""Shared fixtures for all test modules."""
+"""Shared fixtures for all test modules.
+
+There is no mock-data layer. Tests that exercise Salesforce or Conductor patch
+`get_sf` / `get_conductor_client` in the service module under test and supply a
+`unittest.mock` double configured for that test. See tests/test_platform_events.py
+for the canonical pattern.
+"""
 import os
 import pytest
 
-# Force mock mode so tests never need real credentials
-os.environ.setdefault('SF_MOCK', 'true')
-os.environ.setdefault('CONDUCTOR_MOCK', 'true')
 os.environ.setdefault('SECRET_KEY', 'test-secret')
 os.environ.setdefault('DATABASE_URL', '')
 os.environ.setdefault('SCHEDULER_ENABLED', 'false')
-
-
-@pytest.fixture
-def mock_sf():
-    from sf_provider import MockSalesforce
-    return MockSalesforce('dev')
-
-
-@pytest.fixture
-def mock_conductor():
-    from conductor_provider import MockConductorClient
-    return MockConductorClient()
 
 
 @pytest.fixture

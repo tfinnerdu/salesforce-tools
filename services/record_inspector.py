@@ -10,28 +10,11 @@ a migrated record has the expected field values after a bulk DML operation.
 """
 import logging
 
-from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
 
 _SKIP_TYPES = {'base64', 'address', 'location', 'complexvalue'}
-
-
-def _mock_record(object_name: str, record_id: str) -> dict:
-    fields = [
-        {'name': 'Id',               'label': 'Record ID',          'type': 'id',       'value': record_id or '001Mock000000000001'},
-        {'name': 'Name',             'label': 'Name',               'type': 'string',   'value': f'Mock {object_name} Record'},
-        {'name': 'SIS_ID__c',        'label': 'SIS ID',             'type': 'string',   'value': 'MOCK-001'},
-        {'name': 'Ethos_Guid__c',    'label': 'Ethos GUID',         'type': 'string',   'value': '00000000-0000-0000-0000-000000000001'},
-        {'name': 'IsPersonAccount',  'label': 'Is Person Account',  'type': 'boolean',  'value': True},
-        {'name': 'CreatedDate',      'label': 'Created Date',       'type': 'datetime', 'value': '2026-05-01T09:00:00.000+0000'},
-        {'name': 'LastModifiedDate', 'label': 'Last Modified Date', 'type': 'datetime', 'value': '2026-05-19T10:00:00.000+0000'},
-        {'name': 'OwnerId',          'label': 'Owner ID',           'type': 'reference', 'value': '005Mock000000000001'},
-        {'name': 'IsDeleted',        'label': 'Is Deleted',         'type': 'boolean',  'value': False},
-    ]
-    return {'object': object_name, 'record_id': record_id, 'fields': fields,
-            'total_fields': len(fields), 'mock': True}
 
 
 def get_record(org: str, object_name: str, record_id: str,
@@ -49,11 +32,6 @@ def get_record(org: str, object_name: str, record_id: str,
         raise ValueError('object_name and record_id are required')
 
     sf = get_sf(org)
-    if Config.SF_MOCK:
-        result = _mock_record(object_name, record_id)
-        if external_id_field:
-            result['lookup_mode'] = f'external_id:{external_id_field}'
-        return result
 
     # Describe to get the full field list.
     desc = sf.restful(f'sobjects/{object_name}/describe')

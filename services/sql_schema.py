@@ -21,16 +21,6 @@ CREATE TABLE IF NOT EXISTS sql_schema_cache (
 );
 """
 
-# A small Colleague-shaped schema used in mock mode so the Join Builder is
-# usable in dev without a SQL Server connection.
-_MOCK_SCHEMA = {
-    'dbo.STUDENTS': ['STUDENTS_ID', 'STU_ACAD_LEVELS', 'STU_TYPES', 'STU_CLASS'],
-    'dbo.PERSON': ['PERSON_ID', 'FIRST_NAME', 'LAST_NAME', 'PREFERRED_NAME', 'BIRTH_DATE'],
-    'dbo.STUDENT_TERMS': ['STUDENT_TERMS_ID', 'STTR_STUDENT', 'STTR_TERM', 'STTR_STATUS'],
-    'dbo.APPLICATIONS': ['APPLICATIONS_ID', 'APPL_APPLICANT', 'APPL_START_TERM', 'APPL_STATUS'],
-    'dbo.ADDRESS': ['ADDRESS_ID', 'ADDRESS_LINES', 'CITY', 'STATE', 'ZIP'],
-}
-
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
@@ -91,15 +81,11 @@ def _read() -> dict:
 def get_cached_schema() -> dict:
     """Return {captured_at, table_count, tables: {name: [columns]}}.
 
-    Falls back to a small mock schema in mock mode so the Join Builder is
-    usable in dev; returns an empty schema on a real org with no cache yet.
+    Returns an empty schema when there is no cache yet.
     """
     cached = _read()
     if cached.get('tables'):
         return cached
-    if Config.SF_MOCK:
-        return {'captured_at': None, 'table_count': len(_MOCK_SCHEMA),
-                'tables': dict(_MOCK_SCHEMA), 'mock': True}
     return {'captured_at': None, 'table_count': 0, 'tables': {}}
 
 
@@ -176,39 +162,36 @@ def _ensure_driver(conn_str: str) -> str:
 def refresh_schema() -> dict:
     """Re-introspect the SQL Server schema and cache it.
 
-    Returns {table_count, captured_at, persisted}. In mock mode this caches
-    the mock schema; otherwise it queries INFORMATION_SCHEMA.COLUMNS.
+    Returns {table_count, captured_at, persisted}. Queries
+    INFORMATION_SCHEMA.COLUMNS over the live SQL Server connection.
     """
-    if Config.SF_MOCK:
-        schema = dict(_MOCK_SCHEMA)
-    else:
-        conn_str = Config.SQLSERVER_CONN
-        if not conn_str:
-            raise ValueError('SQLSERVER_CONN is not configured — cannot refresh SQL schema')
-        try:
-            import pyodbc  # noqa: imported lazily — only needed for a live refresh
-        except ImportError:
-            raise RuntimeError(
-                'The pyodbc package is not installed on this server, so the SQL '
-                'Server schema cannot be refreshed. The last cached schema is '
-                'still in use.'
-            )
-        try:
-            conn = pyodbc.connect(_ensure_driver(conn_str), timeout=15)
-        except pyodbc.Error as exc:
-            raise RuntimeError(_friendly_odbc_error(exc)) from exc
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME "
-                "FROM INFORMATION_SCHEMA.COLUMNS "
-                "ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
-            )
-            schema: dict = {}
-            for sch, tbl, col in cur.fetchall():
-                schema.setdefault(f'{sch}.{tbl}', []).append(col)
-        finally:
-            conn.close()
+    conn_str = Config.SQLSERVER_CONN
+    if not conn_str:
+        raise ValueError('SQLSERVER_CONN is not configured — cannot refresh SQL schema')
+    try:
+        import pyodbc  # noqa: imported lazily — only needed for a live refresh
+    except ImportError:
+        raise RuntimeError(
+            'The pyodbc package is not installed on this server, so the SQL '
+            'Server schema cannot be refreshed. The last cached schema is '
+            'still in use.'
+        )
+    try:
+        conn = pyodbc.connect(_ensure_driver(conn_str), timeout=15)
+    except pyodbc.Error as exc:
+        raise RuntimeError(_friendly_odbc_error(exc)) from exc
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME "
+            "FROM INFORMATION_SCHEMA.COLUMNS "
+            "ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
+        )
+        schema: dict = {}
+        for sch, tbl, col in cur.fetchall():
+            schema.setdefault(f'{sch}.{tbl}', []).append(col)
+    finally:
+        conn.close()
 
     persisted = _store(schema)
     return {

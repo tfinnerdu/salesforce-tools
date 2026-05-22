@@ -1,11 +1,19 @@
 """Tests for services.anonymizer and /admin/anonymizer/* routes."""
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
+
+def _count_sf(total):
+    """SF double whose .query() returns a COUNT() result with the given totalSize."""
+    sf = MagicMock()
+    sf.query.return_value = {'totalSize': total, 'records': [], 'done': True}
+    return sf
 
 
 # ---------------------------------------------------------------------------
-# Service unit tests
+# Service unit tests — list_objects (pure logic, no SF)
 # ---------------------------------------------------------------------------
 
 def test_list_objects_returns_list():
@@ -29,55 +37,57 @@ def test_list_objects_includes_account():
     assert 'Account' in names
 
 
-def test_preview_returns_required_keys(mock_sf):
+# ---------------------------------------------------------------------------
+# Service unit tests — preview
+# ---------------------------------------------------------------------------
+
+def test_preview_returns_required_keys():
     from services.anonymizer import preview
-    with patch('services.anonymizer.get_sf', return_value=mock_sf):
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(42)):
         result = preview(org='dev', object_name='Account', field_names=['Name', 'PersonEmail'])
-    assert 'record_count' in result
-    assert 'soql' in result
-    assert 'object' in result
-    assert 'fields' in result
+    for key in ('record_count', 'soql', 'object', 'fields'):
+        assert key in result
 
 
-def test_preview_record_count_is_int(mock_sf):
+def test_preview_record_count_is_int():
     from services.anonymizer import preview
-    with patch('services.anonymizer.get_sf', return_value=mock_sf):
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(7)):
         result = preview(org='dev', object_name='Account', field_names=['Name'])
     assert isinstance(result['record_count'], int)
-    assert result['record_count'] >= 0
+    assert result['record_count'] == 7
 
 
-def test_preview_soql_contains_object(mock_sf):
+def test_preview_soql_contains_object():
     from services.anonymizer import preview
-    with patch('services.anonymizer.get_sf', return_value=mock_sf):
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(0)):
         result = preview(org='dev', object_name='Account', field_names=['Name'])
     assert 'Account' in result['soql']
 
 
-def test_preview_soql_contains_fields(mock_sf):
+def test_preview_soql_contains_fields():
     from services.anonymizer import preview
-    with patch('services.anonymizer.get_sf', return_value=mock_sf):
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(0)):
         result = preview(org='dev', object_name='Account', field_names=['Name', 'PersonEmail'])
     assert 'Name' in result['soql']
     assert 'PersonEmail' in result['soql']
 
 
-def test_preview_empty_fields_uses_id_fallback(mock_sf):
+def test_preview_empty_fields_uses_id_fallback():
     from services.anonymizer import preview
-    with patch('services.anonymizer.get_sf', return_value=mock_sf):
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(0)):
         result = preview(org='dev', object_name='Account', field_names=[])
     assert 'Id != null' in result['soql']
 
 
-def test_preview_returns_fields_list(mock_sf):
+def test_preview_returns_fields_list():
     from services.anonymizer import preview
     fields = ['Name', 'Phone']
-    with patch('services.anonymizer.get_sf', return_value=mock_sf):
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(0)):
         result = preview(org='dev', object_name='Account', field_names=fields)
     assert result['fields'] == fields
 
 
-def test_preview_handles_query_exception(mock_sf):
+def test_preview_handles_query_exception():
     from services.anonymizer import preview
     mock_sf_err = MagicMock()
     mock_sf_err.query.side_effect = Exception('SF timeout')
@@ -86,9 +96,13 @@ def test_preview_handles_query_exception(mock_sf):
     assert result['record_count'] == 0
 
 
-def test_run_no_pii_url_returns_stub(mock_sf):
+# ---------------------------------------------------------------------------
+# Service unit tests — run
+# ---------------------------------------------------------------------------
+
+def test_run_no_pii_url_returns_stub():
     from services.anonymizer import run
-    with patch('services.anonymizer.get_sf', return_value=mock_sf), \
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(5)), \
          patch('services.anonymizer.Config') as mock_cfg:
         mock_cfg.PII_SERVICE_URL = ''
         result = run(org='dev', object_name='Account', field_names=['Name'], dry_run=True)
@@ -96,9 +110,9 @@ def test_run_no_pii_url_returns_stub(mock_sf):
     assert 'PII_SERVICE_URL' in result['message']
 
 
-def test_run_stub_includes_payload(mock_sf):
+def test_run_stub_includes_payload():
     from services.anonymizer import run
-    with patch('services.anonymizer.get_sf', return_value=mock_sf), \
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(5)), \
          patch('services.anonymizer.Config') as mock_cfg:
         mock_cfg.PII_SERVICE_URL = ''
         result = run(org='dev', object_name='Account', field_names=['Name', 'Phone'], dry_run=True)
@@ -107,18 +121,19 @@ def test_run_stub_includes_payload(mock_sf):
     assert 'Name' in result['payload']['fields']
 
 
-def test_run_stub_would_affect_is_int(mock_sf):
+def test_run_stub_would_affect_is_int():
     from services.anonymizer import run
-    with patch('services.anonymizer.get_sf', return_value=mock_sf), \
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(11)), \
          patch('services.anonymizer.Config') as mock_cfg:
         mock_cfg.PII_SERVICE_URL = ''
         result = run(org='dev', object_name='Account', field_names=['Name'], dry_run=True)
     assert isinstance(result['would_affect'], int)
+    assert result['would_affect'] == 11
 
 
-def test_run_dry_run_with_pii_url(mock_sf):
+def test_run_dry_run_with_pii_url():
     from services.anonymizer import run
-    with patch('services.anonymizer.get_sf', return_value=mock_sf), \
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(5)), \
          patch('services.anonymizer.Config') as mock_cfg:
         mock_cfg.PII_SERVICE_URL = 'https://pii.example.com/scrub'
         result = run(org='dev', object_name='Account', field_names=['Name'], dry_run=True)
@@ -126,19 +141,19 @@ def test_run_dry_run_with_pii_url(mock_sf):
     assert 'pii.example.com' in result['message']
 
 
-def test_run_dry_run_includes_pii_url_in_message(mock_sf):
+def test_run_dry_run_includes_pii_url_in_message():
     from services.anonymizer import run
     pii_url = 'https://pii.example.com/scrub'
-    with patch('services.anonymizer.get_sf', return_value=mock_sf), \
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(5)), \
          patch('services.anonymizer.Config') as mock_cfg:
         mock_cfg.PII_SERVICE_URL = pii_url
         result = run(org='dev', object_name='Account', field_names=['Name'], dry_run=True)
     assert pii_url in result['message']
 
 
-def test_run_live_not_wired_returns_not_wired(mock_sf):
+def test_run_live_not_wired_returns_not_wired():
     from services.anonymizer import run
-    with patch('services.anonymizer.get_sf', return_value=mock_sf), \
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(5)), \
          patch('services.anonymizer.Config') as mock_cfg:
         mock_cfg.PII_SERVICE_URL = 'https://pii.example.com/scrub'
         result = run(org='dev', object_name='Account', field_names=['Name'], dry_run=False)
@@ -168,15 +183,16 @@ def test_admin_anonymizer_objects_has_expected_keys(client):
 
 def test_admin_anonymizer_preview_post(session_client):
     payload = {'object': 'Account', 'fields': ['Name', 'PersonEmail']}
-    resp = session_client.post(
-        '/admin/anonymizer/preview',
-        data=json.dumps(payload),
-        content_type='application/json',
-    )
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(123)):
+        resp = session_client.post(
+            '/admin/anonymizer/preview',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
-    assert 'record_count' in data['data']
+    assert data['data']['record_count'] == 123
     assert 'soql' in data['data']
 
 
@@ -194,11 +210,12 @@ def test_admin_anonymizer_preview_missing_object(client):
 
 def test_admin_anonymizer_run_post(session_client):
     payload = {'object': 'Account', 'fields': ['Name'], 'dry_run': True}
-    resp = session_client.post(
-        '/admin/anonymizer/run',
-        data=json.dumps(payload),
-        content_type='application/json',
-    )
+    with patch('services.anonymizer.get_sf', return_value=_count_sf(9)):
+        resp = session_client.post(
+            '/admin/anonymizer/run',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True

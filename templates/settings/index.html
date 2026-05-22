@@ -117,6 +117,9 @@
               <input class="form-check-input" type="checkbox" id="bypassTriggersToggle"
                      role="switch"
                      {% if bypass_active %}checked{% endif %}
+                     data-mc-confirm="Changing the trigger-bypass setting changes how Salesforce automations run for every write in your session."
+                     data-mc-confirm-title="Change trigger bypass"
+                     data-mc-confirm-btn="Change setting"
                      onchange="MC.settings.toggleBypass(this.checked)">
               <label class="form-check-label fw-semibold" for="bypassTriggersToggle">
                 Bypass Triggers <span class="fw-normal text-muted">(session-wide)</span>

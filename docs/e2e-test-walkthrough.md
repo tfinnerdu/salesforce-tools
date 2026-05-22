@@ -11,7 +11,7 @@ Manual steps and expected outcomes for verifying each feature from outside the c
 # App starts at http://localhost:5000
 ```
 
-With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated — no real Salesforce credentials needed.
+The app requires a configured Salesforce org and a configured Conductor connection — set valid credentials in `.env` before running. There is no credential-free demo mode. Run the walkthrough against a non-production org (dev or sandbox) so the write-action steps are safe.
 
 ---
 
@@ -57,18 +57,20 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 4. Verify loading spinner appears during run
 5. After completion, scorecard fills with 6+ check rows
 
-**Expected scorecard (mock data):**
+**Expected scorecard:**
 
-| Check | Status | Expected |
-|---|---|---|
-| PersonAccount SIS_ID__c | 🔴 Red | ~71% coverage |
-| Ethos GUID coverage | 🟡 Amber | ~91% coverage |
-| ContactPoint parents | 🔴 Red | 3,204 broken |
-| Duplicate detection | 🟡 Amber | 23+ groups |
-| Individual links | 🔴 or 🟡 | varies |
-| Required fields | 🔴 Red | missing records |
+| Check | Expected |
+|---|---|
+| PersonAccount SIS_ID__c | Coverage % with a color-coded status badge |
+| Ethos GUID coverage | Coverage % with a color-coded status badge |
+| ContactPoint parents | Count of broken parent links |
+| Duplicate detection | Count of duplicate groups |
+| Individual links | Coverage % / count |
+| Required fields | Count of records missing required fields |
 
-- Overall banner shows red: "Overall Readiness: ~60% — NOT READY FOR GO-LIVE"
+Each row reflects the connected org's actual data.
+
+- Overall banner shows a composite readiness % and go-live status
 - "Last run: [timestamp]" updates
 - Click "Export" triggers browser print dialog
 
@@ -86,14 +88,15 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 3. Click "Load Status"
 4. Observe progress bar and stats grid
 
-**Expected (mock):**
-- Progress bar fills to ~66% (2,756+91 of 4,312)
-- Completed: 2,756 | Failed: 91 | Running: 212 | Queued: 1,253
-- ETA shows ~14 min
-- Failure breakdown table shows: DUPLICATE_VALUE: 44, FIELD_INTEGRITY_EXCEPTION: 31, TIMEOUT: 16
+**Expected:**
+- Progress bar reflects the batch's actual completion %
+- Completed / Failed / Running / Queued counts populate from Conductor
+- ETA is computed from the current processing rate
+- Failure breakdown table groups failures by error type with counts
 
 5. Toggle "Auto-refresh" — verify polling starts (console shows periodic fetches)
-6. Click "Re-run failures" for TIMEOUT row
+6. Click "Re-run failures" for an error-type row — confirm the `MC.confirm`
+   dialog appears, then confirm
 7. Verify success toast
 
 ---
@@ -106,15 +109,15 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 1. Navigate to Migration > Error Reconciler
 2. Enter workflow: `EDA_Person_Sync`, select "Last 24h"
 3. Click Refresh
-4. Verify 3 error category cards appear
+4. Verify error category cards appear, one per error type
 
 **Expected cards:**
-- 🔴 DUPLICATE_VALUE (44 records) — red border, "safe to retry after dedup" hint
-- 🟡 FIELD_INTEGRITY_EXCEPTION (31 records) — amber border
-- 🟢 TIMEOUT (16 records) — green border, "safe to retry immediately"
+- One card per Salesforce error code returned by the connected org's failed
+  workflows, each color-coded by severity with a record count and a retry hint
 
-5. Click "Show all SIS IDs" on DUPLICATE_VALUE card — list expands
-6. Click "Re-run" on TIMEOUT card — toast confirms 16 workflows queued
+5. Click "Show all SIS IDs" on a card — list expands
+6. Click "Re-run" on a card — confirm the `MC.confirm` dialog appears, confirm,
+   and a toast reports the affected workflows queued
 
 ---
 
@@ -127,16 +130,14 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 2. Click "Run Scan"
 
 **Expected:**
-| Strategy | Count | Status |
-|---|---|---|
-| Same SIS_ID | 12 | Amber |
-| Same Name+DOB | 23 | Amber |
-| Same Email | 8 | Amber |
-| Same Ethos GUID | 0 | Green |
+- One strategy card per match type — Same SIS_ID, Same Name+DOB, Same Email,
+  Same Ethos GUID — each with a count and color-coded status from the connected
+  org's data
 
-3. Click "Merge" on a Same SIS_ID row
-4. Verify merge modal opens with master/victim ID fields
-5. Click Confirm — verify success toast
+3. Click "Merge" on a row
+4. Verify the merge modal opens with master/victim ID fields and an
+   acknowledgement checkbox; the confirm button stays disabled until it is ticked
+5. Tick the checkbox and click Confirm — verify success toast
 6. Click "Export CSV" — CSV downloads with strategy results
 
 ---
@@ -150,13 +151,10 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 2. Click "Run Report"
 
 **Expected table:**
-| Object | Total | SIS_ID__c | Ethos_Guid__c |
-|---|---|---|---|
-| Account (PersonAccounts) | 4,312 | 🔴 71% | 🟡 91% |
-| ContactPointEmail | ~4,100 | 🔴 ~80% | N/A |
-| ContactPointPhone | ~3,800 | 🔴 ~80% | N/A |
-| ContactPointAddress | ~3,204 | 🔴 ~80% | N/A |
-| IndividualApplication | ~1,850 | varies | varies |
+- One row per relevant object (Account, the three ContactPoint objects,
+  IndividualApplication, etc.) showing total records, `SIS_ID__c` coverage, and
+  `Ethos_Guid__c` coverage, each with a color-coded badge — all from the
+  connected org's actual data
 
 3. Click the Account SIS_ID__c row — drill-down panel opens
 4. Verify panel shows sample record IDs with missing SIS_ID__c
@@ -197,12 +195,13 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 
 **Expected:**
 - Results table appears with columns: Id | Name | SIS_ID__c
-- Row count shows "20 records (showing 20 of 4,312)"
+- Row count shows the page size and the total matching the connected org
 - Download CSV button enabled
 
-7. Click "Run All Pages" — row count shows all 4,312
+7. Click "Run All Pages" — row count shows the full result set
 8. Double-click a cell in the results table — inline edit input appears
-9. Type new value, press Enter — "Record updated" toast
+9. Type new value, press Enter — the `MC.confirm` dialog appears; confirm and a
+   "Record updated" toast follows
 10. Press Escape — edit cancelled, original value restored
 
 11. Type `SELECT COUNT() FROM Account WHERE IsPersonAccount = true`
@@ -252,8 +251,8 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
 
 **Expected:**
 - Accordion panel per object
-- Each panel shows: X fields left-only, Y fields right-only, Z type mismatches
-- In mock: schemas are identical → all diff sections show empty
+- Each panel shows: X fields left-only, Y fields right-only, Z type mismatches —
+  reflecting the actual schema gap between the two connected orgs
 
 5. Verify export button available
 
@@ -273,10 +272,9 @@ With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), all data is simulated 
    accordion panel renders per metadata type with an L/R count and a diff badge.
 6. Expand a panel — Left-only / Right-only / Modified sections list component
    names with detail.
-7. **Expected (mock):** the seeded `prod` catalog lags the dev sandbox —
-   `MigrationBatchScheduler` is left-only, `LegacyEDAContactSync` is right-only,
-   `StudentSyncService` is modified. Comparing dev against dev shows zero
-   differences.
+7. **Expected:** the diff reflects the real metadata gap between the two
+   connected orgs — left-only, right-only, and modified components. Comparing an
+   org against itself shows zero differences.
 
 Unlike Org Schema Diff (fields), this compares deployable metadata components.
 
@@ -296,8 +294,9 @@ Unlike Org Schema Diff (fields), this compares deployable metadata components.
 6. Switch to **External ID** mode — confirm External ID Field input appears and the
    label changes to "External ID Value".
 7. Enter `SIS_ID__c` and a SIS ID value, click **Inspect**.
-8. **Expected:** results bar shows `ext id: SIS_ID__c` mode badge; in mock mode 9
-   fields render including `SIS_ID__c`, `Ethos_Guid__c`, and `IsPersonAccount`.
+8. **Expected:** results bar shows `ext id: SIS_ID__c` mode badge; the record's
+   queryable fields render, including `SIS_ID__c`, `Ethos_Guid__c`, and
+   `IsPersonAccount`.
 
 ---
 
@@ -373,7 +372,10 @@ JOIN OPENQUERY(SALESFORCE, '
 2. Object `Account`, WHERE `SIS_ID__c = null`. Click "Preview".
 3. **Expected:** matching records + total count render. The "Delete Records" button
    only appears after a successful preview.
-4. Click "Delete Records" → browser confirm dialog → result alert with deleted count.
+4. Click "Delete Records" → the `MC.confirm` dialog appears with an
+   acknowledgement checkbox; the confirm button stays disabled until it is ticked.
+   Tick it and confirm → result alert with deleted count. (See the dedicated
+   confirmation-dialog walkthrough below.)
 
 **Steps (Modify):**
 1. Navigate to Data Ops > Modify. Object `Account`, WHERE `Id != null`.
@@ -400,8 +402,9 @@ JOIN OPENQUERY(SALESFORCE, '
 5. **Expected:** a Before / After table for records that would change, plus a
    count line ("N of M sampled records would change").
 6. The **Apply Standardization** button appears only when the preview found changes.
-7. Click **Apply Standardization** — the result alert reports updated / already-clean /
-   error counts. In mock mode an "mock — not written" badge is shown.
+7. Click **Apply Standardization** — the `MC.confirm` dialog appears; confirm and
+   the result alert reports updated / already-clean / error counts written to the
+   connected org.
 
 ---
 
@@ -459,8 +462,8 @@ with a DB it persists and old runs are pruned to `BACKUP_RETAIN`.
 4. **Object Matrix:** enter `Account` → R/C/E/D/View-All/Modify-All table.
 5. **Field Coverage:** enter `Account` → per-field read/edit table.
 
-**Expected:** all four sub-tabs load without error. In live mode, IDs render as
-"↗ Open in Salesforce" deep links.
+**Expected:** all four sub-tabs load without error. IDs render as
+"↗ Open in Salesforce" deep links to the connected org.
 
 ---
 
@@ -497,14 +500,39 @@ with a DB it persists and old runs are pruned to `BACKUP_RETAIN`.
 
 **Steps:**
 1. Navigate to Settings
-2. Org Connections: click "Test Connection" for dev org
-3. Verify green badge appears: "Connected — 4,312 records"
-4. Click "Test Connection" for prod org (no real creds) — amber/red badge
+2. Org Connections: click "Test Connection" for the dev org
+3. Verify a green badge appears confirming the connection (org ID, instance URL,
+   API version)
+4. Click "Test Connection" for an org whose credentials are missing or invalid —
+   amber/red badge with the error detail
 
 5. Upload a Postman collection JSON file (v2.1 format)
 6. Collection appears in table
 7. Click "Run" — collection runner executes all requests, shows pass/fail per request
 8. Click "Delete" — collection removed from table
+
+---
+
+## Confirmation Dialogs on Destructive Actions
+
+Every state-changing UI action — Salesforce writes, bulk DML execute, Conductor
+batch reruns, the trigger-bypass toggle, Apex-log / trace-flag deletes, and the
+Anonymizer live run — is gated by the shared `MC.confirm()` dialog. The
+destructive ones additionally require ticking an acknowledgement checkbox.
+
+**Steps (using Logs > Delete All Logs):**
+1. Navigate to `/logs`, select a time range.
+2. Click **Delete All Logs**.
+3. **Expected:** the `MC.confirm` modal appears. It shows an acknowledgement
+   checkbox, and the confirm button is **disabled**.
+4. Click **Cancel** — the modal closes and no delete request is sent (check the
+   Network tab).
+5. Click **Delete All Logs** again. Tick the acknowledgement checkbox — the
+   confirm button becomes enabled.
+6. Click the confirm button — the delete runs and a result toast appears.
+
+The same pattern applies to all gated actions; spot-check a write (SOQL inline
+edit) and a bulk DML execute to confirm none of them proceed without confirmation.
 
 ---
 

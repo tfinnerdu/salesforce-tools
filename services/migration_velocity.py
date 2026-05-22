@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime, timezone, timedelta
+
+from config import Config
 from db import get_cursor, db_available
 
 logger = logging.getLogger(__name__)
 
-TOTAL_RECORDS_TARGET = 4312  # mock PersonAccount universe
 
 def get_velocity_data(org: str, days: int = 30) -> dict:
     """
@@ -17,10 +18,9 @@ def get_velocity_data(org: str, days: int = 30) -> dict:
              target (int),
              pct_complete (float)
     """
-    # Try to pull batches from DB; fall back to mock data when unavailable
     batches = _get_batches_from_db(org)
     if not batches:
-        return _mock_velocity(days)
+        return _empty_velocity(days)
 
     # Group by date
     from collections import defaultdict
@@ -46,7 +46,7 @@ def get_velocity_data(org: str, days: int = 30) -> dict:
         result_daily.append({'date': ds, 'records': count, 'cumulative': cumulative})
 
     total_migrated = cumulative
-    target = TOTAL_RECORDS_TARGET
+    target = Config.MIGRATION_RECORD_TARGET
     pct_complete = round(min(total_migrated / target * 100, 100), 1) if target else 0
 
     # Velocity: average over last 7 days with data
@@ -109,34 +109,26 @@ def _get_batches_from_db(org: str) -> list:
             rows = cur.fetchall()
             return [dict(r) for r in rows] if rows else []
     except Exception:
-        logger.debug('migration_batches table not available, using mock data')
+        logger.debug('migration_batches table not available, returning empty list')
         return []
 
 
-def _mock_velocity(days: int = 30) -> dict:
+def _empty_velocity(days: int = 30) -> dict:
+    """Zeroed velocity payload for when no batch data exists yet.
+
+    Keeps the response shape stable so the velocity view renders its empty
+    state instead of erroring.
+    """
     today = datetime.now(timezone.utc).date()
-    import random
-    random.seed(42)
-    daily = []
-    cumulative = 0
-    target = TOTAL_RECORDS_TARGET
-    for i in range(days, -1, -1):
-        d = today - timedelta(days=i)
-        records = random.randint(80, 160) if i > 5 else random.randint(20, 60)
-        cumulative = min(cumulative + records, target)
-        daily.append({'date': d.isoformat(), 'records': records, 'cumulative': cumulative})
-    total_migrated = daily[-1]['cumulative']
-    remaining = target - total_migrated
-    velocity_avg = round(sum(d['records'] for d in daily[-7:]) / 7, 1)
-    eta_date = None
-    if velocity_avg > 0 and remaining > 0:
-        eta_dt = datetime.now(timezone.utc) + timedelta(days=remaining / velocity_avg)
-        eta_date = eta_dt.strftime('%Y-%m-%d')
+    daily = [
+        {'date': (today - timedelta(days=i)).isoformat(), 'records': 0, 'cumulative': 0}
+        for i in range(days, -1, -1)
+    ]
     return {
         'daily': daily,
-        'velocity_avg': velocity_avg,
-        'eta_date': eta_date,
-        'total_migrated': total_migrated,
-        'target': target,
-        'pct_complete': round(total_migrated / target * 100, 1),
+        'velocity_avg': 0,
+        'eta_date': None,
+        'total_migrated': 0,
+        'target': Config.MIGRATION_RECORD_TARGET,
+        'pct_complete': 0.0,
     }

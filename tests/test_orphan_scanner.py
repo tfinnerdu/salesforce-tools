@@ -1,27 +1,53 @@
 """Tests for services.orphan_scanner and /validation/orphans routes."""
+from unittest.mock import MagicMock, patch
+
 import pytest
+
+
+def _clean_sf():
+    """SF double: every COUNT() query returns zero — a clean org, no orphans."""
+    sf = MagicMock()
+    sf.query.return_value = {'totalSize': 0, 'records': [], 'done': True}
+    return sf
+
+
+def _orphans_sf(count=3):
+    """SF double: COUNT() queries return `count`, sample queries return rows."""
+    sf = MagicMock()
+
+    def _query(soql):
+        if 'COUNT()' in soql:
+            return {'totalSize': count, 'records': [], 'done': True}
+        return {'records': [{'Id': f'00X{i}'} for i in range(count)],
+                'totalSize': count, 'done': True}
+
+    sf.query.side_effect = _query
+    return sf
 
 
 # ── Service tests ─────────────────────────────────────────────────────────────
 
 def test_scan_returns_list():
-    from services.orphan_scanner import scan
-    result = scan('dev')
+    with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+        from services.orphan_scanner import scan
+        result = scan('dev')
     assert isinstance(result, list)
 
 
 def test_scan_has_all_six_checks():
     from services.orphan_scanner import scan, CHECKS
-    result = scan('dev')
+    with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+        result = scan('dev')
     expected_keys = {c['key'] for c in CHECKS}
     result_keys = {r['key'] for r in result}
     assert result_keys == expected_keys
-    assert len(result) == 6
+    assert len(result) == len(CHECKS)
 
 
 def test_scan_item_has_required_keys():
-    from services.orphan_scanner import scan
-    result = scan('dev')
+    with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+        from services.orphan_scanner import scan
+        result = scan('dev')
     for item in result:
         assert 'key' in item
         assert 'label' in item
@@ -32,47 +58,43 @@ def test_scan_item_has_required_keys():
 
 
 def test_scan_status_ok_when_count_zero():
-    from services.orphan_scanner import scan
-    result = scan('dev')
+    with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+        from services.orphan_scanner import scan
+        result = scan('dev')
     for item in result:
-        if item['count'] == 0 and item['status'] != 'error':
-            assert item['status'] == 'ok'
+        assert item['count'] == 0
+        assert item['status'] == 'ok'
+        assert item['samples'] == []
 
 
 def test_scan_status_warning_when_count_positive():
-    from services.orphan_scanner import scan
-    result = scan('dev')
+    """A non-zero orphan count yields status='warning' and sample records."""
+    with patch('services.orphan_scanner.get_sf', return_value=_orphans_sf(3)):
+        from services.orphan_scanner import scan
+        result = scan('dev')
     for item in result:
-        if item['count'] > 0:
-            assert item['status'] == 'warning'
+        assert item['count'] == 3
+        assert item['status'] == 'warning'
+        assert len(item['samples']) == 3
 
 
-def test_scan_samples_empty_when_count_zero():
-    from services.orphan_scanner import scan
-    result = scan('dev')
-    for item in result:
-        if item['count'] == 0 and item['status'] != 'error':
-            assert item['samples'] == []
-
-
-def test_scan_per_check_exception_sets_error_status(monkeypatch):
-    """If the SF query raises, status='error' and count=0 for that check."""
-    from sf_provider import MockSalesforce
-    original_query = MockSalesforce.query
-
+def test_scan_per_check_exception_sets_error_status():
+    """If the first SF query raises, status='error' and count=0 for that check."""
+    sf = MagicMock()
     call_count = {'n': 0}
 
-    def failing_query(self, soql):
+    def _query(soql):
         call_count['n'] += 1
         if call_count['n'] == 1:
             raise RuntimeError('simulated SF error')
-        return original_query(self, soql)
+        return {'totalSize': 0, 'records': [], 'done': True}
 
-    monkeypatch.setattr(MockSalesforce, 'query', failing_query)
+    sf.query.side_effect = _query
 
-    from services import orphan_scanner
-    result = orphan_scanner.scan('dev')
-    # First check should be error
+    with patch('services.orphan_scanner.get_sf', return_value=sf):
+        from services import orphan_scanner
+        result = orphan_scanner.scan('dev')
+
     first = result[0]
     assert first['status'] == 'error'
     assert first['count'] == 0
@@ -87,14 +109,16 @@ def test_orphans_page_returns_200(client):
 
 
 def test_orphans_scan_api_returns_200_and_success(client):
-    resp = client.get('/validation/orphans/scan')
+    with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+        resp = client.get('/validation/orphans/scan')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
 
 
 def test_orphans_scan_api_data_structure(client):
-    resp = client.get('/validation/orphans/scan')
+    with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+        resp = client.get('/validation/orphans/scan')
     data = resp.get_json()
     assert data['success'] is True
     checks = data['data']

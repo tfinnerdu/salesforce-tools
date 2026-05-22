@@ -1,12 +1,75 @@
 """Route tests for the Data Ops tools — import, export, delete, modify, reassign.
 
 Covers page rendering, the JSON API contract for each tool, validation of
-required parameters, and the 500 error path.
+required parameters, and the 500 error path. SF-touching routes get their
+service-level `get_sf` patched with unittest.mock doubles.
 """
 import io
 import json
 
 import pytest
+
+
+# ── Salesforce doubles ────────────────────────────────────────────────────────
+
+class _DescribeQuerySF:
+    """SF double covering describe (restful), query, and query_all."""
+    _DESCRIBE = {'fields': [
+        {'name': 'Name', 'label': 'Name', 'type': 'string',
+         'nillable': True, 'createable': True, 'updateable': True, 'externalId': False},
+        {'name': 'SIS_ID__c', 'label': 'SIS ID', 'type': 'string',
+         'nillable': True, 'createable': True, 'updateable': True, 'externalId': True},
+    ]}
+    _ROWS = [{'attributes': {'type': 'Account'}, 'Id': '001AAA', 'Name': 'Acme'}]
+
+    def restful(self, path, **kw):
+        return self._DESCRIBE
+
+    def query(self, soql):
+        return {'records': self._ROWS, 'totalSize': len(self._ROWS), 'done': True}
+
+    def query_all(self, soql):
+        return {'records': self._ROWS, 'done': True}
+
+
+class _FakeBulk2Object:
+    def insert(self, records=None, **kw):
+        return self._job(len(records))
+
+    def update(self, records=None, **kw):
+        return self._job(len(records))
+
+    def delete(self, csv_file=None, **kw):
+        import csv as _csv
+        with open(csv_file, newline='') as fh:
+            rows = list(_csv.reader(fh))
+        return self._job(len(rows) - 1)
+
+    def get_failed_records(self, job_id, file=None):
+        return ''
+
+    @staticmethod
+    def _job(total):
+        return [{'numberRecordsTotal': total, 'numberRecordsProcessed': total,
+                 'numberRecordsFailed': 0, 'job_id': 'JOB1'}]
+
+
+class _FakeBulk2:
+    def __getattr__(self, name):
+        return _FakeBulk2Object()
+
+
+class _BulkSF(_DescribeQuerySF):
+    """Adds a bulk2 stub to the describe/query double."""
+    bulk2 = _FakeBulk2()
+
+
+@pytest.fixture(autouse=True)
+def patch_sf(monkeypatch):
+    """Patch get_sf in every Data Ops service so routes never hit a live org."""
+    from services import data_importer, bulk_ops
+    monkeypatch.setattr(data_importer, 'get_sf', lambda org: _BulkSF())
+    monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: _BulkSF())
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -42,6 +105,7 @@ def test_import_fields_returns_field_list(client):
     body = resp.get_json()
     assert body['success'] is True
     assert isinstance(body['data'], list)
+    assert len(body['data']) >= 1
 
 
 def test_import_fields_missing_object_returns_400(client):

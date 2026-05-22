@@ -15,8 +15,6 @@ COPY . .
 
 EXPOSE 5000
 
-ENV SF_MOCK=false
-ENV CONDUCTOR_MOCK=false
 ENV SCHEDULER_ENABLED=true
 
 # Use -u for unbuffered stdout so hub-logs capture output immediately

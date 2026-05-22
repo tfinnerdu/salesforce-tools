@@ -93,18 +93,20 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
 
 The **Org** dropdown in the top-right navbar switches the active Salesforce org. Every data query, migration check, and schema comparison runs against whichever org is selected. Options are `dev`, `sandbox`, and `prod`. The org badge next to the dropdown (e.g., `SANDBOX`) confirms which org is active at a glance.
 
-### Mock / Live Badges
+### Connection Badges
 
 Two badges in the navbar show the connection state of each data source independently:
 
 | Badge | Meaning |
 |---|---|
-| `SF LIVE` (green) | Connected to real Salesforce — data is live |
-| `SF MOCK` (amber) | `SF_MOCK=true` — all Salesforce data is synthetic |
-| `COND LIVE` (green) | Connected to real Conductor orchestration server |
-| `COND MOCK` (amber) | `CONDUCTOR_MOCK=true` — batch/workflow data is synthetic |
+| `SF LIVE` (green) | Connected to Salesforce — data is live |
+| `COND LIVE` (green) | Connected to the Conductor orchestration server |
 
-Click any badge for a detailed tooltip. In mock mode, an **⚠ MOCK DATA** chip appears on every card header and an **⚠ COND MOCK** chip appears on Conductor-driven page titles. Write-action buttons (Delete, Execute, Create) are disabled in mock mode with a tooltip explaining why — read-only Refresh buttons remain active.
+Click any badge for a detailed tooltip with the org and endpoint it is connected to. The app requires valid Salesforce and Conductor credentials to run.
+
+### Confirmation Before Destructive Actions
+
+Any action that changes data — Salesforce writes, bulk delete / modify / reassign, importing records, Conductor batch reruns, the trigger-bypass toggle, deleting Apex logs or trace flags, and running the Anonymizer — asks for confirmation before it runs. A dialog appears summarizing what will happen; click **Cancel** to back out with nothing changed. For the most destructive actions you must also tick an acknowledgement checkbox before the confirm button becomes active. Read-only actions (Refresh, Preview, Run Scan) run immediately with no prompt.
 
 ### Navigation
 
@@ -112,11 +114,10 @@ The top nav contains all tabs: **Dashboard · Migration · Validation · SOQL ·
 
 ### Salesforce Deep Links
 
-When you're connected to a real org, any Salesforce record ID shown in a table —
-in SOQL results, scan results, the Users list, and more — is a clickable link
-(marked with a ↗) that opens that record directly in Salesforce in a new tab.
-This works for `Id` columns and lookup fields alike. In mock mode the IDs are
-plain text, since there is no real org to open.
+Any Salesforce record ID shown in a table — in SOQL results, scan results, the
+Users list, and more — is a clickable link (marked with a ↗) that opens that
+record directly in Salesforce in a new tab. This works for `Id` columns and
+lookup fields alike.
 
 ---
 
@@ -199,8 +200,6 @@ Pulls failed Conductor workflow executions and groups them by error type so you 
 | Suggested fix | Actionable next step |
 | SIS IDs | Expandable list of Colleague person IDs affected |
 
-> **Note:** Shows **⚠ COND MOCK** in the page title when Conductor is in mock mode.
-
 ---
 
 ### Batch Progress
@@ -222,9 +221,7 @@ Live dashboard for a running Conductor migration batch.
 | Status counts | Completed / Failed / Running / Queued breakdown |
 | Failure table | Per-workflow failure details with error message and Re-run button |
 
-**Re-run All Failures** requeues every failed workflow in the current result set back to Conductor.
-
-> **Note:** Shows **⚠ COND MOCK** when Conductor is in mock mode.
+**Re-run All Failures** requeues every failed workflow in the current result set back to Conductor — you are asked to confirm before the reruns are submitted.
 
 ---
 
@@ -300,7 +297,7 @@ Scans for PersonAccount records that appear to be the same person — exact exte
 | Exact Ethos GUID | Two records share the same `Ethos_Guid__c` |
 | Fuzzy name | Last + first name within edit distance 1 (catches typos) |
 
-> **Warning:** Merge is irreversible. The button is disabled in mock mode. In production, always verify the records in Salesforce before confirming.
+> **Warning:** Merge is irreversible. A confirmation dialog with an acknowledgement checkbox guards the action. Always verify the records in Salesforce before confirming.
 
 ---
 
@@ -376,7 +373,7 @@ Finds records that exist in Salesforce but are disconnected from their required 
 | ContactPointAddress | Same Account + Individual checks |
 | PersonAccount | Missing linked Individual record |
 
-Each card shows the orphan count and sample record IDs (with Salesforce deeplinks in live mode).
+Each card shows the orphan count and sample record IDs (with Salesforce deeplinks).
 
 ---
 
@@ -491,8 +488,6 @@ Each accordion panel reports:
 
 The component count badges are green (no differences) or orange (has differences). Expand any panel to see the full list.
 
-> In mock mode the seeded `prod` catalog deliberately lags the dev sandbox, so the diff shows representative results without a live Salesforce connection.
-
 ---
 
 ### Record Inspector
@@ -591,7 +586,7 @@ Takes point-in-time snapshots of an object's field metadata and diffs two snapsh
 The Data Ops tab houses the bulk data tools — the in-house equivalent of Validity
 DemandTools, tuned for the Colleague → Ethos → Salesforce migration. Every
 write tool follows the same safety pattern: **preview first, execute second**, and
-write operations are disabled in mock mode.
+the execute step asks for confirmation before it runs.
 
 ### Data Import
 
@@ -811,7 +806,7 @@ Updates a field value across many records using the Salesforce Bulk API v2.
 **Safety features:**
 - Preview is required before Execute becomes active.
 - Capped at 10,000 records per operation.
-- Execute is **disabled in mock mode**.
+- Execute asks for confirmation before it runs.
 
 > **Warning:** Bulk updates bypass most validation rules and triggers (unless trigger bypass is off in Settings). Always Preview before executing in production.
 
@@ -828,7 +823,7 @@ Finds records stuck in pending approval processes — a common cause of DML fail
 | Column | Description |
 |---|---|
 | ProcessInstance ID | Salesforce ID of the approval process instance |
-| Target Record | ID of the locked record (SF deeplink in live mode) |
+| Target Record | ID of the locked record (SF deeplink) |
 | Created Date | When the approval was initiated |
 | Days Pending | How long the record has been locked |
 
@@ -874,7 +869,7 @@ Lists and inspects Apex debug logs for the active org.
 
 The detail panel shows: log header (user, duration, heap size, CPU time), parsed event timeline grouped by category (SOQL, DML, Apex calls, limits), and the raw log body.
 
-> **Note:** Delete All Logs is disabled in mock mode.
+> **Note:** Delete and Delete All Logs ask for confirmation before removing logs.
 
 ---
 
@@ -926,7 +921,7 @@ Click **Refresh** to load active flags. Expired flags are grayed out.
 
 **Cleanup:** Click **Delete Expired** to remove all expired flags at once. Click the trash icon on a row to remove a specific flag.
 
-> **Note:** Create, Delete Expired, and Trace Me are disabled in mock mode.
+> **Note:** Create, Delete Expired, and trace-flag deletes ask for confirmation before they run.
 
 ---
 
@@ -1241,7 +1236,7 @@ Sends PII fields to an external anonymization service for scrubbing — designed
 3. Click **Preview** — shows how many records would be affected, no data is modified.
 4. Click **Run Anonymizer** to submit to the PII service.
 
-> **Requires `PII_SERVICE_URL`** in your environment. Without it, the service runs in stub mode — logs what it would send but does not modify data. The Run button is disabled in mock mode.
+> **Requires `PII_SERVICE_URL`** in your environment. Without it, the service runs in stub mode — logs what it would send but does not modify data. **Run Anonymizer** asks for confirmation before submitting records to the PII service.
 
 **Available objects and fields:**
 
@@ -1366,7 +1361,7 @@ Select an org and click **Test Connection** to verify that the credentials in yo
 
 ### Bypass Triggers
 
-When `SF_BYPASS_SETTING` is configured in your environment, this toggle flips the checkbox field on your Hierarchy Custom Setting that disables triggers for the integration user. Use this before a bulk migration DML run to prevent triggers from firing on every record.
+When `SF_BYPASS_SETTING` is configured in your environment, this toggle flips the checkbox field on your Hierarchy Custom Setting that disables triggers for the integration user. Use this before a bulk migration DML run to prevent triggers from firing on every record. The toggle asks for confirmation before it changes the setting.
 
 > **Important:** Always re-enable triggers after the migration run completes. Leaving bypass active in production can cause data integrity issues and missed automations.
 

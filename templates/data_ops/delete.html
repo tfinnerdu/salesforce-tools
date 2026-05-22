@@ -57,7 +57,11 @@
           </div>
           <div class="d-flex gap-2">
             <button id="btnDeletePreview" class="btn btn-outline-primary">Preview</button>
-            <button id="btnDeleteExecute" class="btn btn-danger d-none">Delete Records</button>
+            <button id="btnDeleteExecute" class="btn btn-danger d-none"
+                    data-mc-confirm="This permanently deletes the Salesforce records matched in the preview. Deleted records can only be recovered from the Recycle Bin for a limited time."
+                    data-mc-confirm-title="Delete records"
+                    data-mc-confirm-btn="Delete records"
+                    data-mc-confirm-ack="true">Delete Records</button>
           </div>
         </div>
       </div>

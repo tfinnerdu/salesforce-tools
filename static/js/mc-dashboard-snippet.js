@@ -277,7 +277,6 @@ MC.dashboard = {
       const summary = await MC.api('/dashboard/summary');
       const readinessPct = summary?.readiness_pct;
       const preflightPct = summary?.preflight_pct;
-      const mock = summary?.mock;
 
       // Compute composite score — weighted average of available signals
       let score = null;
@@ -306,14 +305,9 @@ MC.dashboard = {
         concern = 'Critical readiness issues — do not go live';
       }
 
-      const modeBadge = mock
-        ? '<span class="badge badge-amber ms-1">MOCK</span>'
-        : '<span class="badge badge-green ms-1">LIVE</span>';
-
       const bullets = [
         `<li>${concern}</li>`,
         `<li>Readiness: ${readinessPct !== null && readinessPct !== undefined ? readinessPct + '%' : 'Not run'}</li>`,
-        `<li>Data mode: ${modeBadge}</li>`,
       ].join('');
 
       this._setWidgetBody('dashWidget8Body',

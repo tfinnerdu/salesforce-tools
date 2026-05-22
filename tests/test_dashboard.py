@@ -37,7 +37,7 @@ def test_dashboard_summary_has_required_keys(client):
     data = resp.get_json()
     assert 'data' in data
     payload = data['data']
-    for key in ('org', 'mock', 'readiness_pct', 'preflight_pct'):
+    for key in ('org', 'readiness_pct', 'preflight_pct'):
         assert key in payload, f"Missing key: {key}"
 
 

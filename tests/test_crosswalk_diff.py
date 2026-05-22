@@ -1,9 +1,33 @@
-"""Tests for services.crosswalk_diff."""
-import pytest
+"""Tests for services.crosswalk_diff.
+
+The fabricated ``_mock_coverage`` helper is gone. ``run_live_check`` now queries
+both the EDA and EC side via ``_count_populated`` against the live org, so tests
+configure a Salesforce double whose COUNT() queries return controlled numbers.
+"""
 from unittest.mock import MagicMock, patch
 
+import pytest
 
-# ── parse_csv ─────────────────────────────────────────────────────────────────
+
+def _count(n):
+    return {'totalSize': n, 'done': True, 'records': []}
+
+
+def _sf_counts(count_map, default=0):
+    """SF double whose COUNT() queries resolve via substring match in count_map."""
+    sf = MagicMock()
+
+    def _query(soql):
+        for needle, n in count_map.items():
+            if needle in soql:
+                return _count(n)
+        return _count(default)
+
+    sf.query.side_effect = _query
+    return sf
+
+
+# ── parse_csv (pure logic, unchanged) ─────────────────────────────────────────
 
 def test_parse_csv_basic():
     from services.crosswalk_diff import parse_csv
@@ -46,112 +70,71 @@ def test_parse_csv_empty_body():
 
 # ── _count_populated ─────────────────────────────────────────────────────────
 
-def test_count_populated_returns_tuple(mock_sf):
+def test_count_populated_returns_tuple():
     from services.crosswalk_diff import _count_populated
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
-        result = _count_populated(mock_sf, 'Account', 'SIS_ID__c')
-    covered, total = result
+    sf = _sf_counts({'WHERE SIS_ID__c != null': 3000, 'FROM Account': 4312})
+    covered, total = _count_populated(sf, 'Account', 'SIS_ID__c')
     assert total == 4312
+    assert covered == 3000
     assert 0 <= covered <= total
 
 
 def test_count_populated_returns_zero_zero_on_exception():
     from services.crosswalk_diff import _count_populated
-    mock_sf = MagicMock()
-    mock_sf.query.side_effect = Exception("SOQL error")
-    covered, total = _count_populated(mock_sf, 'Account', 'SIS_ID__c')
+    sf = MagicMock()
+    sf.query.side_effect = Exception("SOQL error")
+    covered, total = _count_populated(sf, 'Account', 'SIS_ID__c')
     assert covered == 0
     assert total == 0
 
 
 def test_count_populated_zero_total_returns_zero_zero():
     from services.crosswalk_diff import _count_populated
-    mock_sf = MagicMock()
-    mock_sf.query.return_value = {'totalSize': 0, 'done': True, 'records': []}
-    covered, total = _count_populated(mock_sf, 'Account', 'SIS_ID__c')
+    sf = MagicMock()
+    sf.query.return_value = {'totalSize': 0, 'done': True, 'records': []}
+    covered, total = _count_populated(sf, 'Account', 'SIS_ID__c')
     assert covered == 0
     assert total == 0
 
 
-# ── _mock_coverage ────────────────────────────────────────────────────────────
-
-def test_mock_coverage_eda_higher_than_ec():
-    from services.crosswalk_diff import _mock_coverage
-    eda_cov, eda_tot = _mock_coverage('Account', 'SIS_ID__c', 'eda')
-    ec_cov, ec_tot = _mock_coverage('Account', 'SIS_ID__c', 'ec')
-    assert eda_cov > ec_cov
-    assert eda_tot == ec_tot == 4312
-
-
-def test_mock_coverage_eda_97_percent():
-    from services.crosswalk_diff import _mock_coverage
-    covered, total = _mock_coverage('Account', 'SIS_ID__c', 'eda')
-    pct = covered / total * 100
-    assert abs(pct - 97.0) < 1.0  # within 1% of 97
-
-
-def test_mock_coverage_ec_82_percent():
-    from services.crosswalk_diff import _mock_coverage
-    covered, total = _mock_coverage('Account', 'SIS_ID__c', 'ec')
-    pct = covered / total * 100
-    assert abs(pct - 82.0) < 1.0  # within 1% of 82
-
-
-def test_mock_coverage_unknown_object_uses_default():
-    from services.crosswalk_diff import _mock_coverage
-    covered, total = _mock_coverage('UnknownObject', 'SomeField', 'eda')
-    assert total == 500
-    assert covered > 0
-
-
-def test_mock_coverage_known_objects():
-    from services.crosswalk_diff import _mock_coverage
-    for obj, expected_total in [
-        ('ContactPointEmail', 4100),
-        ('ContactPointPhone', 3800),
-        ('ContactPointAddress', 3204),
-        ('IndividualApplication', 1850),
-        ('Opportunity', 620),
-    ]:
-        _, total = _mock_coverage(obj, 'SIS_ID__c', 'eda')
-        assert total == expected_total
-
-
 # ── run_live_check ────────────────────────────────────────────────────────────
 
-def test_run_live_check_skips_non_mapped_rows(mock_sf):
+def test_run_live_check_skips_non_mapped_rows():
     from services.crosswalk_diff import run_live_check
+    sf = _sf_counts({'FROM Account': 4312})
     mappings = [
         {'eda_object': 'Account', 'eda_field': 'SIS_ID__c',
          'ec_object': 'Account', 'ec_field': 'SIS_ID__c', 'status': 'Pending'},
         {'eda_object': 'Account', 'eda_field': 'Name',
          'ec_object': 'Account', 'ec_field': 'Name', 'status': 'Unmapped'},
     ]
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
     assert results == []
 
 
-def test_run_live_check_skips_rows_with_missing_fields(mock_sf):
+def test_run_live_check_skips_rows_with_missing_fields():
     from services.crosswalk_diff import run_live_check
+    sf = _sf_counts({'FROM Account': 4312})
     mappings = [
         {'eda_object': 'Account', 'eda_field': '',
          'ec_object': 'Account', 'ec_field': 'Name', 'status': 'Mapped'},
         {'eda_object': '', 'eda_field': 'SIS_ID__c',
          'ec_object': 'Account', 'ec_field': 'SIS_ID__c', 'status': 'Mapped'},
     ]
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
     assert results == []
 
 
-def test_run_live_check_mapped_row_returns_result(mock_sf):
+def test_run_live_check_mapped_row_returns_result():
     from services.crosswalk_diff import run_live_check
+    sf = _sf_counts({'WHERE SIS_ID__c != null': 3000, 'FROM Account': 4312})
     mappings = [
         {'eda_object': 'Account', 'eda_field': 'SIS_ID__c',
          'ec_object': 'Account', 'ec_field': 'SIS_ID__c', 'status': 'Mapped'},
     ]
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
     assert len(results) == 1
     row = results[0]
@@ -161,49 +144,69 @@ def test_run_live_check_mapped_row_returns_result(mock_sf):
         assert key in row
 
 
-def test_run_live_check_gap_direction_eda_ahead(mock_sf):
-    """When EDA returns same numbers as EC, divergence is applied, making EDA ahead."""
+def test_run_live_check_gap_direction_eda_ahead():
+    """EDA side with higher coverage than the EC side -> eda_ahead direction."""
     from services.crosswalk_diff import run_live_check
+    sf = MagicMock()
+
+    def _query(soql):
+        if 'FROM EDA_Account' in soql and 'WHERE' in soql:
+            return _count(970)   # 97%
+        if 'FROM EDA_Account' in soql:
+            return _count(1000)
+        if 'FROM Account' in soql and 'WHERE' in soql:
+            return _count(820)   # 82%
+        if 'FROM Account' in soql:
+            return _count(1000)
+        return _count(0)
+
+    sf.query.side_effect = _query
     mappings = [
-        {'eda_object': 'Account', 'eda_field': 'SIS_ID__c',
+        {'eda_object': 'EDA_Account', 'eda_field': 'SIS_ID__c',
          'ec_object': 'Account', 'ec_field': 'SIS_ID__c', 'status': 'Mapped'},
     ]
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
     row = results[0]
-    # EDA 97% vs EC 82% means EDA is ahead
     assert row['gap_direction'] == 'eda_ahead'
     assert row['eda_pct'] > row['ec_pct']
 
 
-def test_run_live_check_row_status_error_when_gap_large(mock_sf):
-    """Gap >20 pct points → error status."""
+def test_run_live_check_row_status_warn_when_gap_moderate():
+    """EDA 97% vs EC 82% -> 15-point gap -> warn (gap <= 20)."""
     from services.crosswalk_diff import run_live_check
+    sf = MagicMock()
+
+    def _query(soql):
+        if 'FROM EDA_Account' in soql and 'WHERE' in soql:
+            return _count(970)
+        if 'FROM EDA_Account' in soql:
+            return _count(1000)
+        if 'FROM Account' in soql and 'WHERE' in soql:
+            return _count(820)
+        if 'FROM Account' in soql:
+            return _count(1000)
+        return _count(0)
+
+    sf.query.side_effect = _query
     mappings = [
-        {'eda_object': 'Account', 'eda_field': 'SIS_ID__c',
+        {'eda_object': 'EDA_Account', 'eda_field': 'SIS_ID__c',
          'ec_object': 'Account', 'ec_field': 'SIS_ID__c', 'status': 'Mapped'},
     ]
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
-    row = results[0]
-    # EDA 97% - EC 82% = 15% gap → warn (not error since <=20)
-    assert row['row_status'] in ('warn', 'error')
+    assert results[0]['row_status'] == 'warn'
 
 
 def test_run_live_check_row_status_match_when_same():
-    """When both sides are identical coverage, row_status is match."""
+    """When both sides have identical coverage, gap is 0 -> match."""
     from services.crosswalk_diff import run_live_check
-    mock_sf = MagicMock()
-    mock_sf.query.return_value = {'totalSize': 100, 'done': True, 'records': []}
-
+    sf = _sf_counts({'WHERE Name != null': 90, 'FROM Account': 100})
     mappings = [
         {'eda_object': 'Account', 'eda_field': 'Name',
          'ec_object': 'Account', 'ec_field': 'Name', 'status': 'Mapped'},
     ]
-
-    # Patch _mock_coverage to return equal values so both diverge equally
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf), \
-         patch('services.crosswalk_diff._mock_coverage', side_effect=lambda obj, field, side: (90, 100)):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
     row = results[0]
     assert row['gap_direction'] == 'match'
@@ -211,32 +214,37 @@ def test_run_live_check_row_status_match_when_same():
 
 
 def test_run_live_check_ec_ahead():
-    """EC having more coverage than EDA → ec_ahead direction."""
+    """EC side with much higher coverage than EDA -> ec_ahead, error (gap > 20)."""
     from services.crosswalk_diff import run_live_check
-    mock_sf = MagicMock()
-    mock_sf.query.return_value = {'totalSize': 100, 'done': True, 'records': []}
+    sf = MagicMock()
 
-    def _mock_cov(obj, field, side):
-        if side == 'eda':
-            return 50, 100  # 50%
-        return 90, 100  # 90%
+    def _query(soql):
+        if 'FROM EDA_Account' in soql and 'WHERE' in soql:
+            return _count(500)   # 50%
+        if 'FROM EDA_Account' in soql:
+            return _count(1000)
+        if 'FROM Account' in soql and 'WHERE' in soql:
+            return _count(900)   # 90%
+        if 'FROM Account' in soql:
+            return _count(1000)
+        return _count(0)
 
+    sf.query.side_effect = _query
     mappings = [
-        {'eda_object': 'Account', 'eda_field': 'Name',
+        {'eda_object': 'EDA_Account', 'eda_field': 'Name',
          'ec_object': 'Account', 'ec_field': 'Name', 'status': 'Mapped'},
     ]
-
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf), \
-         patch('services.crosswalk_diff._mock_coverage', side_effect=_mock_cov):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
     row = results[0]
     assert row['gap_direction'] == 'ec_ahead'
-    assert row['row_status'] == 'error'  # 40% gap > 20
+    assert row['row_status'] == 'error'  # 40-point gap > 20
 
 
-def test_run_live_check_empty_mappings(mock_sf):
+def test_run_live_check_empty_mappings():
     from services.crosswalk_diff import run_live_check
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    sf = _sf_counts({})
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', [])
     assert results == []
 
@@ -244,14 +252,15 @@ def test_run_live_check_empty_mappings(mock_sf):
 def test_run_live_check_count_populated_exception_produces_zero_total():
     """If _count_populated raises, row totals are 0 — row still included with 0 pct."""
     from services.crosswalk_diff import run_live_check
-    mock_sf = MagicMock()
-    mock_sf.query.side_effect = Exception("timeout")
-
+    sf = MagicMock()
+    sf.query.side_effect = Exception("timeout")
     mappings = [
         {'eda_object': 'Account', 'eda_field': 'SIS_ID__c',
          'ec_object': 'Account', 'ec_field': 'SIS_ID__c', 'status': 'Mapped'},
     ]
-    with patch('services.crosswalk_diff.get_sf', return_value=mock_sf):
+    with patch('services.crosswalk_diff.get_sf', return_value=sf):
         results = run_live_check('dev', mappings)
-    # When count returns (0, 0) for both sides, divergence is applied
     assert len(results) == 1
+    row = results[0]
+    assert row['eda_pct'] == 0.0
+    assert row['ec_pct'] == 0.0

@@ -134,7 +134,9 @@
       </span>
       <div class="d-flex gap-2 no-print">
         <button id="btnRerunAll" class="btn btn-sm btn-danger"
-                data-mock-disable="Cannot requeue batches in mock mode">Re-run All Failures
+                data-mc-confirm="This re-runs every failed workflow in this batch through Conductor."
+                data-mc-confirm-title="Re-run all failures"
+                data-mc-confirm-btn="Re-run all">Re-run All Failures
           <span class="mc-info-icon"
                 data-bs-toggle="popover"
                 data-bs-trigger="focus"

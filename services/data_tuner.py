@@ -7,7 +7,6 @@ Clean, consistent data fails fewer validation rules on import.
 import logging
 import re
 
-from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -191,10 +190,6 @@ def apply_tune(org: str, object_name: str, where_clause: str, field_rules: dict,
     unchanged = len(records) - len(updates)
     if not updates:
         return {'updated': 0, 'unchanged': unchanged, 'errors': 0, 'total': len(records)}
-
-    if Config.SF_MOCK:
-        return {'updated': len(updates), 'unchanged': unchanged, 'errors': 0,
-                'total': len(records), 'mock': True}
 
     from sf_provider import bulk2_dml, set_bypass_triggers
     if bypass_triggers:

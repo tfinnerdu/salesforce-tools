@@ -1,9 +1,8 @@
 """Tests for services.data_importer — CSV import, validation, Bulk API.
 
 Validation logic is exercised with monkeypatched field metadata so every
-field type and error path is covered deterministically. The mock-SF pipeline
-is used for get_object_fields and import_csv (which short-circuits to mock
-results when SF_MOCK is true).
+field type and error path is covered deterministically. get_object_fields and
+import_csv are exercised against unittest.mock Salesforce doubles.
 """
 import pytest
 
@@ -162,15 +161,33 @@ def test_validate_summary_aggregates_by_field(patched_fields):
     assert result['summary']['Age__c']['errors'] == 2
 
 
-# ── get_object_fields — mock pipeline ─────────────────────────────────────────
+# ── get_object_fields — describe pipeline ─────────────────────────────────────
 
-def test_get_object_fields_returns_metadata():
+class _DescribeSF:
+    """SF double whose restful() returns a describe payload."""
+    def __init__(self, describe):
+        self._describe = describe
+
+    def restful(self, path, **kw):
+        return self._describe
+
+
+def test_get_object_fields_returns_metadata(monkeypatch):
+    describe = {'fields': [
+        {'name': 'Id', 'label': 'Record ID', 'type': 'id',
+         'nillable': False, 'createable': False, 'updateable': False, 'externalId': False},
+        {'name': 'SIS_ID__c', 'label': 'SIS ID', 'type': 'string',
+         'nillable': True, 'createable': True, 'updateable': True, 'externalId': True},
+    ]}
+    monkeypatch.setattr(data_importer, 'get_sf',
+                        lambda org: _DescribeSF(describe))
     fields = data_importer.get_object_fields('dev', 'Account')
     assert isinstance(fields, list)
-    assert len(fields) >= 1
-    f = fields[0]
+    assert len(fields) == 2
     for key in ('name', 'label', 'type', 'required', 'createable', 'external_id'):
-        assert key in f
+        assert key in fields[0]
+    sis = next(f for f in fields if f['name'] == 'SIS_ID__c')
+    assert sis['external_id'] is True
 
 
 def test_get_object_fields_describe_failure_raises_valueerror(monkeypatch):
@@ -184,25 +201,44 @@ def test_get_object_fields_describe_failure_raises_valueerror(monkeypatch):
         data_importer.get_object_fields('dev', 'NoSuchObject__zzz')
 
 
-# ── import_csv — mock mode ────────────────────────────────────────────────────
+# ── import_csv — bulk2 pipeline ───────────────────────────────────────────────
 
-def test_import_csv_mock_mode_returns_results():
+class _FakeBulk2Object:
+    def __init__(self, processed, failed):
+        self._processed = processed
+        self._failed = failed
+
+    def insert(self, records=None, **kw):
+        return [{'numberRecordsTotal': len(records),
+                 'numberRecordsProcessed': self._processed,
+                 'numberRecordsFailed': self._failed,
+                 'job_id': 'JOB1'}]
+
+    def get_failed_records(self, job_id, file=None):
+        return ''
+
+
+class _FakeBulk2:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def __getattr__(self, name):
+        return self._obj
+
+
+class _ImportSF:
+    def __init__(self, processed, failed):
+        self.bulk2 = _FakeBulk2(_FakeBulk2Object(processed, failed))
+
+
+def test_import_csv_returns_results(monkeypatch):
+    monkeypatch.setattr(data_importer, 'get_sf',
+                        lambda org: _ImportSF(processed=3, failed=0))
     csv_text = 'Name,SIS_ID__c\nA,STU1\nB,STU2\nC,STU3'
     result = data_importer.import_csv('dev', 'Account', csv_text,
                                       {'Name': 'Name', 'SIS_ID__c': 'SIS_ID__c'}, 'insert')
-    assert result['mock'] is True
     assert result['total'] == result['success_count'] + result['error_count']
-    assert result['total'] >= 3
-
-
-def test_import_csv_mock_has_error_csv_when_failures():
-    result = data_importer._mock_import_result(10, 'insert')
-    assert result['error_count'] >= 1
-    assert result['success_count'] + result['error_count'] == result['total']
-
-
-def test_mock_import_result_shape():
-    result = data_importer._mock_import_result(5, 'upsert')
-    assert result['operation'] == 'upsert'
-    assert len(result['results']) == result['total']
-    assert all('row' in r and 'success' in r for r in result['results'])
+    assert result['total'] == 3
+    assert result['success_count'] == 3
+    assert result['error_count'] == 0
+    assert result['operation'] == 'insert'

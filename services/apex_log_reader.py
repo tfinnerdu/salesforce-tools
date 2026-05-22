@@ -2,7 +2,6 @@ import logging
 import re
 from datetime import datetime, timezone
 
-from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -144,7 +143,7 @@ def delete_all_logs(org: str) -> dict:
     try:
         sf.restful('tooling/sobjects/ApexLog/', method='DELETE')
     except Exception:
-        pass  # Mock or unsupported — treat as success
+        pass  # Unsupported — treat as success
     return {'deleted': True}
 
 
@@ -294,8 +293,6 @@ def list_trace_flags(org: str) -> list:
                     r['DebugLevel'] = {'DeveloperName': r.get('DebugLevelId', ''),
                                        'Id': r.get('DebugLevelId', '')}
         except Exception:
-            if Config.SF_MOCK:
-                return _mock_trace_flags()
             return []
     flags = []
     for r in result.get('records', []):
@@ -321,30 +318,7 @@ def list_trace_flags(org: str) -> list:
             'expired': expired,
             'expires_in_minutes': expires_in,
         })
-    # Mock fallback
-    if Config.SF_MOCK and not flags:
-        return _mock_trace_flags()
     return flags
-
-
-def _mock_trace_flags():
-    from datetime import timedelta
-    now = datetime.now(timezone.utc)
-    return [
-        {
-            'id': 'TF001', 'log_type': 'USER_DEBUG', 'debug_level_name': 'SFDC_DevConsole',
-            'debug_level_id': 'DL001', 'traced_entity_id': 'U001', 'traced_entity_type': 'User',
-            'start_date': now.isoformat(), 'expiration_date': (now + timedelta(minutes=25)).isoformat(),
-            'expired': False, 'expires_in_minutes': 25,
-        },
-        {
-            'id': 'TF002', 'log_type': 'CLASS_TRACING', 'debug_level_name': 'SF_ApexDebug',
-            'debug_level_id': 'DL002', 'traced_entity_id': 'CL001', 'traced_entity_type': 'ApexClass',
-            'start_date': (now - timedelta(hours=2)).isoformat(),
-            'expiration_date': (now - timedelta(minutes=5)).isoformat(),
-            'expired': True, 'expires_in_minutes': None,
-        },
-    ]
 
 
 def list_debug_levels(org: str) -> list:
@@ -355,8 +329,6 @@ def list_debug_levels(org: str) -> list:
         result = sf.restful('tooling/query/', params={'q': soql})
         levels = [{'id': r['Id'], 'name': r.get('DeveloperName', ''), 'label': r.get('MasterLabel', '')}
                   for r in result.get('records', [])]
-        if Config.SF_MOCK and not levels:
-            return [{'id': 'DL001', 'name': n, 'label': n} for n in DEBUG_LEVELS]
         return levels
     except Exception:
         return [{'id': n, 'name': n, 'label': n} for n in DEBUG_LEVELS]
@@ -370,11 +342,6 @@ def list_users_for_tracing(org: str, search: str = '') -> list:
     result = sf.query(soql)
     users = [{'id': r['Id'], 'name': r.get('Name', ''), 'username': r.get('Username', '')}
              for r in result.get('records', [])]
-    if Config.SF_MOCK and not users:
-        return [
-            {'id': 'U001', 'name': 'Migration Service', 'username': 'migrate@doane.edu'},
-            {'id': 'U002', 'name': 'SF Admin',          'username': 'admin@doane.edu'},
-        ]
     return users
 
 
@@ -394,8 +361,6 @@ def create_trace_flag(org: str, entity_id: str, entity_type: str,
         'DebugLevelId': debug_level_id,
         'TracedEntityId': entity_id,
     }
-    if Config.SF_MOCK:
-        return {'id': 'TF_MOCK', 'created': True, 'mock': True}
     result = sf.restful('tooling/sobjects/TraceFlag/', method='POST', json=body)
     return {'id': result.get('id', ''), 'created': True}
 
@@ -403,8 +368,6 @@ def create_trace_flag(org: str, entity_id: str, entity_type: str,
 def delete_trace_flag(org: str, flag_id: str) -> dict:
     """Delete a TraceFlag by ID."""
     sf = get_sf(org)
-    if Config.SF_MOCK:
-        return {'deleted': True, 'mock': True}
     sf.restful(f'tooling/sobjects/TraceFlag/{flag_id}', method='DELETE')
     return {'deleted': True}
 

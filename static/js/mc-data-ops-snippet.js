@@ -94,9 +94,12 @@ MC.bulkDml = {
     }
 
     if (!dryRun) {
-      const confirmed = window.confirm(
-        `LIVE execution: update ${field} on all matching ${sobject} records.\n\nThis cannot be undone. Proceed?`
-      );
+      const confirmed = await MC.confirm({
+        title: 'Live bulk update',
+        body: `This updates ${field} on every matching ${sobject} record in Salesforce. This is a live write, not a dry run.`,
+        confirmText: 'Run live update',
+        requireAck: true,
+      });
       if (!confirmed) return;
     }
 
@@ -740,7 +743,8 @@ MC.bulkDelete = {
   },
 
   async execute() {
-    if (!confirm(`Delete ${this._previewData?.total || 'matching'} records? This cannot be undone easily.`)) return;
+    // Confirmation is handled declaratively by the data-mc-confirm attribute
+    // on #btnDeleteExecute (see MC.confirm in mission-control.js).
     const obj   = document.getElementById('deleteObject')?.value.trim();
     const where = document.getElementById('deleteWhere')?.value.trim();
     const bypass = document.getElementById('deleteBypass')?.checked;
@@ -1063,11 +1067,10 @@ MC.tuner = {
         {object: obj, where_clause: where, field_rules: fieldRules, bypass_triggers: bypass});
       const alert = document.getElementById('tuneResultAlert');
       document.getElementById('tuneResultWrap')?.classList.remove('d-none');
-      const mockNote = d.mock ? ' <span class="badge badge-secondary">mock — not written</span>' : '';
       if (alert) {
         alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">
           Standardized <strong>${d.updated}</strong> record(s).
-          ${d.unchanged} already clean. Errors: ${d.errors}.${mockNote}</div>`;
+          ${d.unchanged} already clean. Errors: ${d.errors}.</div>`;
       }
       document.getElementById('btnTuneExecute')?.classList.add('d-none');
     } catch (err) {

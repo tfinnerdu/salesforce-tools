@@ -178,9 +178,6 @@ def merge(org: str, master_id: str, victim_id: str, bypass: bool = False) -> dic
         with dml_guard(sf, bypass=bypass):
             sf.Account.merge(master_id, [victim_id])
         success = True
-    except AttributeError:
-        # Mock or real client without merge method — treat as success
-        success = True
     except Exception as exc:
         logger.error("merge failed master=%s victim=%s: %s", master_id, victim_id, exc)
         exc_for_log = exc

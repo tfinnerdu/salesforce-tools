@@ -4,7 +4,6 @@ import io
 import logging
 from typing import Any
 
-from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -186,9 +185,6 @@ def import_csv(org: str, object_name: str, csv_text: str, field_mapping: dict,
         error_csv: str  (the Bulk API failed-records CSV: sf__Id, sf__Error, …)
     }
     """
-    if Config.SF_MOCK:
-        return _mock_import_result(len(_parse_csv(csv_text)), operation)
-
     sf = get_sf(org)
     rows = _parse_csv(csv_text)
     if not rows:
@@ -252,28 +248,3 @@ def _parse_csv(csv_text: str) -> list:
         return []
     reader = csv.DictReader(io.StringIO(csv_text))
     return [dict(row) for row in reader]
-
-
-def _mock_import_result(row_count: int, operation: str) -> dict:
-    total = max(row_count, 3)
-    failed = max(1, total // 10)
-    succeeded = total - failed
-    results = []
-    for i in range(total):
-        ok = i < succeeded
-        results.append({
-            'row': i + 1,
-            'sf_id': f'001MOCK{i:06d}' if ok else '',
-            'success': ok,
-            'errors': '' if ok else 'MOCK: Required field missing: SIS_ID__c',
-        })
-    return {
-        'success_count': succeeded,
-        'error_count': failed,
-        'total': total,
-        'results': results,
-        'error_csv': '',
-        'object_name': 'Account',
-        'operation': operation,
-        'mock': True,
-    }

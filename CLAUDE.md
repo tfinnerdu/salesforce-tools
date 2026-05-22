@@ -31,9 +31,9 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 
 ## Provider pattern
 
-- `sf_provider.get_sf(org)` — real or `MockSalesforce` when `SF_MOCK=true`
-- `conductor_provider.get_conductor_client()` — real or `MockConductorClient` when `CONDUCTOR_MOCK=true`
-- Default dev behavior: both mocks active, no credentials needed
+- `sf_provider.get_sf(org)` — returns a live `simple_salesforce` client; raises `RuntimeError` if the org has no credentials configured
+- `conductor_provider.get_conductor_client()` — returns a live `ConductorClient`; raises `RuntimeError` if Conductor is not configured
+- There is no mock mode. Real Salesforce + Conductor credentials are required to run the app. Tests patch `get_sf` / `get_conductor_client` with `unittest.mock` doubles.
 
 ## Salesforce context
 
@@ -49,8 +49,8 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 app.py               Flask factory, registers all blueprints
 config.py            Config class, get_org_config()
 db.py                psycopg2 connection, init_db(), db_available()
-sf_provider.py       SF client + MockSalesforce (4,312 mock PersonAccounts)
-conductor_provider.py Conductor client + MockConductorClient (91 mock failures)
+sf_provider.py       Live SF client factory + Bulk API / DML helpers
+conductor_provider.py Live Conductor client
 scheduler.py         APScheduler daily readiness job
 routes/              One blueprint file per tab
 services/            Business logic, one module per feature
@@ -68,7 +68,7 @@ services/            Business logic, one module per feature
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
 static/js/           mission-control.js (MC.* namespace, vanilla JS)
-tests/               pytest, all services mocked
+tests/               pytest; SF/Conductor patched with unittest.mock doubles
 docs/                e2e walkthrough + user guide
 k8s/manifest.yaml   Deployment + IngressRoute + Middleware + TLS
 ```
@@ -87,7 +87,11 @@ python app.py
 
 ## Environment variables
 
-Copy `.env.example` to `.env`. With `SF_MOCK=true` and `CONDUCTOR_MOCK=true` (defaults), the app runs fully without any credentials.
+Copy `.env.example` to `.env`. Salesforce and Conductor credentials are required — there is no mock mode, so the app needs real connections to start serving data.
+
+## Confirmation dialogs
+
+Every state-changing UI action (SF writes, bulk DML, Conductor reruns, trigger-bypass changes, log/trace-flag deletes) is gated by a confirmation modal. The shared primitive is `MC.confirm()` in `mission-control.js`; most buttons opt in declaratively via a `data-mc-confirm` attribute, intercepted by a capture-phase guard. Conditional cases (anonymizer live run, bulk-update live run) call `MC.confirm()` directly.
 
 ## Testing
 
@@ -100,4 +104,4 @@ pytest tests/ -v
 - `secretKeyRef` indentation in K8s manifest: `name` and `key` must indent UNDER `secretKeyRef`
 - Flask binds `0.0.0.0` so Conductor/Docker can reach via `host.docker.internal`
 - `use_reloader=False` in hub-launched mode
-- Mock data is seeded from `sf_provider.py` — numbers match handoff doc examples
+- No mock layer: an unconfigured org makes `get_sf()` raise — configure credentials in `.env`

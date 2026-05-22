@@ -1,14 +1,10 @@
-"""Boundary tests for the real (SF_MOCK=false) Bulk API 2.0 code paths.
+"""Boundary tests for the Bulk API 2.0 code paths.
 
-In mock mode the import/delete/modify/reassign/tune execute functions
-short-circuit to canned results, so their real logic — record-dict assembly,
-the bulk2 job-result aggregation, and the failed-records error CSV — never
-runs under the default test config. These tests flip SF_MOCK off and inject a
-fake Salesforce client exposing ``sf.bulk2`` so that logic is exercised
-deterministically without a live org.
+These tests inject a fake Salesforce client exposing ``sf.bulk2`` so the real
+record-dict assembly, bulk2 job-result aggregation, and failed-records error
+CSV logic runs deterministically without a live org.
 """
 import csv
-import io
 
 import pytest
 
@@ -76,16 +72,9 @@ class _FakeSF:
         return {'records': self._query_records}
 
 
-@pytest.fixture
-def live_mode(monkeypatch):
-    """Disable SF_MOCK so the real bulk2 code paths run."""
-    monkeypatch.setattr(data_importer.Config, 'SF_MOCK', False)
-    monkeypatch.setattr(bulk_ops.Config, 'SF_MOCK', False)
+# ── data_importer.import_csv — bulk2 path ─────────────────────────────────────
 
-
-# ── data_importer.import_csv — real bulk2 path ────────────────────────────────
-
-def test_import_csv_insert_aggregates_job_counts(live_mode, monkeypatch):
+def test_import_csv_insert_aggregates_job_counts(monkeypatch):
     sf = _FakeSF(processed=2, failed=1)
     monkeypatch.setattr(data_importer, 'get_sf', lambda org: sf)
 
@@ -101,7 +90,7 @@ def test_import_csv_insert_aggregates_job_counts(live_mode, monkeypatch):
     assert sf.bulk2._obj.received[1]['SIS_ID__c'] is None
 
 
-def test_import_csv_error_csv_comes_from_failed_records(live_mode, monkeypatch):
+def test_import_csv_error_csv_comes_from_failed_records(monkeypatch):
     failed_csv = ('sf__Id,sf__Error,Name,SIS_ID__c\n'
                   ',DUPLICATE_VALUE: duplicate SIS_ID__c,Bad,STU2\n')
     sf = _FakeSF(processed=2, failed=1, failed_csv=failed_csv)
@@ -118,14 +107,14 @@ def test_import_csv_error_csv_comes_from_failed_records(live_mode, monkeypatch):
     assert out['results'][0]['source']['Name'] == 'Bad'
 
 
-def test_import_csv_upsert_requires_external_id(live_mode, monkeypatch):
+def test_import_csv_upsert_requires_external_id(monkeypatch):
     monkeypatch.setattr(data_importer, 'get_sf', lambda org: _FakeSF())
     with pytest.raises(ValueError, match='external_id_field'):
         data_importer.import_csv('dev', 'Account', 'Name\nA\n',
                                  {'Name': 'Name'}, 'upsert', external_id_field='')
 
 
-def test_import_csv_upsert_passes_external_id(live_mode, monkeypatch):
+def test_import_csv_upsert_passes_external_id(monkeypatch):
     sf = _FakeSF(processed=1, failed=0)
     monkeypatch.setattr(data_importer, 'get_sf', lambda org: sf)
 
@@ -136,14 +125,14 @@ def test_import_csv_upsert_passes_external_id(live_mode, monkeypatch):
     assert sf.bulk2._obj.ext_id == 'SIS_ID__c'
 
 
-def test_import_csv_unknown_operation_raises(live_mode, monkeypatch):
+def test_import_csv_unknown_operation_raises(monkeypatch):
     monkeypatch.setattr(data_importer, 'get_sf', lambda org: _FakeSF())
     with pytest.raises(ValueError, match='Unknown bulk operation'):
         data_importer.import_csv('dev', 'Account', 'Name\nA\n',
                                  {'Name': 'Name'}, 'frobnicate')
 
 
-def test_import_csv_over_row_cap_raises(live_mode, monkeypatch):
+def test_import_csv_over_row_cap_raises(monkeypatch):
     monkeypatch.setattr(data_importer, 'get_sf', lambda org: _FakeSF())
     monkeypatch.setattr(data_importer, '_MAX_ROWS', 2)
     big_csv = 'Name\n' + '\n'.join(f'Row{i}' for i in range(5)) + '\n'
@@ -151,14 +140,14 @@ def test_import_csv_over_row_cap_raises(live_mode, monkeypatch):
         data_importer.import_csv('dev', 'Account', big_csv, {'Name': 'Name'}, 'insert')
 
 
-def test_import_csv_empty_returns_zero(live_mode, monkeypatch):
+def test_import_csv_empty_returns_zero(monkeypatch):
     monkeypatch.setattr(data_importer, 'get_sf', lambda org: _FakeSF())
     out = data_importer.import_csv('dev', 'Account', '', {'Name': 'Name'}, 'insert')
     assert out['total'] == 0
     assert out['success_count'] == 0
 
 
-def test_import_csv_bypass_triggers_toggled(live_mode, monkeypatch):
+def test_import_csv_bypass_triggers_toggled(monkeypatch):
     """bypass_triggers must be set before the load and cleared after."""
     calls = []
     import sf_provider
@@ -172,15 +161,15 @@ def test_import_csv_bypass_triggers_toggled(live_mode, monkeypatch):
     assert calls == [True, False]
 
 
-# ── bulk_ops execute functions — real bulk2 path ──────────────────────────────
+# ── bulk_ops execute functions — bulk2 path ───────────────────────────────────
 
-def test_bulk_delete_execute_no_matches_returns_zero(live_mode, monkeypatch):
+def test_bulk_delete_execute_no_matches_returns_zero(monkeypatch):
     monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: _FakeSF(query_records=[]))
     out = bulk_ops.bulk_delete_execute('dev', 'Account', 'Id = null')
     assert out == {'deleted': 0, 'errors': 0}
 
 
-def test_bulk_delete_execute_writes_id_csv_and_counts(live_mode, monkeypatch):
+def test_bulk_delete_execute_writes_id_csv_and_counts(monkeypatch):
     sf = _FakeSF(processed=2, failed=1,
                  query_records=[{'Id': '001AAA'}, {'Id': '001BBB'}])
     monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: sf)
@@ -193,7 +182,7 @@ def test_bulk_delete_execute_writes_id_csv_and_counts(live_mode, monkeypatch):
     assert sf.bulk2._obj.received == [['001AAA'], ['001BBB']]
 
 
-def test_bulk_modify_execute_processes_results(live_mode, monkeypatch):
+def test_bulk_modify_execute_processes_results(monkeypatch):
     sf = _FakeSF(processed=2, failed=0,
                  query_records=[{'Id': '001AAA'}, {'Id': '001BBB'}])
     monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: sf)
@@ -203,13 +192,13 @@ def test_bulk_modify_execute_processes_results(live_mode, monkeypatch):
     assert all(r.get('Name') == 'X' for r in sf.bulk2._obj.received)
 
 
-def test_bulk_modify_execute_no_matches_returns_zero(live_mode, monkeypatch):
+def test_bulk_modify_execute_no_matches_returns_zero(monkeypatch):
     monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: _FakeSF(query_records=[]))
     out = bulk_ops.bulk_modify_execute('dev', 'Account', 'Id = null', {'Name': 'X'})
     assert out == {'updated': 0, 'errors': 0}
 
 
-def test_bulk_reassign_execute_processes_results(live_mode, monkeypatch):
+def test_bulk_reassign_execute_processes_results(monkeypatch):
     sf = _FakeSF(processed=1, failed=0, query_records=[{'Id': '001AAA'}])
     monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: sf)
     out = bulk_ops.bulk_reassign_execute('dev', 'Account', 'Id != null', '005ZZZ')
@@ -217,7 +206,7 @@ def test_bulk_reassign_execute_processes_results(live_mode, monkeypatch):
     assert sf.bulk2._obj.received[0]['OwnerId'] == '005ZZZ'
 
 
-def test_bulk_reassign_execute_no_matches_returns_zero(live_mode, monkeypatch):
+def test_bulk_reassign_execute_no_matches_returns_zero(monkeypatch):
     monkeypatch.setattr(bulk_ops, 'get_sf', lambda org: _FakeSF(query_records=[]))
     out = bulk_ops.bulk_reassign_execute('dev', 'Account', 'Id = null', '005ZZZ')
     assert out == {'reassigned': 0, 'errors': 0}

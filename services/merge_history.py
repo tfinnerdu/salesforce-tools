@@ -56,14 +56,12 @@ def log_merge(
 def list_merges(org: str, limit: int = 100) -> list:
     """Return recent merges for the org, newest first.
 
-    Returns mock data only when SF_MOCK is enabled and DB is unavailable.
     Each item: {id, org, master_id, victim_id, merged_at, bypass_used, status, error_msg}
     """
-    from config import Config
     try:
         from db import get_cursor, db_available
         if not db_available():
-            return _mock_merges(org) if Config.SF_MOCK else []
+            return []
         with get_cursor() as cur:
             cur.execute(
                 """
@@ -78,7 +76,7 @@ def list_merges(org: str, limit: int = 100) -> list:
             )
             rows = cur.fetchall()
         if not rows:
-            return _mock_merges(org) if Config.SF_MOCK else []
+            return []
         return [
             {
                 'id': r['id'],
@@ -94,54 +92,16 @@ def list_merges(org: str, limit: int = 100) -> list:
         ]
     except Exception as exc:
         logger.warning('list_merges failed: %s', exc)
-        return _mock_merges(org) if Config.SF_MOCK else []
-
-
-def _mock_merges(org: str) -> list:
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
-    return [
-        {
-            'id': 1,
-            'org': org,
-            'master_id': '001A000001abc001',
-            'victim_id': '001A000001abc002',
-            'merged_at': (now - timedelta(hours=1)).isoformat(),
-            'bypass_used': False,
-            'status': 'success',
-            'error_msg': None,
-        },
-        {
-            'id': 2,
-            'org': org,
-            'master_id': '001A000001abc003',
-            'victim_id': '001A000001abc004',
-            'merged_at': (now - timedelta(hours=3)).isoformat(),
-            'bypass_used': True,
-            'status': 'success',
-            'error_msg': None,
-        },
-        {
-            'id': 3,
-            'org': org,
-            'master_id': '001A000001abc005',
-            'victim_id': '001A000001abc006',
-            'merged_at': (now - timedelta(days=1)).isoformat(),
-            'bypass_used': False,
-            'status': 'error',
-            'error_msg': 'Merge failed: insufficient privileges',
-        },
-    ]
+        return []
 
 
 def get_stats(org: str) -> dict:
     """Return {total_merges, successful, failed, bypass_used_count}."""
-    from config import Config
     _empty = {'total_merges': 0, 'successful': 0, 'failed': 0, 'bypass_used_count': 0}
     try:
         from db import get_cursor, db_available
         if not db_available():
-            return _mock_stats(org) if Config.SF_MOCK else _empty
+            return _empty
         with get_cursor() as cur:
             cur.execute(
                 """
@@ -157,7 +117,7 @@ def get_stats(org: str) -> dict:
             )
             row = cur.fetchone()
         if not row or row['total_merges'] == 0:
-            return _mock_stats(org) if Config.SF_MOCK else _empty
+            return _empty
         return {
             'total_merges': int(row['total_merges']),
             'successful': int(row['successful']),
@@ -166,15 +126,4 @@ def get_stats(org: str) -> dict:
         }
     except Exception as exc:
         logger.warning('get_stats failed: %s', exc)
-        return _mock_stats(org) if Config.SF_MOCK else _empty
-
-
-def _mock_stats(org: str) -> dict:
-    """Derive stats from mock merge list."""
-    merges = _mock_merges(org)
-    return {
-        'total_merges': len(merges),
-        'successful': sum(1 for m in merges if m['status'] == 'success'),
-        'failed': sum(1 for m in merges if m['status'] == 'error'),
-        'bypass_used_count': sum(1 for m in merges if m['bypass_used']),
-    }
+        return _empty

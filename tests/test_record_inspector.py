@@ -1,25 +1,73 @@
 """Tests for services.record_inspector — single-record field browser."""
 import pytest
+from unittest.mock import patch
+
 from services import record_inspector
 
 
-# ── _mock_record ───────────────────────────────────────────────────────────────
+# ── Stub Salesforce client ────────────────────────────────────────────────────
 
-def test_mock_record_returns_expected_shape():
-    result = record_inspector._mock_record('Account', 'AAA001')
+_DESCRIBE = {
+    'name': 'Account',
+    'fields': [
+        {'name': 'Id', 'label': 'Record ID', 'type': 'id'},
+        {'name': 'Name', 'label': 'Account Name', 'type': 'string'},
+        {'name': 'SIS_ID__c', 'label': 'SIS ID', 'type': 'string'},
+        {'name': 'Ethos_Guid__c', 'label': 'Ethos GUID', 'type': 'string'},
+        {'name': 'BillingAddress', 'label': 'Billing Address', 'type': 'address'},
+    ],
+}
+
+_RECORD = {
+    'Id': 'TEST001',
+    'Name': 'Jane Doe',
+    'SIS_ID__c': '12345',
+    'Ethos_Guid__c': 'abc-guid',
+}
+
+
+class _StubSF:
+    """SF double serving an object describe and a single-record fetch via restful."""
+    def __init__(self, describe=None, record=None):
+        self._describe = describe if describe is not None else _DESCRIBE
+        self._record = record if record is not None else _RECORD
+
+    def restful(self, path, params=None):
+        if path.endswith('/describe'):
+            return self._describe
+        # record-fetch path: sobjects/Account/<id> or sobjects/Account/<extid>/<val>
+        return dict(self._record)
+
+
+def _patch_sf(stub):
+    return patch('services.record_inspector.get_sf', return_value=stub)
+
+
+# ── get_record — happy path ───────────────────────────────────────────────────
+
+def test_get_record_returns_dict_with_fields():
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', 'TEST001')
     assert result['object'] == 'Account'
-    assert result['record_id'] == 'AAA001'
-    assert result['mock'] is True
-    assert isinstance(result['fields'], list)
-    assert len(result['fields']) > 0
+    assert result['record_id'] == 'TEST001'
+    assert 'fields' in result
+    assert result['total_fields'] > 0
+
+
+def test_get_record_skips_compound_fields():
+    """Compound types (address/location/base64) are excluded from the field list."""
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', 'TEST001')
     names = [f['name'] for f in result['fields']]
     assert 'Id' in names
     assert 'SIS_ID__c' in names
     assert 'Ethos_Guid__c' in names
+    assert 'BillingAddress' not in names  # 'address' type skipped
 
 
-def test_mock_record_each_field_has_required_keys():
-    result = record_inspector._mock_record('Account', 'X')
+def test_get_record_each_field_has_required_keys():
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', 'TEST001')
     for f in result['fields']:
         assert 'name' in f
         assert 'label' in f
@@ -27,30 +75,38 @@ def test_mock_record_each_field_has_required_keys():
         assert 'value' in f
 
 
-def test_mock_record_total_fields_matches_list():
-    result = record_inspector._mock_record('Account', 'X')
+def test_get_record_total_fields_matches_list():
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', 'TEST001')
     assert result['total_fields'] == len(result['fields'])
 
 
-# ── get_record — mock mode (SF_MOCK=true by default in tests) ─────────────────
-
-def test_get_record_mock_returns_dict_with_fields():
-    result = record_inspector.get_record('dev', 'Account', 'TEST001')
-    assert result['object'] == 'Account'
-    assert result['record_id'] == 'TEST001'
-    assert 'fields' in result
-    assert result['total_fields'] > 0
+def test_get_record_carries_field_values():
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', 'TEST001')
+    by_name = {f['name']: f['value'] for f in result['fields']}
+    assert by_name['SIS_ID__c'] == '12345'
+    assert by_name['Name'] == 'Jane Doe'
 
 
-def test_get_record_mock_external_id_includes_lookup_mode():
-    result = record_inspector.get_record('dev', 'Account', '12345', external_id_field='SIS_ID__c')
+def test_get_record_default_lookup_mode_is_sf_id():
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', 'TEST001')
+    assert result['lookup_mode'] == 'sf_id'
+
+
+def test_get_record_external_id_includes_lookup_mode():
+    with _patch_sf(_StubSF()):
+        result = record_inspector.get_record('dev', 'Account', '12345',
+                                             external_id_field='SIS_ID__c')
     assert result['lookup_mode'] == 'external_id:SIS_ID__c'
 
 
-def test_get_record_mock_sf_id_has_sf_id_lookup_mode():
-    result = record_inspector.get_record('dev', 'Account', 'TEST001')
-    # mock always returns; lookup_mode set only when external_id_field given
-    assert 'lookup_mode' not in result or result.get('lookup_mode') != 'external_id:SIS_ID__c'
+def test_get_record_raises_when_record_not_found():
+    """An empty record payload raises ValueError."""
+    with _patch_sf(_StubSF(record={})):
+        with pytest.raises(ValueError, match='Record not found'):
+            record_inspector.get_record('dev', 'Account', 'MISSING')
 
 
 def test_get_record_raises_on_missing_object():
@@ -80,8 +136,9 @@ def test_record_inspector_page_has_sub_nav(client):
 
 
 def test_inspect_run_returns_fields(client):
-    resp = client.post('/schema/inspect/run',
-                       json={'object': 'Account', 'record_id': 'TEST001'})
+    with _patch_sf(_StubSF()):
+        resp = client.post('/schema/inspect/run',
+                           json={'object': 'Account', 'record_id': 'TEST001'})
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -90,9 +147,10 @@ def test_inspect_run_returns_fields(client):
 
 
 def test_inspect_run_external_id(client):
-    resp = client.post('/schema/inspect/run',
-                       json={'object': 'Account', 'record_id': '12345',
-                             'external_id_field': 'SIS_ID__c'})
+    with _patch_sf(_StubSF()):
+        resp = client.post('/schema/inspect/run',
+                           json={'object': 'Account', 'record_id': '12345',
+                                 'external_id_field': 'SIS_ID__c'})
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True

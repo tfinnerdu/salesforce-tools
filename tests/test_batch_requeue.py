@@ -1,58 +1,48 @@
-"""Tests for batch requeue functionality."""
+"""Tests for batch requeue functionality.
+
+`error_reconciler.requeue_batch` no longer fabricates a success response. The
+Conductor client has no batch-level requeue endpoint, so the function always
+raises ``RuntimeError`` and the route surfaces that as a 500.
+"""
 import pytest
 
 
 # ── Service tests ──────────────────────────────────────────────────────────────
 
-def test_requeue_batch_returns_dict():
+def test_requeue_batch_raises_runtime_error():
     from services.error_reconciler import requeue_batch
-    result = requeue_batch('batch-001', 'dev')
-    assert isinstance(result, dict)
+    with pytest.raises(RuntimeError):
+        requeue_batch('batch-001', 'dev')
 
 
-def test_requeue_batch_has_required_keys():
+def test_requeue_batch_error_mentions_batch_id():
     from services.error_reconciler import requeue_batch
-    result = requeue_batch('batch-001', 'dev')
-    assert 'batch_id' in result
-    assert 'status' in result
-    assert 'message' in result
+    with pytest.raises(RuntimeError) as excinfo:
+        requeue_batch('batch-abc', 'dev')
+    assert 'batch-abc' in str(excinfo.value)
 
 
-def test_requeue_batch_mock_returns_queued_status():
+def test_requeue_batch_error_mentions_org():
     from services.error_reconciler import requeue_batch
-    result = requeue_batch('batch-abc', 'dev')
-    # Mock conductor has no requeue_batch method, so falls through to mock success
-    assert result['status'] == 'queued'
-    assert result['batch_id'] == 'batch-abc'
-
-
-def test_requeue_batch_exception_returns_error_status(monkeypatch):
-    from services import error_reconciler
-    import conductor_provider
-
-    class BrokenClient:
-        def requeue_batch(self, batch_id):
-            raise RuntimeError('network error')
-
-    monkeypatch.setattr(conductor_provider, 'get_conductor_client', lambda: BrokenClient())
-    result = error_reconciler.requeue_batch('batch-999', 'dev')
-    assert result['status'] == 'error'
-    assert 'network error' in result['message']
-    assert result['batch_id'] == 'batch-999'
+    with pytest.raises(RuntimeError) as excinfo:
+        requeue_batch('batch-999', 'dev')
+    assert 'dev' in str(excinfo.value)
 
 
 # ── Route tests ────────────────────────────────────────────────────────────────
 
-def test_requeue_route_success(session_client):
+def test_requeue_route_returns_500(session_client):
+    """requeue_batch always raises, so the route returns 500 with success:False."""
     resp = session_client.post(
         '/migration/errors/requeue',
         json={'batch_id': 'batch-001'},
         content_type='application/json',
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 500
     data = resp.get_json()
-    assert data['success'] is True
-    assert data['data'] is not None
+    assert data['success'] is False
+    assert data['data'] is None
+    assert data['error']
 
 
 def test_requeue_route_missing_batch_id(session_client):

@@ -48,9 +48,10 @@ class _RaisingSF:
         raise RuntimeError('query api down')
 
 
-# ── Happy path through the mock-SF pipeline ───────────────────────────────────
+# ── Happy path through a stubbed SF pipeline ──────────────────────────────────
 
-def test_scan_field_returns_expected_shape():
+def test_scan_field_returns_expected_shape(monkeypatch):
+    monkeypatch.setattr(field_impact, 'get_sf', lambda org: _StubSF())
     result = field_impact.scan_field('dev', 'Account', 'SIS_ID__c')
     for key in ('object_name', 'field_name', 'validation_rules', 'flows',
                 'reports_count', 'summary'):

@@ -23,8 +23,10 @@ pytest tests/ -v
 ### 2. Contract-pinned
 
 `tests/test_contracts.py` pins known-good invariants (field shapes, value ranges,
-counts from the handoff document). These tests act as regression guards: if mock
-data shapes or service return schemas change, contracts break immediately.
+response envelope schemas). These tests act as regression guards: if a service's
+return schema changes, contracts break immediately. The Salesforce and Conductor
+clients themselves are no longer pinned here — they are unit-tested with
+`unittest.mock` doubles (see below).
 
 ### 3. Compile-verified
 
@@ -67,8 +69,8 @@ the Observe / Logs / Impact / Deploy tabs).
 | `config.py` | Unit-tested | `test_contracts.py` + broad use across the suite |
 | `db.py` | Unit-tested | `test_merge_history.py`, `test_query_history.py` (psycopg2 / cursor mocked) |
 | `scheduler.py` | Unit-tested | Scheduler init tests (`BackgroundScheduler` mocked) |
-| `sf_provider.py` | Unit-tested + Contract-pinned | `test_contracts.py` pins mock record counts to the handoff doc |
-| `conductor_provider.py` | Unit-tested + Contract-pinned | `test_contracts.py`; `responses` mocks all Conductor HTTP |
+| `sf_provider.py` | Unit-tested | `get_sf` exercised via `unittest.mock` doubles patched per-test; includes the no-credentials `RuntimeError` path |
+| `conductor_provider.py` | Unit-tested | `get_conductor_client` exercised via `unittest.mock` doubles patched per-test; `responses` mocks all Conductor HTTP; includes the missing-config `RuntimeError` path |
 
 ### Routes (`routes/`)
 
@@ -253,7 +255,8 @@ the staging URL.
 ### Prerequisites
 
 - App running at `http://localhost:5000` (or staging URL)
-- `SF_MOCK=true` and `CONDUCTOR_MOCK=true` set (default dev behavior)
+- A configured Salesforce org with valid credentials, and Conductor configured —
+  the app requires real Salesforce + Conductor connections to run
 - Browser developer tools open to the Network tab
 
 ---
@@ -310,8 +313,8 @@ UI without a page reload.
    across all relevant objects (Account, ContactPointEmail, etc.).
 5. Verify each bar shows a percentage and absolute counts.
 
-**Expected:** Report renders with correct mock numbers matching the handoff doc
-(SIS_ID coverage ~71%, Ethos_Guid ~91%).
+**Expected:** Report renders with coverage percentages and counts that match the
+connected org's actual data for `SIS_ID__c` and `Ethos_Guid__c`.
 
 ---
 
@@ -327,7 +330,8 @@ UI without a page reload.
    count, status badge, and sample IDs.
 5. Click on a sample ID — confirm it is copyable (click-to-copy or a link).
 
-**Expected:** All three CP types render. Missing counts match mock data.
+**Expected:** All three CP types render. Missing counts match the connected org's
+actual ContactPoint data.
 
 ---
 
@@ -380,8 +384,9 @@ statuses within 3 seconds.
 5. Confirm results appear per-object: left-only fields, right-only fields,
    type mismatches, required mismatches.
 
-**Expected:** Diff runs within 5 seconds. Result shows zero differences in mock mode
-(both orgs use the same MockSalesforce schema).
+**Expected:** Diff runs within 5 seconds. Result shows per-object field
+differences (left-only, right-only, type/required mismatches) reflecting the
+actual schema gap between the two connected orgs.
 
 ---
 
@@ -424,7 +429,8 @@ without errors. Delete removes the entry without page reload.
 
 **Goal:** Verify the four-step import wizard validates a CSV and imports it.
 
-Preconditions: app running, `SF_MOCK=true`. Prepare a CSV file `students.csv`:
+Preconditions: app running against a configured Salesforce org. Prepare a CSV
+file `students.csv`:
 
 ```
 Name,SIS_ID__c,PersonEmail
@@ -449,7 +455,8 @@ Bad Row,,notanemail
 8. Fix the CSV (use a valid email), re-upload, re-validate — confirm 0 errors and the
    **Next: Import →** button appears.
 9. **Step 4 — Import:** click **Execute Import**. Confirm the result cards show
-   Total / Succeeded / Failed counts. In mock mode ~10% of rows report a mock failure.
+   Total / Succeeded / Failed counts that reflect the actual Bulk API result from
+   the connected org.
 10. Confirm the **Download Error CSV** button appears when failures exist and that
     clicking it downloads a CSV containing a `_sf_error` column.
 
@@ -532,11 +539,11 @@ at step 3. Import returns counts and a downloadable error file.
    of permission sets with R/C/E/D/View-All/Modify-All check columns.
 5. **Field Coverage** sub-tab: enter `Account`, click **Load Field Coverage** — confirm
    a per-field read/edit table.
-6. Where an SF instance is connected (live mode), confirm permission-set and user names
-   render as "↗ Open in Salesforce" deep links.
+6. Confirm permission-set and user names render as "↗ Open in Salesforce" deep
+   links to records in the connected org.
 
 **Expected:** All four sub-tabs load. Drill-downs render without errors. Deep links
-appear in live mode and are absent in mock mode.
+point at the connected org's records.
 
 ---
 
@@ -578,8 +585,7 @@ forever because `mc-migration-snippet.js` was not loaded).
 
 **Goal:** Verify that displayed record IDs link back to the connected org.
 
-Preconditions: connected to a **real** Salesforce org (`SF_MOCK=false`). In mock
-mode the helper intentionally renders plain text — see step 6.
+Preconditions: connected to a configured Salesforce org.
 
 1. **SOQL Workbench** (`/soql`): run `SELECT Id, Name, OwnerId FROM Account LIMIT 5`.
    Confirm the `Id` and `OwnerId` cells render as links with a ↗ icon. Click one —
@@ -591,11 +597,9 @@ mode the helper intentionally renders plain text — see step 6.
 4. **Admin › Users**: confirm each user's name links to their User record.
 5. **Admin › Permissions Audit**: confirm permission-set and user names render as
    "↗ Open in SF" links.
-6. **Mock-mode check:** restart with `SF_MOCK=true`, repeat step 1 — confirm IDs
-   render as plain text (no links), since mock IDs have no real org to point at.
 
-**Expected:** In live mode every real 15/18-char SF ID is a working link; in mock
-mode the same cells are plain text. No broken `/lightning/r/undefined/...` URLs.
+**Expected:** Every real 15/18-char SF ID is a working link to the connected org.
+No broken `/lightning/r/undefined/...` URLs.
 
 ---
 
@@ -613,9 +617,9 @@ mode the same cells are plain text. No broken `/lightning/r/undefined/...` URLs.
    change, and a count line ("N of M sampled records would change").
 6. Confirm the **Apply Standardization** button appears only when the preview
    found changes.
-7. Click **Apply Standardization** — confirm the result alert reports updated /
-   already-clean / error counts. In mock mode it shows a "mock — not written"
-   badge (the preview math runs for real; only the write is skipped).
+7. Click **Apply Standardization** — confirm the confirmation dialog appears,
+   then confirm and check that the result alert reports updated / already-clean /
+   error counts written to the connected org.
 8. Remove a field row with the ✕ button — confirm it disappears.
 
 **Expected:** Preview shows accurate before/after. Apply gates on a successful
@@ -683,8 +687,8 @@ an in-memory manifest but is not retained.
    Modified sections render with component names and detail.
 7. Uncheck all types but one, re-run — confirm only that panel renders.
 
-**Expected:** In mock mode the seeded `prod` catalog lags the dev sandbox, so
-the diff shows left-only, right-only, and modified components. Comparing an org
+**Expected:** The diff shows left-only, right-only, and modified components
+reflecting the real metadata gap between the two connected orgs. Comparing an org
 against itself reports zero differences.
 
 ---
@@ -708,9 +712,39 @@ both Salesforce ID and external ID.
    **Inspect**.
 9. Confirm the mode badge shows `ext id: SIS_ID__c` in the results bar.
 
-**Expected:** In mock mode the seeded Account record returns 9 fields including
-`SIS_ID__c`, `Ethos_Guid__c`, and `IsPersonAccount`. The external-ID lookup
-path sets `lookup_mode: external_id:SIS_ID__c` in the response.
+**Expected:** The inspected Account record returns its queryable fields,
+including `SIS_ID__c`, `Ethos_Guid__c`, and `IsPersonAccount`. The external-ID
+lookup path sets `lookup_mode: external_id:SIS_ID__c` in the response.
+
+---
+
+### Procedure 24 — Confirmation Dialogs on Destructive Actions
+
+**Goal:** Verify that every state-changing UI action is gated by the shared
+`MC.confirm()` dialog (the `data-mc-confirm` capture-phase guard in
+`static/js/mission-control.js`), and that destructive actions additionally
+require ticking an acknowledgement checkbox.
+
+1. **Cancel aborts the action.** Navigate to `/logs`, select a time range, and
+   click **Delete All Logs**. Confirm the `MC.confirm` modal appears. Click
+   **Cancel** — confirm the modal closes and *no* delete request is sent (verify
+   in the Network tab).
+2. **Acknowledgement gate.** Trigger the same action again (or use Data Ops →
+   Delete → **Delete Records** after a preview). Confirm the modal shows an
+   acknowledgement checkbox and that the confirm button stays **disabled** until
+   the checkbox is ticked.
+3. **Confirming proceeds.** Tick the acknowledgement checkbox, then click the
+   confirm button — confirm the action runs and the result alert/toast appears.
+4. **Coverage spot-check.** Repeat steps 1–3 on a representative sample of the
+   other gated actions: a Salesforce write (SOQL inline edit save), a bulk DML
+   execute, a Conductor batch re-run (Migration → Batch Progress), the
+   trigger-bypass toggle (Settings), an Apex-log / trace-flag delete, and the
+   Anonymizer live run. Each must open `MC.confirm` before doing anything; the
+   destructive ones must also require the acknowledgement checkbox.
+
+**Expected:** No gated action runs without confirmation. Cancel always aborts
+cleanly with no network call. For ack-required actions the confirm button is
+inert until the checkbox is ticked.
 
 ---
 

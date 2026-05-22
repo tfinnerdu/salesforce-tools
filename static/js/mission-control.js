@@ -63,6 +63,138 @@ MC.showToast = (message, type = 'success') => {
   el.addEventListener('hidden.bs.toast', () => el.remove());
 };
 
+/**
+ * Show a confirmation modal. Returns a Promise resolving true (confirmed) or
+ * false (cancelled / dismissed). A single modal element is built lazily and
+ * reused. This is the one confirmation primitive for every state-changing
+ * action — never use the native window.confirm().
+ *
+ * opts: {
+ *   title:        heading text         (default "Confirm action")
+ *   body:         explanation text     (default "Are you sure?")
+ *   confirmText:  confirm button label (default "Confirm")
+ *   confirmClass: confirm button class (default "btn-danger")
+ *   requireAck:   when true, an acknowledgement checkbox must be ticked
+ *                 before the confirm button enables
+ * }
+ */
+MC._confirmModal = null;
+MC.confirm = (opts = {}) => {
+  const {
+    title = 'Confirm action',
+    body = 'Are you sure?',
+    confirmText = 'Confirm',
+    confirmClass = 'btn-danger',
+    requireAck = false,
+  } = opts;
+
+  if (!MC._confirmModal) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="modal fade" id="mcConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="mcConfirmTitle"></h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <p id="mcConfirmBody" class="mb-2" style="white-space:pre-line;"></p>
+              <div class="form-check d-none" id="mcConfirmAckWrap">
+                <input class="form-check-input" type="checkbox" id="mcConfirmAck">
+                <label class="form-check-label" for="mcConfirmAck">
+                  I understand this action cannot be undone.
+                </label>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-danger" id="mcConfirmOk">Confirm</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap.firstElementChild);
+    MC._confirmModal = new bootstrap.Modal(document.getElementById('mcConfirmModal'));
+  }
+
+  const modalEl = document.getElementById('mcConfirmModal');
+  modalEl.querySelector('#mcConfirmTitle').textContent = title;
+  modalEl.querySelector('#mcConfirmBody').textContent = body;
+  const okBtn = modalEl.querySelector('#mcConfirmOk');
+  okBtn.textContent = confirmText;
+  okBtn.className = `btn ${confirmClass}`;
+
+  const ackWrap = modalEl.querySelector('#mcConfirmAckWrap');
+  const ackBox = modalEl.querySelector('#mcConfirmAck');
+  ackBox.checked = false;
+  if (requireAck) {
+    ackWrap.classList.remove('d-none');
+    okBtn.disabled = true;
+    ackBox.onchange = () => { okBtn.disabled = !ackBox.checked; };
+  } else {
+    ackWrap.classList.add('d-none');
+    okBtn.disabled = false;
+    ackBox.onchange = null;
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const cleanup = () => {
+      okBtn.removeEventListener('click', onOk);
+      modalEl.removeEventListener('hidden.bs.modal', onHide);
+    };
+    const onOk = () => {
+      settled = true;
+      cleanup();
+      MC._confirmModal.hide();
+      resolve(true);
+    };
+    const onHide = () => {
+      if (settled) return;
+      cleanup();
+      resolve(false);
+    };
+    okBtn.addEventListener('click', onOk);
+    modalEl.addEventListener('hidden.bs.modal', onHide);
+    MC._confirmModal.show();
+  });
+};
+
+/**
+ * Declarative confirmation guard. Any element carrying a `data-mc-confirm`
+ * attribute has its click intercepted in the capture phase: the action only
+ * proceeds once the user confirms in the MC.confirm() modal. Because it runs
+ * at capture phase and stops propagation, it gates the element regardless of
+ * which script (mission-control.js or a per-tab snippet) wired its handler.
+ *
+ *   data-mc-confirm        confirmation message            (required)
+ *   data-mc-confirm-title  modal heading
+ *   data-mc-confirm-btn    confirm button label
+ *   data-mc-confirm-ack    "true" to require the acknowledgement checkbox
+ */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-mc-confirm]');
+  if (!el) return;
+  if (el.dataset.mcConfirmed === '1') {   // second pass — let the real handler run
+    delete el.dataset.mcConfirmed;
+    return;
+  }
+  if (el.disabled) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  MC.confirm({
+    title: el.dataset.mcConfirmTitle || 'Confirm action',
+    body: el.dataset.mcConfirm || 'Are you sure?',
+    confirmText: el.dataset.mcConfirmBtn || 'Confirm',
+    requireAck: el.dataset.mcConfirmAck === 'true',
+  }).then((ok) => {
+    if (!ok) return;
+    el.dataset.mcConfirmed = '1';
+    el.click();
+  });
+}, true);
+
 MC.showSpinner = () =>
   document.getElementById('mcSpinnerOverlay')?.classList.remove('d-none');
 
@@ -138,14 +270,14 @@ MC.isSfId = (v) =>
 
 /**
  * Build a Salesforce URL for a record ID, or null when unavailable
- * (mock instance, or the value is not a real SF ID).
+ * (no SF instance is set, or the value is not a real SF ID).
  * When objectApiName is given, builds the explicit Lightning record path;
  * otherwise uses the bare-ID URL, which Salesforce resolves to the right
  * record page regardless of object type.
  */
 MC.sfLink = (id, objectApiName) => {
   const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance || instance === 'mock.salesforce.com') return null;
+  if (!instance) return null;
   if (!MC.isSfId(id)) return null;
   return objectApiName
     ? `https://${instance}/lightning/r/${objectApiName}/${id}/view`
@@ -164,7 +296,7 @@ MC.sfLinkTag = (id, objectApiName, label) => {
 /** Build a Salesforce object list-view URL, or null when no live instance. */
 MC.sfObjectLink = (objectApiName) => {
   const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance || instance === 'mock.salesforce.com' || !objectApiName) return null;
+  if (!instance || !objectApiName) return null;
   return `https://${instance}/lightning/o/${encodeURIComponent(objectApiName)}/list`;
 };
 
@@ -1859,7 +1991,7 @@ MC.joinBuilder = {
       this._sqlTables = d.tables || [];
       if (status) {
         if (d.table_count) {
-          const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
+          const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'unknown';
           status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}) — type to filter.`;
         } else {
           status.textContent = 'No SQL schema cached yet — refresh it from Settings → SQL Server Schema Cache.';
@@ -2071,7 +2203,7 @@ MC.settings = {
     try {
       const d = await MC.api('/data-ops/sql-schema');
       if (d.table_count) {
-        const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
+        const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'unknown';
         status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}).`;
       } else {
         status.textContent = 'No SQL schema cached yet — click Refresh to build it.';
@@ -2282,14 +2414,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ── Mock-mode helpers ─────────────────────────────────────────────────────────
-
-/** Return true when Salesforce is in mock mode. */
-MC.isMock = () => document.querySelector('meta[name="sf-mock"]')?.content === 'true';
-
-/** Return true when Conductor is in mock mode. */
-MC.isConductorMock = () => document.querySelector('meta[name="conductor-mock"]')?.content === 'true';
-
 // ── Popover / Tooltip init ────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2300,52 +2424,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
     new bootstrap.Tooltip(el);
   });
-});
-
-// ── Mock-mode visual indicators ───────────────────────────────────────────────
-
-function _mcMakeChip(text, title) {
-  const chip = document.createElement('span');
-  chip.className = 'mc-mock-chip ms-2';
-  chip.title = title;
-  chip.textContent = text;
-  return chip;
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const sfMock = MC.isMock();
-  const condMock = MC.isConductorMock();
-  if (!sfMock && !condMock) return;
-
-  // SF mock: chip on every card-header h5 that is NOT inside a conductor card
-  if (sfMock) {
-    document.querySelectorAll('.card-header h5').forEach(h5 => {
-      if (!h5.closest('[data-conductor-card]')) {
-        h5.appendChild(_mcMakeChip('MOCK DATA', 'SF_MOCK=true — Salesforce data is synthetic'));
-      }
-    });
-  }
-
-  // Conductor mock: chip on the page title when this page has conductor-driven sections
-  if (condMock && document.querySelector('[data-conductor-card]')) {
-    const pageTitle = document.querySelector('.mc-page-title');
-    if (pageTitle) {
-      pageTitle.appendChild(_mcMakeChip('COND MOCK', 'CONDUCTOR_MOCK=true — workflow/batch data is synthetic'));
-    }
-  }
-
-  // Disable write-action buttons (SF writes only)
-  if (sfMock) {
-    document.querySelectorAll('[data-mock-disable]').forEach(btn => {
-      btn.classList.add('mc-mock-btn-disabled');
-      btn.setAttribute('disabled', 'disabled');
-      const msg = btn.getAttribute('data-mock-disable') || 'Not available in mock mode';
-      btn.setAttribute('title', msg);
-      btn.setAttribute('data-bs-toggle', 'tooltip');
-      btn.setAttribute('data-bs-placement', 'top');
-      if (typeof bootstrap !== 'undefined') new bootstrap.Tooltip(btn);
-    });
-  }
 });
 
 // ── Logs ──────────────────────────────────────────────────────────────────────

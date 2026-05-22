@@ -1,9 +1,25 @@
-"""Tests for the Migration Velocity & ETA service and routes."""
+"""Tests for the Migration Velocity & ETA service and routes.
+
+The fabricated mock-data layer is gone: there is no ``_mock_velocity`` and no
+``TOTAL_RECORDS_TARGET`` constant. ``target`` now comes from
+``Config.MIGRATION_RECORD_TARGET`` (default 0) and an empty DB yields a zeroed
+payload from ``_empty_velocity``. Tests drive ``get_velocity_data`` directly by
+patching ``_get_batches_from_db``.
+"""
 import pytest
 from unittest.mock import patch
 
 
-# ── Service unit tests ────────────────────────────────────────────────────────
+def _batch_rows(per_day):
+    """Build fake migration_batches rows: per_day is a list of (date, records)."""
+    return [
+        {'started_at': f'{date}T08:00:00', 'created_at': f'{date}T08:00:00',
+         'records_processed': records}
+        for date, records in per_day
+    ]
+
+
+# ── Service unit tests: get_velocity_data ─────────────────────────────────────
 
 def test_get_velocity_data_returns_required_keys():
     """get_velocity_data returns a dict with all required top-level keys."""
@@ -14,58 +30,116 @@ def test_get_velocity_data_returns_required_keys():
         assert key in result, f"Missing key: {key}"
 
 
-def test_mock_velocity_daily_list_length():
-    """_mock_velocity(30) returns a daily list with exactly 31 items (days + today)."""
-    from services.migration_velocity import _mock_velocity
-    result = _mock_velocity(30)
+def test_empty_velocity_daily_list_length():
+    """An empty-DB run returns a daily list with exactly 31 items (days + today)."""
+    from services import migration_velocity
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=[]):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
     assert len(result['daily']) == 31
 
 
-def test_mock_velocity_pct_complete_range():
-    """_mock_velocity pct_complete is a float between 0 and 100 inclusive."""
-    from services.migration_velocity import _mock_velocity
-    result = _mock_velocity(30)
+def test_empty_velocity_is_zeroed():
+    """With no batch data, the payload is fully zeroed."""
+    from services import migration_velocity
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=[]):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
+    assert result['total_migrated'] == 0
+    assert result['velocity_avg'] == 0
+    assert result['eta_date'] is None
+    assert result['pct_complete'] == 0.0
+
+
+def test_velocity_pct_complete_range():
+    """pct_complete stays within 0..100 when batch data and a target are present."""
+    from services import migration_velocity
+    from config import Config
+    today = __import__('datetime').datetime.now(
+        __import__('datetime').timezone.utc).date()
+    rows = _batch_rows([(today.isoformat(), 500), ((today.replace()).isoformat(), 0)])
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=rows), \
+         patch.object(Config, 'MIGRATION_RECORD_TARGET', 4000):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
     pct = result['pct_complete']
     assert isinstance(pct, float)
     assert 0.0 <= pct <= 100.0
 
 
-def test_mock_velocity_velocity_avg_positive():
-    """_mock_velocity returns a velocity_avg greater than 0."""
-    from services.migration_velocity import _mock_velocity
-    result = _mock_velocity(30)
+def test_velocity_avg_positive_with_data():
+    """velocity_avg is greater than 0 when recent days have records."""
+    from services import migration_velocity
+    import datetime as dt
+    today = dt.datetime.now(dt.timezone.utc).date()
+    rows = _batch_rows([
+        ((today - dt.timedelta(days=1)).isoformat(), 100),
+        (today.isoformat(), 200),
+    ])
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=rows):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
     assert result['velocity_avg'] > 0
 
 
-def test_mock_velocity_target_value():
-    """_mock_velocity target equals the PersonAccount universe constant (4312)."""
-    from services.migration_velocity import _mock_velocity, TOTAL_RECORDS_TARGET
-    result = _mock_velocity(30)
+def test_velocity_target_from_config(monkeypatch):
+    """target comes straight from Config.MIGRATION_RECORD_TARGET."""
+    from services import migration_velocity
+    from config import Config
+    monkeypatch.setattr(Config, 'MIGRATION_RECORD_TARGET', 4312)
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=[]):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
     assert result['target'] == 4312
-    assert result['target'] == TOTAL_RECORDS_TARGET
 
 
-def test_mock_velocity_eta_date_type():
-    """_mock_velocity eta_date is either a string or None."""
-    from services.migration_velocity import _mock_velocity
-    result = _mock_velocity(30)
+def test_velocity_target_defaults_to_zero():
+    """With no MIGRATION_RECORD_TARGET configured, target is 0 (Config default)."""
+    from services.migration_velocity import get_velocity_data
+    result = get_velocity_data(org='dev', days=30)
+    assert result['target'] == 0
+
+
+def test_velocity_eta_date_type():
+    """eta_date is either a string or None."""
+    from services.migration_velocity import get_velocity_data
+    result = get_velocity_data(org='dev', days=30)
     assert result['eta_date'] is None or isinstance(result['eta_date'], str)
 
 
-def test_mock_velocity_daily_item_keys():
-    """Each item in _mock_velocity daily list contains date, records, and cumulative keys."""
-    from services.migration_velocity import _mock_velocity
-    result = _mock_velocity(30)
+def test_velocity_eta_date_computed_when_target_set(monkeypatch):
+    """With recent velocity and a remaining target, an ETA date string is produced."""
+    from services import migration_velocity
+    from config import Config
+    import datetime as dt
+    monkeypatch.setattr(Config, 'MIGRATION_RECORD_TARGET', 100000)
+    today = dt.datetime.now(dt.timezone.utc).date()
+    rows = _batch_rows([
+        ((today - dt.timedelta(days=1)).isoformat(), 200),
+        (today.isoformat(), 200),
+    ])
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=rows):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
+    assert isinstance(result['eta_date'], str)
+
+
+def test_velocity_daily_item_keys():
+    """Each item in the daily list contains date, records, and cumulative keys."""
+    from services.migration_velocity import get_velocity_data
+    result = get_velocity_data(org='dev', days=30)
     for item in result['daily']:
         assert 'date' in item
         assert 'records' in item
         assert 'cumulative' in item
 
 
-def test_mock_velocity_cumulative_monotonic():
-    """_mock_velocity cumulative values are monotonically non-decreasing."""
-    from services.migration_velocity import _mock_velocity
-    result = _mock_velocity(30)
+def test_velocity_cumulative_monotonic():
+    """Cumulative values are monotonically non-decreasing."""
+    from services import migration_velocity
+    import datetime as dt
+    today = dt.datetime.now(dt.timezone.utc).date()
+    rows = _batch_rows([
+        ((today - dt.timedelta(days=5)).isoformat(), 50),
+        ((today - dt.timedelta(days=2)).isoformat(), 80),
+        (today.isoformat(), 120),
+    ])
+    with patch.object(migration_velocity, '_get_batches_from_db', return_value=rows):
+        result = migration_velocity.get_velocity_data(org='dev', days=30)
     cumulative_values = [item['cumulative'] for item in result['daily']]
     for i in range(1, len(cumulative_values)):
         assert cumulative_values[i] >= cumulative_values[i - 1], (

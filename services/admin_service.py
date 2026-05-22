@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -210,22 +209,8 @@ def get_user_audit(org: str) -> dict:
 
 # ── Record Types ───────────────────────────────────────────────────────────────
 
-def _mock_record_types():
-    return [
-        {'id': '012000000000001', 'name': 'Person Account',      'developer_name': 'PersonAccount',      'sobject_type': 'Account',     'is_active': True,  'description': 'Person Account record type', 'record_count': 4312},
-        {'id': '012000000000002', 'name': 'Household Account',   'developer_name': 'HouseholdAccount',   'sobject_type': 'Account',     'is_active': True,  'description': 'Household/family account',   'record_count': 87},
-        {'id': '012000000000003', 'name': 'Standard Opportunity', 'developer_name': 'Standard',           'sobject_type': 'Opportunity', 'is_active': True,  'description': '',                           'record_count': None},
-        {'id': '012000000000004', 'name': 'Standard Case',       'developer_name': 'Standard',           'sobject_type': 'Case',        'is_active': True,  'description': '',                           'record_count': None},
-        {'id': '012000000000005', 'name': 'EDC Case',            'developer_name': 'EDC_Case',           'sobject_type': 'Case',        'is_active': True,  'description': 'Education Cloud Case',       'record_count': None},
-        {'id': '012000000000006', 'name': 'Standard Campaign',   'developer_name': 'Standard',           'sobject_type': 'Campaign',    'is_active': False, 'description': '',                           'record_count': None},
-    ]
-
-
 def get_record_types(org: str) -> list:
     """Query RecordType with record count per type."""
-    if Config.SF_MOCK:
-        return _mock_record_types()
-
     sf = get_sf(org)
     rt_soql = (
         "SELECT Id, Name, DeveloperName, SobjectType, IsActive, Description "
@@ -267,21 +252,8 @@ def get_record_types(org: str) -> list:
 
 # ── Email Templates ────────────────────────────────────────────────────────────
 
-def _mock_email_templates():
-    return [
-        {'id': '00X01', 'name': 'Welcome Email',         'developer_name': 'Welcome_Email',         'folder_name': 'Student Communications', 'subject': 'Welcome to Doane University!',       'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-08-15T10:00:00.000Z', 'last_modified_by': 'Admin User'},
-        {'id': '00X02', 'name': 'Application Received',  'developer_name': 'Application_Received',  'folder_name': 'Student Communications', 'subject': 'We received your application',       'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-09-01T14:00:00.000Z', 'last_modified_by': 'Admin User'},
-        {'id': '00X03', 'name': 'Migration Batch Alert', 'developer_name': 'Migration_Batch_Alert', 'folder_name': 'IT Internal',            'subject': 'Migration batch completed: {batch}', 'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-10-20T09:00:00.000Z', 'last_modified_by': 'SF Admin'},
-        {'id': '00X04', 'name': 'Financial Aid Update',  'developer_name': 'FinAid_Update',         'folder_name': 'Financial Aid',          'subject': 'Update on your financial aid',       'encoding': 'UTF-8',       'is_active': True,  'last_modified_date': '2025-07-01T12:00:00.000Z', 'last_modified_by': 'FinAid Team'},
-        {'id': '00X05', 'name': 'Legacy Welcome (OLD)',  'developer_name': 'Legacy_Welcome',        'folder_name': 'Unfiled Public',         'subject': 'Welcome (deprecated)',               'encoding': 'ISO-8859-1',  'is_active': False, 'last_modified_date': '2024-01-10T08:00:00.000Z', 'last_modified_by': 'Admin User'},
-    ]
-
-
 def get_email_templates(org: str) -> list:
     """Query EmailTemplate via standard API."""
-    if Config.SF_MOCK:
-        return _mock_email_templates()
-
     sf = get_sf(org)
     soql = (
         "SELECT Id, Name, DeveloperName, FolderId, FolderName, Subject, "
@@ -308,18 +280,6 @@ def get_email_templates(org: str) -> list:
 
 # ── Setup Audit Trail ──────────────────────────────────────────────────────────
 
-def _mock_audit_trail():
-    now = datetime.now(timezone.utc)
-    return [
-        {'id': 'SAT01', 'action': 'Changed',   'section': 'Permission Sets',       'created_date': (now - timedelta(hours=2)).isoformat(),  'created_by': 'SF Admin', 'display': 'Changed permission set Migration Admin: added Create on Account'},
-        {'id': 'SAT02', 'action': 'Created',   'section': 'Custom Fields',         'created_date': (now - timedelta(hours=5)).isoformat(),  'created_by': 'SF Admin', 'display': 'Created custom field Account.SIS_ID__c'},
-        {'id': 'SAT03', 'action': 'Activated', 'section': 'Flows',                 'created_date': (now - timedelta(days=1)).isoformat(),   'created_by': 'SF Admin', 'display': 'Activated Flow: Student_Update_Handler version 3'},
-        {'id': 'SAT04', 'action': 'Changed',   'section': 'Named Credentials',     'created_date': (now - timedelta(days=2)).isoformat(),   'created_by': 'SF Admin', 'display': 'Changed Named Credential: Conductor API endpoint'},
-        {'id': 'SAT05', 'action': 'Changed',   'section': 'Remote Site Settings',  'created_date': (now - timedelta(days=3)).isoformat(),   'created_by': 'SF Admin', 'display': 'Changed Remote Site Setting: Ethos — enabled'},
-        {'id': 'SAT06', 'action': 'Installed', 'section': 'Packages',              'created_date': (now - timedelta(days=5)).isoformat(),   'created_by': 'SF Admin', 'display': 'Installed package: Education Data Architecture v2.4'},
-    ]
-
-
 def get_audit_trail(org: str, days: int = 7) -> list:
     """Query SetupAuditTrail for recent org config changes."""
     sf = get_sf(org)
@@ -342,8 +302,6 @@ def get_audit_trail(org: str, days: int = 7) -> list:
             'created_by': creator.get('Name', ''),
             'display': r.get('Display', ''),
         })
-    if Config.SF_MOCK and not entries:
-        return _mock_audit_trail()
     return entries
 
 
@@ -356,16 +314,6 @@ def _job_status_flag(status: str) -> str:
         'Completed': 'success', 'Aborted': 'secondary',
         'Failed': 'danger',
     }.get(status, 'secondary')
-
-
-def _mock_apex_jobs():
-    now = datetime.now(timezone.utc)
-    return [
-        {'id': 'J001', 'class_name': 'MigrationBatchAccount',  'job_type': 'BatchApex',    'status': 'Completed',  'status_flag': 'success', 'created_date': (now - timedelta(hours=1)).isoformat(),               'completed_date': (now - timedelta(minutes=45)).isoformat(),              'items_processed': 4312, 'total_items': 4312, 'errors': 0, 'extended_status': '',                                            'created_by': 'Migration Service'},
-        {'id': 'J002', 'class_name': 'ContactPointSyncBatch',  'job_type': 'BatchApex',    'status': 'Processing', 'status_flag': 'primary', 'created_date': (now - timedelta(minutes=10)).isoformat(),              'completed_date': None,                                                   'items_processed': 1240, 'total_items': 3800, 'errors': 0, 'extended_status': '',                                            'created_by': 'Migration Service'},
-        {'id': 'J003', 'class_name': 'EthosGuidSyncQueueable', 'job_type': 'Queueable',    'status': 'Failed',     'status_flag': 'danger',  'created_date': (now - timedelta(hours=3)).isoformat(),                 'completed_date': (now - timedelta(hours=2, minutes=50)).isoformat(),     'items_processed': 0,    'total_items': 0,    'errors': 1, 'extended_status': 'System.LimitException: Too many SOQL queries: 101', 'created_by': 'SF Admin'},
-        {'id': 'J004', 'class_name': 'DailyReadinessCheck',    'job_type': 'ScheduledApex', 'status': 'Queued',    'status_flag': 'warning', 'created_date': (now - timedelta(minutes=2)).isoformat(),               'completed_date': None,                                                   'items_processed': 0,    'total_items': 0,    'errors': 0, 'extended_status': '',                                            'created_by': 'SF Admin'},
-    ]
 
 
 def get_apex_job_queue(org: str, limit: int = 100) -> list:
@@ -398,24 +346,10 @@ def get_apex_job_queue(org: str, limit: int = 100) -> list:
             'extended_status': r.get('ExtendedStatus') or '',
             'created_by': creator.get('Name', ''),
         })
-    if Config.SF_MOCK and not jobs:
-        return _mock_apex_jobs()
     return jobs
 
 
 # ── Login History ──────────────────────────────────────────────────────────────
-
-def _mock_login_history():
-    now = datetime.now(timezone.utc)
-    logins = [
-        {'id': 'L001', 'user_id': 'U001', 'login_time': (now - timedelta(minutes=5)).isoformat(),              'source_ip': '198.51.100.10', 'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Chrome 120',  'status': 'Success',              'success': True},
-        {'id': 'L002', 'user_id': 'U002', 'login_time': (now - timedelta(hours=1)).isoformat(),                'source_ip': '198.51.100.10', 'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Chrome 120',  'status': 'Success',              'success': True},
-        {'id': 'L003', 'user_id': 'U003', 'login_time': (now - timedelta(hours=2)).isoformat(),                'source_ip': '203.0.113.55',  'platform': 'API', 'application': 'API',     'login_type': 'OAuth2',      'browser': '',            'status': 'Success',              'success': True},
-        {'id': 'L004', 'user_id': 'U002', 'login_time': (now - timedelta(hours=3)).isoformat(),                'source_ip': '10.0.0.99',     'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Firefox 121', 'status': 'Failed: Wrong Password', 'success': False},
-        {'id': 'L005', 'user_id': 'U002', 'login_time': (now - timedelta(hours=3, minutes=2)).isoformat(),     'source_ip': '10.0.0.99',     'platform': 'Web', 'application': 'Browser', 'login_type': 'Application', 'browser': 'Firefox 121', 'status': 'Failed: Wrong Password', 'success': False},
-    ]
-    return {'logins': logins, 'summary': {'total': len(logins), 'failed': 2, 'unique_ips': 3, 'unique_users': 3}}
-
 
 def get_login_history(org: str, limit: int = 200) -> dict:
     sf = get_sf(org)
@@ -451,8 +385,6 @@ def get_login_history(org: str, limit: int = 200) -> dict:
             'status': status,
             'success': success,
         })
-    if Config.SF_MOCK and not logins:
-        return _mock_login_history()
     return {
         'logins': logins,
         'summary': {

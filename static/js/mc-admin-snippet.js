@@ -428,7 +428,15 @@ MC.admin = {
     const { object, fields } = this._getAnonSelection();
     const dryRun = document.getElementById('anonDryRun')?.checked ?? true;
     if (!object || !fields.length) { MC.showToast('Select object and at least one field', 'warning'); return; }
-    if (!dryRun && !confirm(`Run LIVE anonymization on ${object}? This modifies real data.`)) return;
+    if (!dryRun) {
+      const confirmed = await MC.confirm({
+        title: 'Live anonymization',
+        body: `This permanently overwrites the selected fields on ${object} records in Salesforce with anonymized values.`,
+        confirmText: 'Anonymize',
+        requireAck: true,
+      });
+      if (!confirmed) return;
+    }
     MC.showSpinner();
     try {
       const data = await MC.api('/admin/anonymizer/run', 'POST', { object, fields, dry_run: dryRun });

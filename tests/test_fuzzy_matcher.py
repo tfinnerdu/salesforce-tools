@@ -156,7 +156,9 @@ def test_match_page_renders(client):
     assert client.get('/data-ops/match').status_code == 200
 
 
-def test_match_run_route(client):
+def test_match_run_route(client, monkeypatch):
+    monkeypatch.setattr(fuzzy_matcher, 'get_sf',
+                        lambda org: _StubSF(_NEAR_DUP_RECORDS))
     resp = client.post('/data-ops/match/run', json={
         'object': 'Account', 'where_clause': 'Id != null',
         'compare_fields': ['Name'], 'block_field': 'Name', 'threshold': 0.85,
