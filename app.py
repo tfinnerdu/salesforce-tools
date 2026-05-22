@@ -45,10 +45,15 @@ def create_app() -> Flask:
     app.register_blueprint(deploy_bp)
     app.register_blueprint(dashboard_bp)
 
+    @app.before_request
+    def _ensure_active_org():
+        from flask import session
+        session.setdefault('active_org', Config.DEFAULT_ORG)
+
     @app.context_processor
     def inject_globals():
         from flask import session
-        active_org = session.get('active_org', 'dev')
+        active_org = session.get('active_org', Config.DEFAULT_ORG)
         return {
             'sf_mock_mode': Config.SF_MOCK,
             'conductor_mock_mode': Config.CONDUCTOR_MOCK,

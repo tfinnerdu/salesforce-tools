@@ -2272,12 +2272,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const org = e.target.value;
     try {
       await MC.api('/settings/org/switch', 'POST', { org });
-      const badgeEl = document.getElementById('activeOrgBadge');
-      if (badgeEl) badgeEl.textContent = org.toUpperCase();
-      // Update meta tag so MC.activeOrg() returns correct value
-      const metaEl = document.querySelector('meta[name="active-org"]');
-      if (metaEl) metaEl.setAttribute('content', org);
-      MC.showToast(`Switched to ${org.toUpperCase()} org`, 'success');
+      // Reload so every server-rendered page and widget re-fetches for the new org.
+      window.location.reload();
     } catch (err) {
       MC.showToast(`Failed to switch org: ${err.message}`, 'danger');
       // Revert picker to previous value
