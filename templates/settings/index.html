@@ -190,6 +190,33 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Section 5: SQL Server Schema Cache ─────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">SQL Server Schema Cache</div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          The Join Builder uses a cached copy of the Colleague SQL Server schema
+          (table and column names) so it keeps working even when the ODBC link
+          is down. The cache never expires on its own — refresh it here only
+          when SQL Server tables actually change.
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="SQL Schema Cache"
+                data-bs-content="Refresh re-introspects INFORMATION_SCHEMA.COLUMNS over the live ODBC connection and overwrites the cached copy stored in Postgres. It is intentionally kept on this page, away from the Join Builder, since a refresh is a relatively heavy SQL Server call that rarely needs running.">ⓘ</span>
+        </p>
+        <div class="d-flex align-items-center gap-3 flex-wrap no-print">
+          <button id="btnRefreshSqlSchema" class="btn btn-outline-secondary btn-sm">
+            &#8635; Refresh SQL Schema
+          </button>
+          <span id="sqlSchemaCacheStatus" class="small text-muted">Checking cache…</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Run Collection Modal ──────────────────────────────────────────── -->

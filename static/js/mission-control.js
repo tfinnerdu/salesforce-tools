@@ -1760,7 +1760,6 @@ MC.joinBuilder = {
     document.getElementById('btnBuild')?.addEventListener('click', () => this.buildQuery());
     document.getElementById('btnRun')?.addEventListener('click', () => this.runPython());
     document.getElementById('btnCheckFields')?.addEventListener('click', () => this.checkFields());
-    document.getElementById('btnRefreshSqlSchema')?.addEventListener('click', () => this.refreshSqlSchema());
     document.getElementById('btnCopy')?.addEventListener('click', () => {
       const sql = document.getElementById('generatedSql')?.textContent || '';
       MC.copyToClipboard(sql);
@@ -1863,24 +1862,11 @@ MC.joinBuilder = {
           const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
           status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}) — type to filter.`;
         } else {
-          status.textContent = 'No SQL schema cached yet — click "Refresh schema".';
+          status.textContent = 'No SQL schema cached yet — refresh it from Settings → SQL Server Schema Cache.';
         }
       }
     } catch (err) {
       if (status) status.textContent = 'Could not load SQL schema: ' + err.message;
-    }
-  },
-
-  async refreshSqlSchema() {
-    const status = document.getElementById('sqlSchemaStatus');
-    if (status) status.textContent = 'Refreshing SQL schema…';
-    try {
-      const d = await MC.api('/data-ops/sql-schema/refresh', 'POST');
-      MC.showToast(`SQL schema refreshed — ${d.table_count} tables`, 'success');
-      await this.loadSqlSchema();
-    } catch (err) {
-      MC.showToast('Schema refresh failed: ' + err.message, 'danger');
-      if (status) status.textContent = 'Refresh failed: ' + err.message;
     }
   },
 
@@ -2072,7 +2058,40 @@ MC.settings = {
       if (colId) this.runCollection(colId);
     });
 
+    // SQL Server schema cache
+    document.getElementById('btnRefreshSqlSchema')?.addEventListener('click', () => this.refreshSqlSchema());
+
     this.listCollections();
+    this.loadSqlSchemaStatus();
+  },
+
+  async loadSqlSchemaStatus() {
+    const status = document.getElementById('sqlSchemaCacheStatus');
+    if (!status) return;
+    try {
+      const d = await MC.api('/data-ops/sql-schema');
+      if (d.table_count) {
+        const when = d.captured_at ? new Date(d.captured_at).toLocaleString() : 'mock data';
+        status.textContent = `${d.table_count.toLocaleString()} tables cached (${when}).`;
+      } else {
+        status.textContent = 'No SQL schema cached yet — click Refresh to build it.';
+      }
+    } catch (err) {
+      status.textContent = 'Could not read SQL schema cache: ' + err.message;
+    }
+  },
+
+  async refreshSqlSchema() {
+    const status = document.getElementById('sqlSchemaCacheStatus');
+    if (status) status.textContent = 'Refreshing SQL schema…';
+    try {
+      const d = await MC.api('/data-ops/sql-schema/refresh', 'POST');
+      MC.showToast(`SQL schema refreshed — ${d.table_count} tables`, 'success');
+      await this.loadSqlSchemaStatus();
+    } catch (err) {
+      MC.showToast('Schema refresh failed: ' + err.message, 'danger');
+      if (status) status.textContent = 'Refresh failed: ' + err.message;
+    }
   },
 
   async testOrg(orgName) {

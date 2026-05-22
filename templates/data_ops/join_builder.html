@@ -55,16 +55,14 @@
         </div>
         <div class="card-body">
           <div class="mb-3">
-            <label for="sqlTable" class="form-label small fw-semibold d-flex justify-content-between align-items-center">
-              <span>Table Name
-                <span class="mc-info-icon"
-                      data-bs-toggle="popover"
-                      data-bs-trigger="focus"
-                      tabindex="0"
-                      data-bs-title="SQL Server Table"
-                      data-bs-content="Start typing to filter the cached table list. The schema is cached so this works even when the ODBC/Devart link is down — click 'Refresh schema' to re-introspect when tables change. The generated query is verbatim and uses WITH (NOLOCK).">ⓘ</span>
-              </span>
-              <button id="btnRefreshSqlSchema" type="button" class="btn btn-link btn-sm p-0 small no-print">&#8635; Refresh schema</button>
+            <label for="sqlTable" class="form-label small fw-semibold">
+              Table Name
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="SQL Server Table"
+                    data-bs-content="Start typing to filter the cached table list. The schema is cached so this works even when the ODBC/Devart link is down — refresh it from Settings → SQL Server Schema Cache when tables change. The generated query is verbatim and uses WITH (NOLOCK).">ⓘ</span>
             </label>
             <div class="position-relative">
               <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
