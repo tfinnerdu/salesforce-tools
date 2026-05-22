@@ -152,6 +152,25 @@ def test_ensure_driver_leaves_an_explicit_driver_untouched(monkeypatch):
     assert sql_schema._ensure_driver(conn) == conn
 
 
+def test_normalize_keywords_translates_net_style():
+    """ADO.NET-style keywords are translated to ODBC equivalents before driver detection."""
+    result = sql_schema._normalize_keywords(
+        'Data Source=myserver;Initial Catalog=mydb;User ID=svc;Password=secret'
+    )
+    assert 'SERVER=myserver' in result
+    assert 'DATABASE=mydb' in result
+    assert 'UID=svc' in result
+    assert 'PWD=secret' in result
+    assert 'Data Source' not in result
+    assert 'User ID' not in result
+
+
+def test_normalize_keywords_handles_user_id_case_variants():
+    r1 = sql_schema._normalize_keywords('user Id=svc;Password=p')
+    assert 'UID=svc' in r1
+    assert 'PWD=p' in r1
+
+
 def test_ensure_driver_leaves_a_dsn_string_untouched(monkeypatch):
     import sys
     import types
@@ -159,6 +178,15 @@ def test_ensure_driver_leaves_a_dsn_string_untouched(monkeypatch):
                         types.SimpleNamespace(drivers=lambda: ['ODBC Driver 18 for SQL Server']))
     conn = 'DSN=ColleagueProd;uid=svc;pwd=p'
     assert sql_schema._ensure_driver(conn) == conn
+
+
+def test_friendly_odbc_error_08001_server_missing():
+    msg = sql_schema._friendly_odbc_error(
+        Exception("('08001', '[08001] Neither DSN nor SERVER keyword supplied')")
+    )
+    assert 'SERVER' in msg
+    assert 'cached schema is still in use' in msg
+    assert '08001' in msg
 
 
 def test_friendly_odbc_error_falls_back_to_raw_text():

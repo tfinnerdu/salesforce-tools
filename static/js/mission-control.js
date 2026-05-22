@@ -1569,14 +1569,86 @@ MC.crosswalk = {
 // ── Org Diff ──────────────────────────────────────────────────────────────────
 
 MC.orgDiff = {
+  _defaultObjects: [
+    'Account', 'ContactPointEmail', 'ContactPointPhone',
+    'ContactPointAddress', 'IndividualApplication', 'Opportunity',
+  ],
+  _selectedObjects: [],
+
   init() {
     document.getElementById('btnRunDiff')?.addEventListener('click', () => this.run());
+    document.getElementById('btnResetObjects')?.addEventListener('click', () => this._resetObjects());
+    this._initTagInput();
+  },
+
+  _initTagInput() {
+    this._selectedObjects = [...this._defaultObjects];
+    this._renderTags();
+    const input = document.getElementById('objectTagInput');
+    if (!input) return;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const val = input.value.trim().replace(/,$/, '');
+        if (val) this._addObject(val);
+        input.value = '';
+      } else if (e.key === 'Backspace' && input.value === '' && this._selectedObjects.length > 0) {
+        this._selectedObjects.pop();
+        this._renderTags();
+      }
+    });
+  },
+
+  _addObject(name) {
+    const clean = name.trim();
+    if (!clean || this._selectedObjects.includes(clean)) return;
+    this._selectedObjects.push(clean);
+    this._renderTags();
+  },
+
+  _removeObject(name) {
+    this._selectedObjects = this._selectedObjects.filter(o => o !== name);
+    this._renderTags();
+  },
+
+  _resetObjects() {
+    this._selectedObjects = [...this._defaultObjects];
+    this._renderTags();
+    const input = document.getElementById('objectTagInput');
+    if (input) input.value = '';
+  },
+
+  _renderTags() {
+    const container = document.getElementById('objectTagContainer');
+    const input = document.getElementById('objectTagInput');
+    if (!container || !input) return;
+    // Remove existing tags (everything except the input)
+    Array.from(container.children).forEach(el => {
+      if (el !== input) el.remove();
+    });
+    // Prepend tags before the input
+    [...this._selectedObjects].reverse().forEach(obj => {
+      const tag = document.createElement('span');
+      tag.className = 'badge bg-secondary d-flex align-items-center gap-1';
+      tag.style.fontSize = '0.75rem';
+      tag.innerHTML = `${MC._escHtml(obj)}<button type="button" class="btn-close btn-close-white" style="font-size:0.55rem;" aria-label="Remove"></button>`;
+      tag.querySelector('.btn-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._removeObject(obj);
+      });
+      container.insertBefore(tag, input);
+    });
   },
 
   async run() {
     const rightOrg = document.getElementById('rightOrgSelect')?.value;
-    const objectsRaw = document.getElementById('objectMultiSelect')?.value?.trim();
-    const objects = objectsRaw ? objectsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    // Flush any pending text in the tag input
+    const tagInput = document.getElementById('objectTagInput');
+    if (tagInput?.value.trim()) {
+      this._addObject(tagInput.value.trim());
+      tagInput.value = '';
+    }
+    const objects = [...this._selectedObjects];
 
     const diffEmpty = document.getElementById('diffEmpty');
     const diffLoading = document.getElementById('diffLoading');
@@ -2190,10 +2262,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-'use strict';
-
 // ── Logs ──────────────────────────────────────────────────────────────────────
-// Paste this object into mission-control.js after the last MC.* namespace block.
 
 MC.logs = {
   _activeTab: 'apex',
@@ -2211,7 +2280,22 @@ MC.logs = {
     document.getElementById('btnRefreshApex')?.addEventListener('click', () => this.loadApexLogs());
     document.getElementById('btnRefreshFlows')?.addEventListener('click', () => this.loadFlowErrors());
     document.getElementById('btnRefreshCpuSummary')?.addEventListener('click', () => this.loadCpuSummary());
+    document.getElementById('btnRefreshTraceFlags')?.addEventListener('click', () => this.loadTraceFlags());
+    document.getElementById('btnDeleteExpired')?.addEventListener('click', () => this.deleteExpiredFlags());
+    document.getElementById('btnCreateTraceFlag')?.addEventListener('click', () => this.createTraceFlag());
     document.getElementById('btnCloseDetail')?.addEventListener('click', () => this._closeDetail());
+
+    // User search datalist population
+    document.getElementById('traceFlagEntitySearch')?.addEventListener('input', (e) => {
+      this._populateUserDatalist(e.target.value);
+    });
+    // Clear hidden entity ID when user types (requires re-selection)
+    document.getElementById('traceFlagEntitySearch')?.addEventListener('change', (e) => {
+      const val = e.target.value;
+      const dl = document.getElementById('traceFlagUserList');
+      const match = dl ? Array.from(dl.options).find(o => o.value === val) : null;
+      document.getElementById('traceFlagEntityId').value = match ? match.dataset.id : '';
+    });
 
     // Time-range toolbar
     document.getElementById('logTimeRange')?.addEventListener('change', (e) => {
@@ -2237,13 +2321,16 @@ MC.logs = {
     const showApex = tab === 'apex';
     const showFlows = tab === 'flows';
     const showCpu = tab === 'cpu';
+    const showTrace = tab === 'trace';
 
     document.getElementById('panelApex')?.classList.toggle('d-none', !showApex);
     document.getElementById('panelFlows')?.classList.toggle('d-none', !showFlows);
     document.getElementById('panelCpuSummary')?.classList.toggle('d-none', !showCpu);
+    document.getElementById('panelTrace')?.classList.toggle('d-none', !showTrace);
 
     if (tab === 'flows') this.loadFlowErrors();
     if (tab === 'cpu') this.loadCpuSummary();
+    if (tab === 'trace') this.loadTraceFlags();
   },
 
   async loadApexLogs() {
@@ -2560,10 +2647,10 @@ MC.logs = {
     const tbody = document.getElementById('flowsBody');
     if (!tbody) return;
     tbody.innerHTML = flows.map(f => `<tr>
-      <td><code class="small">${MC._escHtml(f.current_element)}</code></td>
-      <td class="small text-danger">${MC._escHtml(f.error_message)}</td>
-      <td class="text-muted small">${MC._fmtTime(f.start_time)}</td>
-      <td class="text-muted small">${MC._fmtTime(f.end_time)}</td>
+      <td class="small fw-semibold">${MC._escHtml(f.flow_label) || '—'}</td>
+      <td><code class="small">${MC._escHtml(f.current_element) || '—'}</code></td>
+      <td><span class="badge badge-red">${MC._escHtml(f.status)}</span></td>
+      <td class="text-muted small">${MC._fmtTime(f.created_date)}</td>
     </tr>`).join('');
   },
 
@@ -2577,6 +2664,181 @@ MC.logs = {
       <td>${MC.statusBadge(ex.status)}</td>
       <td class="small text-muted">${MC._fmtTime(ex.created_date)}</td>
     </tr>`).join('');
+  },
+
+  // ── Trace Flags ─────────────────────────────────────────────────────────────
+
+  _debugLevels: [],
+
+  async loadTraceFlags() {
+    const loading = document.getElementById('traceFlagsLoading');
+    const empty   = document.getElementById('traceFlagsEmpty');
+    const table   = document.getElementById('traceFlagsTable');
+
+    loading?.classList.remove('d-none');
+    empty?.classList.add('d-none');
+    table?.classList.add('d-none');
+
+    try {
+      const [flags, levels] = await Promise.all([
+        MC.api('/logs/trace-flags'),
+        MC.api('/logs/trace-flags/debug-levels'),
+      ]);
+
+      // Populate debug level select
+      this._debugLevels = levels || [];
+      const levelSel = document.getElementById('traceFlagDebugLevel');
+      if (levelSel && levels && levels.length > 0) {
+        levelSel.innerHTML = levels.map(l =>
+          `<option value="${MC._escHtml(l.id)}">${MC._escHtml(l.label || l.name)}</option>`
+        ).join('');
+      }
+
+      // Populate also the user datalist with initial top users
+      await this._populateUserDatalist('');
+
+      if (!flags || flags.length === 0) {
+        empty?.classList.remove('d-none');
+      } else {
+        this._renderTraceFlagsTable(flags);
+        table?.classList.remove('d-none');
+      }
+    } catch (err) {
+      MC.showToast(`Failed to load trace flags: ${err.message}`, 'danger');
+      empty?.classList.remove('d-none');
+    } finally {
+      loading?.classList.add('d-none');
+    }
+  },
+
+  _renderTraceFlagsTable(flags) {
+    const tbody = document.getElementById('traceFlagsTbody');
+    if (!tbody) return;
+    tbody.innerHTML = flags.map(f => {
+      const expired = f.expired;
+      const rowCls = expired ? 'table-secondary text-muted' : '';
+      let statusCell;
+      if (expired) {
+        statusCell = '<span class="badge bg-secondary">Expired</span>';
+      } else {
+        const mins = f.expires_in_minutes;
+        const color = (mins !== null && mins < 5) ? 'text-warning fw-semibold' : 'text-success fw-semibold';
+        statusCell = `<span class="${color}">${mins !== null ? mins + 'm remaining' : 'Active'}</span>`;
+      }
+      const deleteBtn = `<button class="btn btn-outline-danger btn-sm py-0"
+                                 onclick="MC.logs.deleteTraceFlag('${MC._escHtml(f.id)}')">
+                           &times; Delete
+                         </button>`;
+      return `<tr class="${rowCls}">
+        <td class="small font-monospace">${MC.sfLinkTag(f.traced_entity_id, f.traced_entity_type)}</td>
+        <td class="small">${MC._escHtml(f.traced_entity_type)}</td>
+        <td class="small">${MC._escHtml(f.debug_level_name)}</td>
+        <td class="small">${MC._escHtml(f.log_type)}</td>
+        <td class="small text-muted">${MC._fmtTime(f.expiration_date)}</td>
+        <td>${statusCell}</td>
+        <td class="no-print">${deleteBtn}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  async deleteTraceFlag(flagId) {
+    if (!confirm('Delete this trace flag?')) return;
+    try {
+      await MC.api(`/logs/trace-flags/${encodeURIComponent(flagId)}`, 'DELETE');
+      MC.showToast('Trace flag deleted', 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Delete failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async deleteExpiredFlags() {
+    try {
+      const result = await MC.api('/logs/trace-flags/delete-expired', 'DELETE');
+      const count = result ? result.deleted_count : 0;
+      MC.showToast(`Deleted ${count} expired trace flag${count !== 1 ? 's' : ''}`, 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Delete expired failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async createTraceFlag() {
+    const entityId      = document.getElementById('traceFlagEntityId')?.value.trim();
+    const entityType    = document.getElementById('traceFlagEntityType')?.value || 'User';
+    const debugLevelId  = document.getElementById('traceFlagDebugLevel')?.value.trim();
+    const durationSel   = document.getElementById('traceFlagDuration');
+    let duration = parseInt(durationSel?.value, 10);
+
+    // Handle "until midnight" option
+    if (durationSel?.options[durationSel.selectedIndex]?.dataset?.dynamic === 'true') {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      duration = Math.ceil((midnight - now) / 60000);
+    }
+
+    if (!entityId) {
+      MC.showToast('Please select a user or class first', 'warning');
+      return;
+    }
+    if (!debugLevelId) {
+      MC.showToast('Please select a debug level', 'warning');
+      return;
+    }
+
+    try {
+      await MC.api('/logs/trace-flags', 'POST', {
+        entity_id: entityId,
+        entity_type: entityType,
+        debug_level_id: debugLevelId,
+        duration_minutes: duration,
+      });
+      MC.showToast('Trace flag created successfully', 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Create failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async traceMe() {
+    try {
+      const [users, levels] = await Promise.all([
+        MC.api('/logs/trace-flags/users'),
+        MC.api('/logs/trace-flags/debug-levels'),
+      ]);
+      const user  = users && users.length > 0 ? users[0] : null;
+      const level = levels && levels.length > 0 ? levels[0] : null;
+      if (!user || !level) {
+        MC.showToast('Could not find user or debug level to trace', 'warning');
+        return;
+      }
+      await MC.api('/logs/trace-flags', 'POST', {
+        entity_id: user.id,
+        entity_type: 'User',
+        debug_level_id: level.id,
+        duration_minutes: 30,
+      });
+      MC.showToast('Trace flag active for 30 minutes — logs will appear in Apex Logs tab', 'success');
+      await this.loadTraceFlags();
+    } catch (err) {
+      MC.showToast(`Trace Me failed: ${err.message}`, 'danger');
+    }
+  },
+
+  async _populateUserDatalist(search) {
+    try {
+      const url = search ? `/logs/trace-flags/users?q=${encodeURIComponent(search)}` : '/logs/trace-flags/users';
+      const users = await MC.api(url);
+      const dl = document.getElementById('traceFlagUserList');
+      if (dl && users) {
+        dl.innerHTML = users.map(u =>
+          `<option value="${MC._escHtml(u.name + ' <' + u.username + '>')}" data-id="${MC._escHtml(u.id)}">`
+        ).join('');
+      }
+    } catch (_) {
+      // ignore datalist population errors silently
+    }
   },
 };
 'use strict';

@@ -120,6 +120,11 @@ def _friendly_odbc_error(exc: Exception) -> str:
     if 'IM003' in text or 'specified driver could not be loaded' in text.lower():
         return ('The ODBC driver named in SQLSERVER_CONN is registered but could '
                 f'not be loaded (architecture or install issue). {tail} [IM003]')
+    if '08001' in text or 'Neither DSN nor SERVER' in text:
+        return ('SQL Server could not connect — the SERVER name in SQLSERVER_CONN '
+                'is missing or empty. Use the form: '
+                'SERVER=myhostname;DATABASE=mydb;UID=myuser;PWD=mypassword '
+                f'{tail} [08001]')
     if 'Login failed' in text or '28000' in text:
         return f'SQL Server rejected the credentials in SQLSERVER_CONN. {tail}'
     if 'timeout' in text.lower() or 'HYT00' in text or 'HYT01' in text:
@@ -127,15 +132,35 @@ def _friendly_odbc_error(exc: Exception) -> str:
     return f'SQL Server refresh failed: {text}. {tail}'
 
 
+def _normalize_keywords(conn_str: str) -> str:
+    """Translate common .NET-style connection string keywords to ODBC-compatible ones.
+
+    ADO.NET uses 'Data Source', 'User ID', 'Password', 'Initial Catalog';
+    pyodbc/ODBC Driver expects 'SERVER', 'UID', 'PWD', 'DATABASE'.
+    """
+    import re
+    pairs = [
+        (r'(?i)\bData\s+Source\s*=', 'SERVER='),
+        (r'(?i)\bInitial\s+Catalog\s*=', 'DATABASE='),
+        (r'(?i)\bUser\s+ID\s*=', 'UID='),
+        (r'(?i)\bUser\s+Id\s*=', 'UID='),
+        (r'(?i)\bPassword\s*=', 'PWD='),
+    ]
+    for pattern, replacement in pairs:
+        conn_str = re.sub(pattern, replacement, conn_str)
+    return conn_str
+
+
 def _ensure_driver(conn_str: str) -> str:
     """Prepend an installed SQL Server ODBC driver when the connection string
-    names neither a DRIVER nor a DSN.
+    names neither a DRIVER nor a DSN, and normalise .NET-style keywords.
 
     A generic 'server=...;database=...;user id=...;password=...' string omits
     the driver, so pyodbc fails with IM002. Most admins write the string this
     way, so detect an installed driver and prepend it rather than failing.
     """
     import pyodbc  # noqa: lazy — only needed for a live refresh
+    conn_str = _normalize_keywords(conn_str)
     lowered = conn_str.lower()
     if 'driver=' in lowered or 'dsn=' in lowered:
         return conn_str
