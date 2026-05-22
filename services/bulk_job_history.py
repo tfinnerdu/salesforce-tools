@@ -4,9 +4,10 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-def get_bulk_jobs(org: str, limit: int = 50) -> list:
+def get_bulk_jobs(org: str) -> list:
     """Query the Bulk API 2.0 ingest jobs for the org's recent bulk loads.
 
+    Returns all jobs sorted newest-first. Pagination is handled client-side.
     Returns mock data only when SF_MOCK is enabled. Against a real org a query
     failure propagates to the caller — it is never masked with mock data, and a
     genuinely empty result returns an empty list.
@@ -31,7 +32,7 @@ def get_bulk_jobs(org: str, limit: int = 50) -> list:
         for j in jobs
     ]
     mapped.sort(key=lambda j: j.get('createdDate') or '', reverse=True)
-    return mapped[:limit]
+    return mapped
 
 def _mock_bulk_jobs() -> list:
     return [

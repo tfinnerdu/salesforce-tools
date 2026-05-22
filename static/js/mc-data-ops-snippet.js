@@ -269,11 +269,21 @@ MC.recordLocks = {
 
 MC.bulkJobs = {
   _timer: null,
+  _allJobs: [],
+  _page: 1,
+  _pageSize: 10,
 
   init() {
     document.getElementById('btnRefreshBulkJobs')?.addEventListener('click', () => this.load());
     document.getElementById('bulkJobsAutoRefresh')?.addEventListener('change', (e) => {
       this._setAutoRefresh(e.target.checked);
+    });
+    document.getElementById('btnBJPrev')?.addEventListener('click', () => {
+      if (this._page > 1) this._renderPage(this._page - 1);
+    });
+    document.getElementById('btnBJNext')?.addEventListener('click', () => {
+      const maxPage = Math.ceil(this._allJobs.length / this._pageSize);
+      if (this._page < maxPage) this._renderPage(this._page + 1);
     });
     this.load();
   },
@@ -289,10 +299,10 @@ MC.bulkJobs = {
     emptyState?.classList.add('d-none');
 
     try {
-      const resp = await MC.api('/data-ops/api/bulk-jobs', 'GET');
-      const jobs = resp;
+      const jobs = await MC.api('/data-ops/api/bulk-jobs', 'GET');
+      this._allJobs = jobs;
+      this._page = 1;
 
-      // Summary stats
       const totalJobs = jobs.length;
       const totalProcessed = jobs.reduce((s, j) => s + (j.numberRecordsProcessed ?? 0), 0);
       const totalFailed = jobs.reduce((s, j) => s + (j.numberRecordsFailed ?? 0), 0);
@@ -318,37 +328,60 @@ MC.bulkJobs = {
         return;
       }
 
-      const tbody = document.getElementById('bulkJobsBody');
-      if (tbody) {
-        tbody.innerHTML = jobs.map(j => {
-          const stateBadge = MC.bulkJobs._stateBadge(j.state);
-          const opBadge = `<span class="badge bg-secondary">${MC._escHtml(j.operation || '')}</span>`;
-          const failedCell = (j.numberRecordsFailed > 0)
-            ? `<td class="text-danger fw-semibold">${(j.numberRecordsFailed ?? 0).toLocaleString()}</td>`
-            : `<td>${(j.numberRecordsFailed ?? 0).toLocaleString()}</td>`;
-          const procTime = j.totalProcessingTime != null
-            ? MC.bulkJobs._fmtMs(j.totalProcessingTime)
-            : '—';
-          const created = j.createdDate ? new Date(j.createdDate).toLocaleString() : '—';
-          return `<tr>
-            <td><code class="small">${MC._escHtml(j.id || '')}</code></td>
-            <td>${opBadge}</td>
-            <td>${MC._escHtml(j.object || '')}</td>
-            <td>${stateBadge}</td>
-            <td>${(j.numberRecordsProcessed ?? 0).toLocaleString()}</td>
-            ${failedCell}
-            <td>${procTime}</td>
-            <td><small>${created}</small></td>
-          </tr>`;
-        }).join('');
-      }
-
+      this._renderPage(1);
       tableWrap?.classList.remove('d-none');
 
     } catch (err) {
       MC.showToast(`Bulk jobs failed: ${err.message}`, 'danger');
     } finally {
       loading?.classList.add('d-none');
+    }
+  },
+
+  _renderPage(page) {
+    this._page = page;
+    const total = this._allJobs.length;
+    const start = (page - 1) * this._pageSize;
+    const end = Math.min(start + this._pageSize, total);
+    const pageJobs = this._allJobs.slice(start, end);
+
+    const tbody = document.getElementById('bulkJobsBody');
+    if (tbody) {
+      tbody.innerHTML = pageJobs.map(j => {
+        const stateBadge = MC.bulkJobs._stateBadge(j.state);
+        const opBadge = `<span class="badge bg-secondary">${MC._escHtml(j.operation || '')}</span>`;
+        const failedCell = (j.numberRecordsFailed > 0)
+          ? `<td class="text-danger fw-semibold">${(j.numberRecordsFailed ?? 0).toLocaleString()}</td>`
+          : `<td>${(j.numberRecordsFailed ?? 0).toLocaleString()}</td>`;
+        const procTime = j.totalProcessingTime != null
+          ? MC.bulkJobs._fmtMs(j.totalProcessingTime)
+          : '—';
+        const created = j.createdDate ? new Date(j.createdDate).toLocaleString() : '—';
+        return `<tr>
+          <td><code class="small">${MC._escHtml(j.id || '')}</code></td>
+          <td>${opBadge}</td>
+          <td>${MC._escHtml(j.object || '')}</td>
+          <td>${stateBadge}</td>
+          <td>${(j.numberRecordsProcessed ?? 0).toLocaleString()}</td>
+          ${failedCell}
+          <td>${procTime}</td>
+          <td><small>${created}</small></td>
+        </tr>`;
+      }).join('');
+    }
+
+    const paginationEl = document.getElementById('bulkJobsPagination');
+    const pageInfoEl = document.getElementById('bulkJobsPageInfo');
+    const btnPrev = document.getElementById('btnBJPrev');
+    const btnNext = document.getElementById('btnBJNext');
+
+    if (total > this._pageSize) {
+      paginationEl?.classList.remove('d-none');
+      if (pageInfoEl) pageInfoEl.textContent = `Showing ${start + 1}–${end} of ${total} jobs`;
+      if (btnPrev) btnPrev.disabled = page === 1;
+      if (btnNext) btnNext.disabled = end >= total;
+    } else {
+      paginationEl?.classList.add('d-none');
     }
   },
 

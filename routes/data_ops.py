@@ -636,9 +636,8 @@ def api_record_locks():
 def api_bulk_jobs():
     org = session.get('active_org', 'dev')
     try:
-        limit = int(request.args.get('limit', 50))
         from services import bulk_job_history
-        data = bulk_job_history.get_bulk_jobs(org=org, limit=limit)
+        data = bulk_job_history.get_bulk_jobs(org=org)
         return jsonify({'success': True, 'data': data})
     except Exception as exc:
         logger.exception('bulk job history failed')
