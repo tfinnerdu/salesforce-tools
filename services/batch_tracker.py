@@ -3,6 +3,7 @@ import re
 import time
 from typing import Optional
 
+from config import Config
 from conductor_provider import get_conductor_client
 
 logger = logging.getLogger(__name__)
@@ -30,11 +31,19 @@ def get_batch_status(workflow_name: str, start_time_ms: Optional[int] = None) ->
     total = status.get('total', 0) or 1
     done = status.get('completed', 0) + status.get('failed', 0)
     status['progress_pct'] = round(100 * done / total, 1)
-    # The Conductor status response carries no throughput data, so a processing
-    # rate and ETA cannot be computed without fabricating one. Left null until a
-    # real rate source is available.
-    status['rate_per_min'] = None
-    status['eta_minutes'] = None
+    if Config.SHOW_MOCK:
+        # Demo rate so the velocity widget shows a plausible ETA in mock mode.
+        running = status.get('running', 0)
+        queued = status.get('queued', 0)
+        rate_per_min = 48
+        remaining = running + queued
+        status['rate_per_min'] = rate_per_min
+        status['eta_minutes'] = round(remaining / rate_per_min, 0) if rate_per_min > 0 else None
+    else:
+        # Real Conductor status has no throughput field — leave the rate null
+        # rather than fabricate one outside of demo mode.
+        status['rate_per_min'] = None
+        status['eta_minutes'] = None
     return status
 
 

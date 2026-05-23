@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Optional  # noqa: F401 — used in merge()
 
+from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -178,6 +179,17 @@ def merge(org: str, master_id: str, victim_id: str, bypass: bool = False) -> dic
         with dml_guard(sf, bypass=bypass):
             sf.Account.merge(master_id, [victim_id])
         success = True
+    except AttributeError as exc:
+        # MockSalesforce has no Account.merge — in SHOW_MOCK mode this branch
+        # keeps the demo end-to-end (the merge appears to succeed). In real
+        # mode the same AttributeError indicates a genuine failure and falls
+        # through to the general handler below.
+        if Config.SHOW_MOCK:
+            success = True
+        else:
+            logger.error("merge failed master=%s victim=%s: %s", master_id, victim_id, exc)
+            exc_for_log = exc
+            success = False
     except Exception as exc:
         logger.error("merge failed master=%s victim=%s: %s", master_id, victim_id, exc)
         exc_for_log = exc

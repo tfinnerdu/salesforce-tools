@@ -1,6 +1,7 @@
 """Compare two Permission Sets to find access gaps."""
 import logging
 from sf_provider import get_sf
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,12 @@ def list_permission_sets(org: str) -> list:
             }
             for r in result.get('records', [])
         ]
+        if Config.SHOW_MOCK and not perm_sets:
+            return _mock_perm_sets()
         return perm_sets
     except Exception:
+        if Config.SHOW_MOCK:
+            return _mock_perm_sets()
         raise
 
 
@@ -85,6 +90,8 @@ def compare(org: str, ps_id_a: str, ps_id_b: str) -> dict:
         field_gaps = _build_field_gaps(field_res.get('records', []), ps_id_a, ps_id_b)
 
     except Exception:
+        if Config.SHOW_MOCK:
+            return _mock_compare_result(ps_id_a, ps_id_b)
         raise
 
     only_in_a = sum(1 for g in obj_gaps + field_gaps if g['in_a'] and not g['in_b'])
@@ -193,3 +200,30 @@ def _build_field_gaps(records: list, ps_id_a: str, ps_id_b: str) -> list:
                     'in_b': b_val,
                 })
     return gaps
+
+
+def _mock_perm_sets() -> list:
+    return [
+        {'id': 'a0A000001', 'name': 'Migration_Admin', 'label': 'Migration Admin', 'description': 'Full migration access'},
+        {'id': 'a0A000002', 'name': 'Read_Only_Access', 'label': 'Read Only Access', 'description': 'Read-only view'},
+        {'id': 'a0A000003', 'name': 'EDA_Standard', 'label': 'EDA Standard', 'description': 'EDA standard user'},
+        {'id': 'a0A000004', 'name': 'Integration_User', 'label': 'Integration User', 'description': 'Conductor integration'},
+    ]
+
+
+def _mock_compare_result(ps_id_a: str, ps_id_b: str) -> dict:
+    return {
+        'ps_a': {'id': ps_id_a, 'label': 'Migration Admin'},
+        'ps_b': {'id': ps_id_b, 'label': 'Read Only Access'},
+        'object_gaps': [
+            {'object': 'Account', 'permission': 'Create', 'in_a': True, 'in_b': False},
+            {'object': 'Account', 'permission': 'Delete', 'in_a': True, 'in_b': False},
+            {'object': 'ContactPointEmail', 'permission': 'Create', 'in_a': True, 'in_b': False},
+        ],
+        'field_gaps': [
+            {'object': 'Account', 'field': 'Account.SIS_ID__c', 'permission': 'Edit', 'in_a': True, 'in_b': False},
+            {'object': 'Account', 'field': 'Account.Ethos_Guid__c', 'permission': 'Edit', 'in_a': True, 'in_b': False},
+            {'object': 'Account', 'field': 'Account.PersonEmail', 'permission': 'Edit', 'in_a': False, 'in_b': True},
+        ],
+        'summary': {'only_in_a': 4, 'only_in_b': 1, 'shared_objects': 2, 'total_gaps': 5},
+    }

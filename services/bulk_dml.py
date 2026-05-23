@@ -1,6 +1,7 @@
 """Bulk DML service — preview and update a single field across a SOQL-matched record set."""
 import logging
 
+from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,18 @@ def bulk_update(org: str, sobject: str, where_clause: str,
         records = id_result.get('records', [])
         update_list = [{'Id': r['Id'], field: value} for r in records]
 
+        if Config.SHOW_MOCK:
+            # Mock mode — simulate a successful bulk update
+            return {
+                'status': 'ok',
+                'records_queried': len(update_list),
+                'records_updated': len(update_list),
+                'records_failed': 0,
+                'dry_run': False,
+                'errors': [],
+            }
+
+        # Real bulk API call
         bulk_obj = getattr(sf.bulk, sobject)
         results = bulk_obj.update(update_list)
 

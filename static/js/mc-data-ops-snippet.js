@@ -1067,10 +1067,11 @@ MC.tuner = {
         {object: obj, where_clause: where, field_rules: fieldRules, bypass_triggers: bypass});
       const alert = document.getElementById('tuneResultAlert');
       document.getElementById('tuneResultWrap')?.classList.remove('d-none');
+      const mockNote = d.mock ? ' <span class="badge badge-secondary">mock — not written</span>' : '';
       if (alert) {
         alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">
           Standardized <strong>${d.updated}</strong> record(s).
-          ${d.unchanged} already clean. Errors: ${d.errors}.</div>`;
+          ${d.unchanged} already clean. Errors: ${d.errors}.${mockNote}</div>`;
       }
       document.getElementById('btnTuneExecute')?.classList.add('d-none');
     } catch (err) {

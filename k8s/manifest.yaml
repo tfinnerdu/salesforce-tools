@@ -28,6 +28,8 @@ spec:
               value: "5000"
             - name: SCHEDULER_ENABLED
               value: "true"
+            - name: SHOW_MOCK
+              value: "false"
             - name: DEFAULT_ORG
               value: "prod"
             - name: SF_DEV_USERNAME

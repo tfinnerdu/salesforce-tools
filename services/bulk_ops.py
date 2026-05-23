@@ -3,6 +3,7 @@ import csv
 import io
 import logging
 
+from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ def bulk_delete_preview(org: str, object_name: str, where_clause: str) -> dict:
 def bulk_delete_execute(org: str, object_name: str, where_clause: str,
                         bypass_triggers: bool = False) -> dict:
     """Delete all records matching the WHERE clause."""
+    if Config.SHOW_MOCK:
+        return {'deleted': 42, 'errors': 0, 'mock': True}
+
     sf = get_sf(org)
     # Fetch all IDs first
     soql = f"SELECT Id FROM {object_name} WHERE {where_clause} LIMIT {_MAX_BULK_ROWS}"
@@ -74,6 +78,9 @@ def bulk_modify_preview(org: str, object_name: str, where_clause: str,
 def bulk_modify_execute(org: str, object_name: str, where_clause: str,
                         field_updates: dict, bypass_triggers: bool = False) -> dict:
     """Update field_updates={field: value} on all records matching where_clause."""
+    if Config.SHOW_MOCK:
+        return {'updated': 37, 'errors': 0, 'mock': True}
+
     sf = get_sf(org)
     soql = f"SELECT Id FROM {object_name} WHERE {where_clause} LIMIT {_MAX_BULK_ROWS}"
     result = sf.query_all(soql)
@@ -115,6 +122,9 @@ def bulk_reassign_preview(org: str, object_name: str, where_clause: str) -> dict
 def bulk_reassign_execute(org: str, object_name: str, where_clause: str,
                           new_owner_id: str, bypass_triggers: bool = False) -> dict:
     """Reassign ownership of matching records to new_owner_id."""
+    if Config.SHOW_MOCK:
+        return {'reassigned': 15, 'errors': 0, 'mock': True}
+
     sf = get_sf(org)
     soql = f"SELECT Id FROM {object_name} WHERE {where_clause} LIMIT {_MAX_BULK_ROWS}"
     result = sf.query_all(soql)

@@ -647,6 +647,7 @@ class TestGetConductorClientRealPath:
              patch('conductor_provider.Config') as mock_cfg:
             mock_cfg.CONDUCTOR_URL = 'http://conductor:8080'
             mock_cfg.CONDUCTOR_API_KEY = 'real-key'
+            mock_cfg.SHOW_MOCK = False
             result = conductor_provider.get_conductor_client()
         assert isinstance(result, ConductorClient)
         assert result.base_url == 'http://conductor:8080'

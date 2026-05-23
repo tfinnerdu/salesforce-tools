@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="active-org" content="{{ session.get('active_org', 'dev') }}">
   <meta name="sf-instance" content="{{ sf_instance }}">
+  <meta name="show-mock" content="{{ 'true' if show_mock_mode else 'false' }}">
   <title>{% block title %}Doane SF Mission Control{% endblock %}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
@@ -94,6 +95,21 @@
           <span id="activeOrgBadge" class="badge mc-org-badge">
             {{ session.get('active_org', 'dev') | upper }}
           </span>
+          {% if show_mock_mode %}
+          <span class="badge badge-amber"
+                data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-title="Mock mode"
+                data-bs-content="SHOW_MOCK=true — Salesforce and Conductor data is synthetic. Unset SHOW_MOCK to use live credentials.">
+            MOCK
+          </span>
+          {% else %}
+          <span class="badge badge-green"
+                data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-title="Live mode"
+                data-bs-content="Connected to a real Salesforce org and Conductor instance.">
+            LIVE
+          </span>
+          {% endif %}
         </div>
 
         <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>

@@ -9,11 +9,14 @@ For each metadata type a component is reduced to a name and a fingerprint. The
 diff reports components present in only one org (left-only / right-only) and
 components present in both but configured differently (modified).
 
-Orgs are queried via the Tooling / Data API.
+Real orgs are queried via the Tooling / Data API. In mock mode a seeded
+catalog is used; the 'prod' variant deliberately lags the dev sandbox so the
+diff is demonstrable without two live orgs.
 """
 import logging
 from datetime import datetime, timezone
 
+from config import Config
 from sf_provider import get_sf, assert_orgs_comparable
 
 logger = logging.getLogger(__name__)
@@ -157,9 +160,78 @@ _REAL_FETCHERS = {
 }
 
 
+# ── Mock catalog ──────────────────────────────────────────────────────────────
+# The dev-sandbox baseline. Each entry is name -> (fingerprint, detail).
+
+_MOCK_BASE = {
+    'apex_classes': {
+        'StudentSyncService':      ('v59.0|4820|Active', 'API 59.0, 4820 chars, Active'),
+        'AccountTriggerHandler':   ('v59.0|2110|Active', 'API 59.0, 2110 chars, Active'),
+        'EthosIntegrationUtil':    ('v59.0|3640|Active', 'API 59.0, 3640 chars, Active'),
+        'ContactPointService':     ('v58.0|1290|Active', 'API 58.0, 1290 chars, Active'),
+        'MigrationBatchScheduler': ('v59.0|980|Active',  'API 59.0, 980 chars, Active'),
+    },
+    'apex_triggers': {
+        'AccountTrigger':           ('Account|Active|1840',            'Account · Active · 1840 chars'),
+        'ContactPointEmailTrigger': ('ContactPointEmail|Active|620',   'ContactPointEmail · Active · 620 chars'),
+        'IndividualTrigger':        ('Individual|Inactive|410',        'Individual · Inactive · 410 chars'),
+    },
+    'flows': {
+        'Student_Update_Handler':      ('AutoLaunchedFlow|Active',   'AutoLaunchedFlow · Active'),
+        'Migration_Complete_Notifier': ('AutoLaunchedFlow|Active',   'AutoLaunchedFlow · Active'),
+        'ContactPoint_Dedupe':         ('Workflow|Inactive',        'Workflow · Inactive'),
+    },
+    'validation_rules': {
+        'Account.Require_SIS_ID':                         ('Active',   'Account · Active'),
+        'Account.Valid_Ethos_Guid_Format':                ('Active',   'Account · Active'),
+        'ContactPointEmail.ContactPoint_Parent_Required': ('Active',   'ContactPointEmail · Active'),
+        'Contact.Legacy_EDA_Block':                       ('Inactive', 'Contact · Inactive'),
+    },
+    'custom_objects': {
+        'Migration_Batch__c':   ('Private', 'Migration Batch · Private'),
+        'Crosswalk_Mapping__c': ('Read',    'Crosswalk Mapping · Read'),
+        'Sync_Log__c':          ('Private', 'Sync Log · Private'),
+    },
+}
+
+# How 'prod' lags the dev sandbox, so the mock diff is demonstrable.
+_MOCK_PROD_MISSING = {
+    'apex_classes': ['MigrationBatchScheduler'],
+    'flows': ['Migration_Complete_Notifier'],
+    'validation_rules': ['Account.Valid_Ethos_Guid_Format'],
+    'custom_objects': ['Sync_Log__c'],
+}
+_MOCK_PROD_MODIFIED = {
+    'apex_classes': {'StudentSyncService': ('v58.0|4120|Active', 'API 58.0, 4120 chars, Active')},
+    'flows': {'Student_Update_Handler': ('AutoLaunchedFlow|Inactive', 'AutoLaunchedFlow · Inactive')},
+}
+_MOCK_PROD_EXTRA = {
+    'apex_classes': {'LegacyEDAContactSync': ('v52.0|2200|Inactive', 'API 52.0, 2200 chars, Inactive')},
+}
+
+
+def _mock_components(meta_type: str, org: str) -> dict:
+    """Return the seeded component map for a metadata type and org."""
+    base = {n: {'fingerprint': fp, 'detail': dt}
+            for n, (fp, dt) in _MOCK_BASE[meta_type].items()}
+    if (org or '').lower() not in ('prod', 'production'):
+        return base
+    result = dict(base)
+    for name in _MOCK_PROD_MISSING.get(meta_type, []):
+        result.pop(name, None)
+    for name, (fp, dt) in _MOCK_PROD_MODIFIED.get(meta_type, {}).items():
+        if name in result:
+            result[name] = {'fingerprint': fp, 'detail': dt}
+    for name, (fp, dt) in _MOCK_PROD_EXTRA.get(meta_type, {}).items():
+        result[name] = {'fingerprint': fp, 'detail': dt}
+    return result
+
+
 # ── Diff ──────────────────────────────────────────────────────────────────────
 
 def _fetch(meta_type: str, sf, org: str) -> dict:
+    if Config.SHOW_MOCK:
+        return _mock_components(meta_type, org)
     return _REAL_FETCHERS[meta_type](sf)
 
 

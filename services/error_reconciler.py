@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 
+from config import Config
 from conductor_provider import get_conductor_client
 from services.batch_tracker import extract_sf_error_code
 
@@ -98,11 +99,17 @@ def categorize_conductor_failures(workflow_name: str, hours_back: int = 24) -> l
 def requeue_batch(batch_id: str, org: str) -> dict:
     """Requeue a failed Conductor batch.
 
-    The Conductor client exposes per-workflow retry (``retry_workflow``) but no
-    batch-level requeue endpoint. Until a real batch-requeue API is wired up,
-    this raises rather than reporting a fabricated success — retry the
-    individual failed workflows instead.
+    With SHOW_MOCK=true, returns a synthesized "queued" success so the demo UI
+    is end-to-end. With SHOW_MOCK=false, raises — the Conductor client has no
+    batch-level requeue endpoint yet, and we never fabricate success in real
+    mode. Retry the individual failed workflows via /migration/reconciler/rerun.
     """
+    if Config.SHOW_MOCK:
+        return {
+            'status': 'queued',
+            'batch_id': batch_id,
+            'message': f'Batch {batch_id} requeued successfully',
+        }
     raise RuntimeError(
         f"Batch requeue is not available — the Conductor client has no "
         f"batch-level requeue endpoint (batch_id={batch_id}, org={org}). "

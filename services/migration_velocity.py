@@ -6,6 +6,10 @@ from db import get_cursor, db_available
 
 logger = logging.getLogger(__name__)
 
+# Mock universe size — used only when SHOW_MOCK is on, so the velocity demo
+# shows a plausible %-complete and ETA against a known total.
+TOTAL_RECORDS_TARGET = 4312
+
 
 def get_velocity_data(org: str, days: int = 30) -> dict:
     """
@@ -18,6 +22,9 @@ def get_velocity_data(org: str, days: int = 30) -> dict:
              target (int),
              pct_complete (float)
     """
+    if Config.SHOW_MOCK:
+        return _mock_velocity(days)
+
     batches = _get_batches_from_db(org)
     if not batches:
         return _empty_velocity(days)
@@ -131,4 +138,34 @@ def _empty_velocity(days: int = 30) -> dict:
         'total_migrated': 0,
         'target': Config.MIGRATION_RECORD_TARGET,
         'pct_complete': 0.0,
+    }
+
+
+def _mock_velocity(days: int = 30) -> dict:
+    """Synthetic velocity payload for SHOW_MOCK demos."""
+    today = datetime.now(timezone.utc).date()
+    import random
+    random.seed(42)
+    daily = []
+    cumulative = 0
+    target = TOTAL_RECORDS_TARGET
+    for i in range(days, -1, -1):
+        d = today - timedelta(days=i)
+        records = random.randint(80, 160) if i > 5 else random.randint(20, 60)
+        cumulative = min(cumulative + records, target)
+        daily.append({'date': d.isoformat(), 'records': records, 'cumulative': cumulative})
+    total_migrated = daily[-1]['cumulative']
+    remaining = target - total_migrated
+    velocity_avg = round(sum(d['records'] for d in daily[-7:]) / 7, 1)
+    eta_date = None
+    if velocity_avg > 0 and remaining > 0:
+        eta_dt = datetime.now(timezone.utc) + timedelta(days=remaining / velocity_avg)
+        eta_date = eta_dt.strftime('%Y-%m-%d')
+    return {
+        'daily': daily,
+        'velocity_avg': velocity_avg,
+        'eta_date': eta_date,
+        'total_migrated': total_migrated,
+        'target': target,
+        'pct_complete': round(total_migrated / target * 100, 1),
     }

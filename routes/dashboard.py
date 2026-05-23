@@ -23,8 +23,10 @@ def api_summary():
     """Quick stats for the dashboard title bar — doesn't call SF, just reads DB."""
     org = session.get('active_org', 'dev')
     from db import get_cursor, db_available
+    from config import Config
     summary = {
         'org': org,
+        'mock': Config.SHOW_MOCK,
         'readiness_pct': None,
         'preflight_pct': None,
     }

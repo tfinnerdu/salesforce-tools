@@ -390,6 +390,7 @@ def api_sql_schema():
         return jsonify({'success': True, 'data': {
             'captured_at': cached.get('captured_at'),
             'table_count': cached.get('table_count', 0),
+            'mock': cached.get('mock', False),
             'tables': sorted(cached.get('tables', {}).keys()),
         }})
     except Exception as exc:

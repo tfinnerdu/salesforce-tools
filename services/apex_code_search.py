@@ -3,10 +3,50 @@ import re
 import logging
 
 from sf_provider import get_sf
+from config import Config
 
 logger = logging.getLogger(__name__)
 
 MAX_FILES = 50
+
+
+def _mock_search(pattern: str) -> dict:
+    """Return a fixed mock result for dev/test mode."""
+    return {
+        'pattern': pattern,
+        'total_files_searched': 8,
+        'total_matches': 3,
+        'capped': False,
+        'matches': [
+            {
+                'file_type': 'ApexClass',
+                'name': 'AccountMigrationService',
+                'id': 'AC001',
+                'line_number': 42,
+                'line': "    acct.SIS_ID__c = sisRecord.personId;",
+                'context_before': "    // Populate external IDs",
+                'context_after': "    acct.Ethos_Guid__c = sisRecord.guid;",
+            },
+            {
+                'file_type': 'ApexClass',
+                'name': 'PersonAccountValidator',
+                'id': 'AC002',
+                'line_number': 17,
+                'line': "    if (String.isBlank(acct.SIS_ID__c)) {",
+                'context_before': "    for (Account acct : accounts) {",
+                'context_after': "        errors.add('Missing SIS ID on: ' + acct.Id);",
+            },
+            {
+                'file_type': 'ApexTrigger',
+                'name': 'AccountBeforeInsert',
+                'id': 'TR001',
+                'line_number': 8,
+                'line': "    String sisId = (String)newAcct.get('SIS_ID__c');",
+                'context_before': "trigger AccountBeforeInsert on Account (before insert) {",
+                'context_after': "    if (sisId != null) validateSisId(sisId);",
+            },
+        ],
+    }
 
 
 def _search_body(body: str, pattern: str, case_sensitive: bool) -> list:
@@ -35,8 +75,12 @@ def search(org: str, pattern: str, case_sensitive: bool = False,
     Returns a dict with keys: pattern, matches, total_files_searched, total_matches, capped.
     Each match has: file_type, name, id, line_number, line, context_before, context_after.
 
+    In mock mode, returns a fixed result with 3 matches for any pattern.
     Capped at MAX_FILES (50) total files to prevent timeout.
     """
+    if Config.SHOW_MOCK:
+        return _mock_search(pattern)
+
     sf = get_sf(org)
     files_to_search = []
 

@@ -31,9 +31,10 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 
 ## Provider pattern
 
-- `sf_provider.get_sf(org)` — returns a live `simple_salesforce` client; raises `RuntimeError` if the org has no credentials configured
-- `conductor_provider.get_conductor_client()` — returns a live `ConductorClient`; raises `RuntimeError` if Conductor is not configured
-- There is no mock mode. Real Salesforce + Conductor credentials are required to run the app. Tests patch `get_sf` / `get_conductor_client` with `unittest.mock` doubles.
+- `sf_provider.get_sf(org)` — returns a live `simple_salesforce` client by default; raises `RuntimeError` if the org has no credentials configured. With `SHOW_MOCK=true`, returns a `MockSalesforce` for any org.
+- `conductor_provider.get_conductor_client()` — returns a live `ConductorClient` by default; raises `RuntimeError` if Conductor is not configured. With `SHOW_MOCK=true`, returns a `MockConductorClient`.
+- `SHOW_MOCK` is all-or-nothing: a single env flag that swaps the whole app onto the mock layer for manual UI / demo testing. There is **no silent mock fallback** — unconfigured credentials raise when SHOW_MOCK is off.
+- Tests are independent of `SHOW_MOCK`: pytest patches `get_sf` / `get_conductor_client` with `unittest.mock` doubles per test.
 
 ## Salesforce context
 
@@ -49,8 +50,8 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 app.py               Flask factory, registers all blueprints
 config.py            Config class, get_org_config()
 db.py                psycopg2 connection, init_db(), db_available()
-sf_provider.py       Live SF client factory + Bulk API / DML helpers
-conductor_provider.py Live Conductor client
+sf_provider.py       SF client factory + Bulk API / DML helpers + MockSalesforce (SHOW_MOCK)
+conductor_provider.py Conductor client + MockConductorClient (SHOW_MOCK)
 scheduler.py         APScheduler daily readiness job
 routes/              One blueprint file per tab
 services/            Business logic, one module per feature
@@ -87,7 +88,7 @@ python app.py
 
 ## Environment variables
 
-Copy `.env.example` to `.env`. Salesforce and Conductor credentials are required — there is no mock mode, so the app needs real connections to start serving data.
+Copy `.env.example` to `.env`. Salesforce and Conductor credentials are required for the production path. For credential-free manual testing, set `SHOW_MOCK=true` — that swaps the entire app onto the mock layer (single all-or-nothing flag). The UI shows a loud amber `MOCK` badge in the navbar whenever SHOW_MOCK is on.
 
 ## Confirmation dialogs
 
@@ -104,4 +105,4 @@ pytest tests/ -v
 - `secretKeyRef` indentation in K8s manifest: `name` and `key` must indent UNDER `secretKeyRef`
 - Flask binds `0.0.0.0` so Conductor/Docker can reach via `host.docker.internal`
 - `use_reloader=False` in hub-launched mode
-- No mock layer: an unconfigured org makes `get_sf()` raise — configure credentials in `.env`
+- An unconfigured org makes `get_sf()` raise unless `SHOW_MOCK=true` — there is no silent mock fallback

@@ -5,6 +5,7 @@ divides by total record count to compute a fill percentage.
 """
 import logging
 
+from config import Config
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,22 @@ def _status(pct) -> str:
     return 'green'
 
 
+def _mock_result(sobject: str) -> dict:
+    total = 4312
+    return {
+        'sobject': sobject,
+        'total_records': total,
+        'fields': [
+            {'name': 'SIS_ID__c',       'label': 'SIS ID',        'type': 'string', 'custom': True,  'total': total, 'populated': 4289, 'pct': 99.5, 'status': 'green'},
+            {'name': 'Ethos_Guid__c',   'label': 'Ethos GUID',    'type': 'string', 'custom': True,  'total': total, 'populated': 4100, 'pct': 95.1, 'status': 'green'},
+            {'name': 'PersonEmail',     'label': 'Email',          'type': 'email',  'custom': False, 'total': total, 'populated': 3980, 'pct': 92.3, 'status': 'green'},
+            {'name': 'PersonBirthdate', 'label': 'Birthdate',      'type': 'date',   'custom': False, 'total': total, 'populated': 2100, 'pct': 48.7, 'status': 'amber'},
+            {'name': 'Phone',           'label': 'Phone',          'type': 'phone',  'custom': False, 'total': total, 'populated': 890,  'pct': 20.6, 'status': 'red'},
+            {'name': 'BillingStreet',   'label': 'Billing Street', 'type': 'string', 'custom': False, 'total': total, 'populated': 0,    'pct': 0.0,  'status': 'empty'},
+        ],
+    }
+
+
 def run(org: str, sobject: str, fields: list = None) -> dict:
     """For each field, count total records and records where field != null.
 
@@ -80,7 +97,12 @@ def run(org: str, sobject: str, fields: list = None) -> dict:
         total = total_result.get('totalSize', 0)
     except Exception as exc:
         logger.warning('field_usage: total count failed for %s: %s', sobject, exc)
+        if Config.SHOW_MOCK:
+            return _mock_result(sobject)
         raise
+
+    if Config.SHOW_MOCK and total == 0:
+        return _mock_result(sobject)
 
     # ── Per-field null check ──────────────────────────────────────────────────
     results = []

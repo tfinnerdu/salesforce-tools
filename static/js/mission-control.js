@@ -277,7 +277,7 @@ MC.isSfId = (v) =>
  */
 MC.sfLink = (id, objectApiName) => {
   const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance) return null;
+  if (!instance || instance === 'mock.salesforce.com') return null;
   if (!MC.isSfId(id)) return null;
   return objectApiName
     ? `https://${instance}/lightning/r/${objectApiName}/${id}/view`
@@ -296,7 +296,7 @@ MC.sfLinkTag = (id, objectApiName, label) => {
 /** Build a Salesforce object list-view URL, or null when no live instance. */
 MC.sfObjectLink = (objectApiName) => {
   const instance = document.querySelector('meta[name="sf-instance"]')?.content || '';
-  if (!instance || !objectApiName) return null;
+  if (!instance || instance === 'mock.salesforce.com' || !objectApiName) return null;
   return `https://${instance}/lightning/o/${encodeURIComponent(objectApiName)}/list`;
 };
 
@@ -2414,6 +2414,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ── Mock-mode helpers ─────────────────────────────────────────────────────────
+
+/** Return true when SHOW_MOCK=true on the server (everything is mocked). */
+MC.isMock = () => document.querySelector('meta[name="show-mock"]')?.content === 'true';
+
 // ── Popover / Tooltip init ────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2423,6 +2428,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
     new bootstrap.Tooltip(el);
+  });
+});
+
+// ── Mock-mode visual indicators ───────────────────────────────────────────────
+// When SHOW_MOCK is on, every card header gets a loud amber "MOCK DATA" chip so
+// nothing on the page can be mistaken for live data. The standards' Mock/Live
+// Signal rule: never silent, never ambiguous.
+
+function _mcMakeChip(text, title) {
+  const chip = document.createElement('span');
+  chip.className = 'mc-mock-chip ms-2';
+  chip.title = title;
+  chip.textContent = text;
+  return chip;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!MC.isMock()) return;
+  document.querySelectorAll('.card-header h5').forEach(h5 => {
+    h5.appendChild(_mcMakeChip('MOCK DATA', 'SHOW_MOCK=true — Salesforce / Conductor data is synthetic'));
   });
 });
 
