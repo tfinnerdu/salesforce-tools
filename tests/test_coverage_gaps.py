@@ -48,28 +48,15 @@ class TestAppInitDb:
 
 
 class TestAppScheduler:
-    def test_scheduler_enabled_calls_init_scheduler(self):
-        """Lines 53-55: when SCHEDULER_ENABLED=true, init_scheduler is imported and called."""
-        import importlib
-        import config as config_mod
-
-        with patch.dict(os.environ, {'SCHEDULER_ENABLED': 'true'}):
-            importlib.reload(config_mod)
-
-            # Patch scheduler.init_scheduler (the module where it lives), and
-            # patch app.Config directly so SCHEDULER_ENABLED reads as True.
-            with patch('scheduler.init_scheduler') as mock_init_sched, \
-                 patch('app.init_db'):
-                # Reload app so it re-evaluates Config.SCHEDULER_ENABLED
-                import app as app_mod
-                importlib.reload(app_mod)
-                # init_scheduler should have been called once during module reload
-                mock_init_sched.assert_called_once()
-
-        # Restore normal state
-        with patch.dict(os.environ, {'SCHEDULER_ENABLED': 'false'}):
-            importlib.reload(config_mod)
-            importlib.reload(app_mod)
+    def test_scheduler_enabled_calls_init_scheduler(self, monkeypatch):
+        """When SCHEDULER_ENABLED is true, create_app calls init_scheduler."""
+        from config import Config
+        monkeypatch.setattr(Config, 'SCHEDULER_ENABLED', True)
+        with patch('scheduler.init_scheduler') as mock_init_sched, \
+             patch('app.init_db'):
+            from app import create_app
+            create_app()
+            mock_init_sched.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

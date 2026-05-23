@@ -11,7 +11,24 @@ Manual steps and expected outcomes for verifying each feature from outside the c
 # App starts at http://localhost:5000
 ```
 
-The app requires a configured Salesforce org and a configured Conductor connection — set valid credentials in `.env` before running. There is no credential-free demo mode. Run the walkthrough against a non-production org (dev or sandbox) so the write-action steps are safe.
+The app supports two startup modes — pick one before running the walkthrough:
+
+1. **Real mode (default).** Set valid Salesforce and Conductor credentials in
+   `.env` and leave `SHOW_MOCK=false` (or unset). Every step below runs
+   against the connected org and Conductor. Use a non-production org (`dev` or
+   `sandbox`) so the destructive write steps are safe.
+2. **Demo mode (credential-free).** Set `SHOW_MOCK=true` in `.env`. The whole
+   app — every Salesforce call and every Conductor call — is swapped onto the
+   in-process `MockSalesforce` / `MockConductorClient` layer, so no real
+   credentials are required. The destructive write steps (Bulk Delete /
+   Modify / Reassign, Anonymizer live run, merge, trigger-bypass toggle,
+   log/trace-flag deletes, etc.) are all safe to run in this mode — they hit
+   the mock providers, the `MC.confirm()` modals still appear (the
+   confirmation UX is itself demoable), and synthetic counts come back. This
+   is the right mode for stakeholder demos and onboarding new contributors.
+
+When `SHOW_MOCK=true`, the navbar shows an amber `MOCK` badge and every
+card-header shows a `MOCK DATA` chip — see **Mock/Live Signal** below.
 
 ---
 
@@ -43,6 +60,29 @@ The app requires a configured Salesforce org and a configured Conductor connecti
 6. Verify org badge updates to "PROD" without page reload
 
 **Expected:** Each tab loads without 500 errors. Org switch shows toast "Switched to PROD org".
+
+---
+
+## Mock/Live Signal
+
+**Steps:**
+1. Start the app with `SHOW_MOCK=true` in `.env`. Open `http://localhost:5000`.
+2. Verify the navbar shows an amber **`MOCK`** badge (instead of the green
+   `LIVE` badge).
+3. Verify every card-header on the dashboard, SOQL, and Migration pages renders
+   a small **`MOCK DATA`** chip.
+4. Stop the app, set `SHOW_MOCK=false` (or unset it) with real credentials
+   configured, and restart.
+5. Verify the navbar now shows a green **`LIVE`** badge and no `MOCK DATA`
+   chips are present.
+6. With `SHOW_MOCK=false` and an org that has no credentials configured,
+   switch to that org and trigger any data-loading route — the app boots but
+   the route returns a clean error envelope (no silent mock fallback).
+
+**Expected:** The mode is unmissable from the navbar — amber `MOCK` when
+`SHOW_MOCK=true`, green `LIVE` otherwise. The K8s / Docker manifests pin
+`SHOW_MOCK=false` explicitly so production can never accidentally serve mock
+data.
 
 ---
 

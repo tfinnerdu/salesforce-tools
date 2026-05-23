@@ -28,6 +28,13 @@ return schema changes, contracts break immediately. The Salesforce and Conductor
 clients themselves are no longer pinned here — they are unit-tested with
 `unittest.mock` doubles (see below).
 
+> **Tests are independent of `Config.SHOW_MOCK`.** The pytest suite patches
+> `sf_provider.get_sf` and `conductor_provider.get_conductor_client` with
+> `unittest.mock` doubles per-test, so the entire suite stays deterministic
+> regardless of whether `SHOW_MOCK` is on or off. `SHOW_MOCK` is an app-level
+> flag that swaps the live providers for `MockSalesforce` / `MockConductorClient`
+> at runtime for manual UI / demo use — it has no effect on test behavior.
+
 ### 3. Compile-verified
 
 The file contains only declarations, configuration, or a single universally exempt
@@ -69,8 +76,8 @@ the Observe / Logs / Impact / Deploy tabs).
 | `config.py` | Unit-tested | `test_contracts.py` + broad use across the suite |
 | `db.py` | Unit-tested | `test_merge_history.py`, `test_query_history.py` (psycopg2 / cursor mocked) |
 | `scheduler.py` | Unit-tested | Scheduler init tests (`BackgroundScheduler` mocked) |
-| `sf_provider.py` | Unit-tested | `get_sf` exercised via `unittest.mock` doubles patched per-test; includes the no-credentials `RuntimeError` path |
-| `conductor_provider.py` | Unit-tested | `get_conductor_client` exercised via `unittest.mock` doubles patched per-test; `responses` mocks all Conductor HTTP; includes the missing-config `RuntimeError` path |
+| `sf_provider.py` | Unit-tested | `get_sf` exercised via `unittest.mock` doubles patched per-test; includes the no-credentials `RuntimeError` path. The `Config.SHOW_MOCK=true` branch (returns `MockSalesforce` for any org) exists for manual UI / demo use; tests cover the real-path branch by patching the factory. |
+| `conductor_provider.py` | Unit-tested | `get_conductor_client` exercised via `unittest.mock` doubles patched per-test; `responses` mocks all Conductor HTTP; includes the missing-config `RuntimeError` path. The `Config.SHOW_MOCK=true` branch (returns `MockConductorClient`) exists for manual UI / demo use; tests cover the real-path branch by patching the factory. |
 
 ### Routes (`routes/`)
 
@@ -255,8 +262,10 @@ the staging URL.
 ### Prerequisites
 
 - App running at `http://localhost:5000` (or staging URL)
-- A configured Salesforce org with valid credentials, and Conductor configured —
-  the app requires real Salesforce + Conductor connections to run
+- Either a configured Salesforce org with valid credentials and Conductor
+  configured in `.env`, **or** `SHOW_MOCK=true` in `.env` for a credential-free
+  demo run against the in-process `MockSalesforce` / `MockConductorClient` layer
+  (see Procedure 25 for the mock-mode verification)
 - Browser developer tools open to the Network tab
 
 ---
@@ -745,6 +754,45 @@ require ticking an acknowledgement checkbox.
 **Expected:** No gated action runs without confirmation. Cancel always aborts
 cleanly with no network call. For ack-required actions the confirm button is
 inert until the checkbox is ticked.
+
+---
+
+### Procedure 25 — `SHOW_MOCK` Demo Mode and Mock/Live Signal
+
+**Goal:** Verify the `Config.SHOW_MOCK` toggle swaps the entire app onto the
+mock layer, that the navbar signal makes the mode unmissable, and that the
+no-credentials path errors cleanly when `SHOW_MOCK=false`.
+
+1. **Demo mode boots and is loudly signalled.** Set `SHOW_MOCK=true` in `.env`
+   and start the app. Open `http://localhost:5000`.
+   - Confirm an amber **`MOCK`** badge is visible in the navbar (replacing the
+     green `LIVE` badge).
+   - Confirm every card-header on the page renders a small **`MOCK DATA`**
+     chip.
+2. **Synthetic data renders across tabs.** Navigate to Dashboard, SOQL
+   Workbench (run `SELECT Id, Name FROM Account LIMIT 5`), and Migration →
+   Readiness (click **Run Now**). Each view should populate with synthetic
+   data sourced from `MockSalesforce` / `MockConductorClient` — no
+   `RuntimeError` should appear in the server logs.
+3. **Writes are demoable in mock mode.** From Data Ops → Bulk Modify, run a
+   Preview then Execute against any object. The `MC.confirm()` dialog must
+   still appear (the confirmation UX itself is demoable), and the result alert
+   reports synthesized success/failure counts from the mock layer. No live
+   writes happen.
+4. **Live mode is the default.** Stop the app. Set `SHOW_MOCK=false` (or
+   unset). Restart with real credentials configured. Confirm the navbar shows
+   the green **`LIVE`** badge and no `MOCK DATA` chips are present.
+5. **Unconfigured-credentials path returns a clean error.** Stop the app. Set
+   `SHOW_MOCK=false` and remove the credentials for one org (leave the others
+   configured). Restart. Switch to the unconfigured org and trigger any
+   data-loading route — confirm the app boots successfully, but the route
+   returns a clear error envelope surfaced as a toast (no silent mock
+   fallback, no 500).
+
+**Expected:** The amber `MOCK` badge and per-card `MOCK DATA` chips appear in
+mock mode and disappear in live mode. With `SHOW_MOCK=false` and missing
+credentials, the app boots but data-loading routes return a clean error envelope
+rather than falling back to synthetic data.
 
 ---
 

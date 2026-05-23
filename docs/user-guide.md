@@ -99,10 +99,32 @@ Two badges in the navbar show the connection state of each data source independe
 
 | Badge | Meaning |
 |---|---|
-| `SF LIVE` (green) | Connected to Salesforce — data is live |
-| `COND LIVE` (green) | Connected to the Conductor orchestration server |
+| `LIVE` (green) | Real mode — connected to a configured Salesforce org and Conductor instance |
+| `MOCK` (amber) | Demo mode (`SHOW_MOCK=true`) — every Salesforce and Conductor call is served by the in-process mock layer, no live systems are touched |
 
-Click any badge for a detailed tooltip with the org and endpoint it is connected to. The app requires valid Salesforce and Conductor credentials to run.
+Click the badge for a tooltip with details. The `LIVE` / `MOCK` indicator is
+all-or-nothing — a single flag controls both Salesforce and Conductor.
+
+When the app is in mock mode, the navbar shows the amber **`MOCK`** badge and
+every card-header renders a small **`MOCK DATA`** chip so the mode is
+unmissable on every screen.
+
+### Demo Mode (Credential-Free)
+
+For stakeholder demos, training, and onboarding new contributors who don't yet
+have Salesforce or Conductor credentials, set `SHOW_MOCK=true` in `.env` (or in
+your shell environment) before starting the app. The whole app is swapped onto
+an in-process `MockSalesforce` / `MockConductorClient` layer — every page
+renders with realistic synthetic data, write actions are accepted by the mock
+providers (and return synthesized counts), and the `MC.confirm()` confirmation
+modals still appear so the safety UX is itself demoable.
+
+`SHOW_MOCK` is a single all-or-nothing flag: when on, both Salesforce and
+Conductor are mocked; when off (the default), the app uses live providers and
+will surface a clear error envelope if an org has no credentials configured —
+it never silently falls back to mock data. The production K8s and Docker
+manifests pin `SHOW_MOCK=false` explicitly, so production can never
+accidentally serve mock data.
 
 ### Confirmation Before Destructive Actions
 
