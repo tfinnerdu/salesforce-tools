@@ -19,6 +19,7 @@ from routes.impact import impact_bp
 from routes.admin import admin_bp
 from routes.deploy import deploy_bp
 from routes.dashboard import dashboard_bp
+from routes.scenarios import scenarios_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +45,7 @@ def create_app() -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(deploy_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(scenarios_bp)
 
     @app.before_request
     def _ensure_active_org():

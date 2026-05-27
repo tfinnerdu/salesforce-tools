@@ -25,6 +25,7 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 | SOQL | `/soql` | `soql_bp` |
 | Schema | `/schema` | `schema_bp` |
 | Data Ops | `/data-ops` | `data_ops_bp` |
+| Scenarios | `/scenarios` | `scenarios_bp` |
 | Settings | `/settings` | `settings_bp` |
 
 **API routes live UNDER the blueprint prefix**, not at `/api/v1/`. Example: `POST /migration/readiness/run` (not `/api/v1/migration/readiness/run`). The blueprint prefix IS the namespace.
@@ -66,6 +67,11 @@ services/            Business logic, one module per feature
   crosswalk_diff.py        §4 EDA→Ed Cloud field mapping diff
   join_builder.py          §14 SF↔SQL Server join query builder
   collection_manager.py    §13 Postman collection runner
+  scenarios.py             Multi-step Data Ops pipelines (delete / modify /
+                           reassign / bulk_update / tune chained together)
+  tags.py                  App-level tagging for saved artifacts (scenarios
+                           first); see tag_sync.py for the future SF-field
+                           sync scaffold
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
 static/js/           mission-control.js (MC.* namespace, vanilla JS)
@@ -89,6 +95,22 @@ python app.py
 ## Environment variables
 
 Copy `.env.example` to `.env`. Salesforce and Conductor credentials are required for the production path. For credential-free manual testing, set `SHOW_MOCK=true` — that swaps the entire app onto the mock layer (single all-or-nothing flag). The UI shows a loud amber `MOCK` badge in the navbar whenever SHOW_MOCK is on.
+
+## Scenarios + Tags
+
+The Scenarios tab saves multi-step Data Ops pipelines (each step is `delete`,
+`modify`, `reassign`, `bulk_update`, or `tune` with its params) and runs them
+in order. Each step is dispatched to the same service the Data Ops tab calls
+directly, so SHOW_MOCK, `dml_guard`, and confirmation gates behave identically.
+Steps can `stop` or `continue` on error. The Run button is gated by
+`MC.confirm` with an acknowledgement checkbox; runs are synchronous and write
+a row to `scenario_runs` with per-step results.
+
+Tags (v1) are interface-only — an app-level labeling layer for organizing
+scenarios (extendable to saved queries / collections / snapshots). Stored in
+`tags` + `artifact_tags` tables. `services/tag_sync.py` is a scaffold for the
+future ability to push tags up to a real Salesforce field (`Config.TAG_SF_FIELD`);
+its entry points raise `NotImplementedError` until wired.
 
 ## Confirmation dialogs
 

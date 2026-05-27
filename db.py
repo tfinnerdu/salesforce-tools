@@ -65,6 +65,51 @@ def init_db() -> None:
         created_at      TIMESTAMP DEFAULT NOW(),
         updated_at      TIMESTAMP DEFAULT NOW()
     );
+
+    -- Scenarios: saved multi-step Data Ops pipelines (delete / modify /
+    -- reassign / bulk_update / tune chained together).
+    CREATE TABLE IF NOT EXISTS scenarios (
+        id           SERIAL PRIMARY KEY,
+        name         VARCHAR(200) NOT NULL,
+        description  TEXT,
+        org          VARCHAR(50),
+        steps_json   JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_by   VARCHAR(100),
+        created_at   TIMESTAMP DEFAULT NOW(),
+        updated_at   TIMESTAMP DEFAULT NOW()
+    );
+
+    -- One row per scenario run; step_results captures per-step outcomes.
+    CREATE TABLE IF NOT EXISTS scenario_runs (
+        id           SERIAL PRIMARY KEY,
+        scenario_id  INTEGER REFERENCES scenarios(id) ON DELETE CASCADE,
+        org          VARCHAR(50),
+        started_at   TIMESTAMP DEFAULT NOW(),
+        finished_at  TIMESTAMP,
+        status       VARCHAR(20),
+        step_results JSONB DEFAULT '[]'::jsonb
+    );
+
+    -- App-level tags for organizing saved artifacts (scenarios first; saved
+    -- queries / collections / snapshots can be folded in later). Many-to-many
+    -- via artifact_tags so one tag can apply to many artifacts.
+    CREATE TABLE IF NOT EXISTS tags (
+        id          SERIAL PRIMARY KEY,
+        name        VARCHAR(100) NOT NULL UNIQUE,
+        color       VARCHAR(20) DEFAULT 'slate',
+        created_at  TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS artifact_tags (
+        id            SERIAL PRIMARY KEY,
+        tag_id        INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+        artifact_type VARCHAR(50) NOT NULL,  -- 'scenario' | 'saved_query' | 'collection' | 'snapshot'
+        artifact_id   INTEGER NOT NULL,
+        created_at    TIMESTAMP DEFAULT NOW(),
+        UNIQUE (tag_id, artifact_type, artifact_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_artifact_tags_lookup
+        ON artifact_tags (artifact_type, artifact_id);
     """
     try:
         with get_cursor() as cur:

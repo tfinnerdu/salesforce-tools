@@ -42,3 +42,8 @@ class Config:
     # Salesforce SOAP login rejects API versions above ~59.0; REST calls use SF_API_VERSION.
     SF_SOAP_AUTH_VERSION = os.environ.get('SF_SOAP_AUTH_VERSION', '57.0')
     PII_SERVICE_URL = os.environ.get('PII_SERVICE_URL', '')
+    # Salesforce field used by the (future) Tag Sync — when set, app-level
+    # tags applied to records can be pushed up to this field on the target
+    # SObject. Multi-select picklist or text. Leave blank to keep tags
+    # interface-only. See services/tag_sync.py.
+    TAG_SF_FIELD = os.environ.get('TAG_SF_FIELD', '')

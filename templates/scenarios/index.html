@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}Scenarios - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Scenarios
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Scenarios"
+            data-bs-content="Save a chain of Data Ops steps (delete, modify, reassign, bulk update, tune) and run them as one pipeline. Each step uses the same service the Data Ops tab uses directly — same SHOW_MOCK, same confirmation gate, same audit trail.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+    <div class="ms-auto d-flex gap-2">
+      <a href="/scenarios/new" class="btn btn-doane btn-sm">+ New Scenario</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- ── Tag filter rail ─────────────────────────────────────────────── -->
+    <div class="col-md-3">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold d-flex align-items-center justify-content-between"
+             style="color:var(--doane-slate)">
+          <span>Tags</span>
+          <button class="btn btn-outline-secondary btn-sm" id="btnNewTag">+ New</button>
+        </div>
+        <div class="card-body p-2">
+          <div id="tagFilterList" class="d-flex flex-column gap-1">
+            <span class="text-muted small">Loading…</span>
+          </div>
+          <hr class="my-2">
+          <a href="#" id="tagFilterClear" class="text-muted small">Show all scenarios</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Scenario list ───────────────────────────────────────────────── -->
+    <div class="col-md-9">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Saved scenarios
+        </div>
+        <div class="card-body p-0">
+          <div id="scenLoading" class="text-center py-4">
+            <div class="spinner-border text-warning" role="status"></div>
+            <div class="text-muted small mt-2">Loading scenarios…</div>
+          </div>
+          <div id="scenEmpty" class="text-center py-4 text-muted d-none">
+            No scenarios yet — click <strong>+ New Scenario</strong> to build one.
+          </div>
+          <table id="scenTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Steps</th>
+                <th>Tags</th>
+                <th class="text-nowrap">Last updated</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="scenTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tag attach popover (template, cloned per row) ─────────────────────── -->
+<template id="tplTagPicker">
+  <div class="dropdown-menu show p-2" style="min-width: 220px;">
+    <div class="d-flex flex-column gap-1" data-role="picker-list"></div>
+  </div>
+</template>
+
+<!-- ── New Tag modal ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="newTagModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New Tag</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Name</label>
+          <input id="newTagName" type="text" class="form-control" maxlength="100" placeholder="e.g. weekly-cleanup">
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Color</label>
+          <select id="newTagColor" class="form-select form-select-sm">
+            <option value="slate">slate</option>
+            <option value="orange">orange</option>
+            <option value="amber">amber</option>
+            <option value="green">green</option>
+            <option value="blue">blue</option>
+            <option value="purple">purple</option>
+            <option value="red">red</option>
+            <option value="muted">muted</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-doane" id="btnSaveTag">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-scenarios-snippet.js') }}"></script>
+{% endblock %}
