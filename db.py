@@ -110,6 +110,96 @@ def init_db() -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_artifact_tags_lookup
         ON artifact_tags (artifact_type, artifact_id);
+
+    -- ── Source → Salesforce Key Maps ──────────────────────────────────────
+    -- A key_map is a reusable spec for transforming source rows (from a SQL
+    -- result or a JSON document) into Salesforce records of one SObject.
+    -- PTATs are the first consumer but the model is deliberately generic.
+    --
+    -- Shape:
+    --   key_maps                — one row per saved map (Source → target SObject).
+    --   key_map_fk_lookups      — for each FK on the target, how to resolve it
+    --                             from a source column (SObject + field to match
+    --                             SIS_ID__c / Ethos_Guid__c / etc.).
+    --   key_map_families        — a named bundle of variants. Routing rule
+    --                             decides which family applies per source row.
+    --   key_map_variants        — one row per variant; `overlay_json` is the
+    --                             set of target-field values that variant
+    --                             contributes on top of the resolved FK base
+    --                             (e.g. {APTV_Id: "0PT...", Pre_Id: "0PR..."}).
+    --   key_map_runs            — preview-only run history with the expanded
+    --                             output rows + per-row resolution notes.
+    CREATE TABLE IF NOT EXISTS key_maps (
+        id              SERIAL PRIMARY KEY,
+        name            VARCHAR(200) NOT NULL UNIQUE,
+        description     TEXT,
+        target_sobject  VARCHAR(100) NOT NULL,
+        created_by      VARCHAR(100),
+        created_at      TIMESTAMP DEFAULT NOW(),
+        updated_at      TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS key_map_fk_lookups (
+        id              SERIAL PRIMARY KEY,
+        key_map_id      INTEGER NOT NULL REFERENCES key_maps(id) ON DELETE CASCADE,
+        source_column   VARCHAR(100) NOT NULL,
+        target_field    VARCHAR(100) NOT NULL,         -- e.g. LearningProgramId
+        lookup_sobject  VARCHAR(100) NOT NULL,         -- e.g. LearningProgram
+        lookup_field    VARCHAR(100) NOT NULL DEFAULT 'SIS_ID__c',
+        position        INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_key_map_fk_lookups_key_map
+        ON key_map_fk_lookups (key_map_id);
+
+    CREATE TABLE IF NOT EXISTS key_map_families (
+        id              SERIAL PRIMARY KEY,
+        key_map_id      INTEGER NOT NULL REFERENCES key_maps(id) ON DELETE CASCADE,
+        name            VARCHAR(200) NOT NULL,
+        -- routing_json describes when this family applies to a source row.
+        -- Shape: {"match": [{"source_column": "ACPG_ACAD_LEVEL", "equals": "UG"}, ...]}
+        -- Empty/null = default family (used when no other family matches).
+        routing_json    JSONB DEFAULT '{}'::jsonb,
+        position        INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (key_map_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_key_map_families_key_map
+        ON key_map_families (key_map_id);
+
+    CREATE TABLE IF NOT EXISTS key_map_variants (
+        id              SERIAL PRIMARY KEY,
+        family_id       INTEGER NOT NULL REFERENCES key_map_families(id) ON DELETE CASCADE,
+        name            VARCHAR(200) NOT NULL,
+        -- overlay_json is {target_field: literal_value, ...} applied on top of
+        -- the resolved FK base row. E.g. for a PTAT Readmit variant:
+        --   {"ActionPlanTemplateVersionId": "0PR...",
+        --    "Pre_decision_Requirements_Action_Plan__c": "0PR...",
+        --    "Post_admit_Requirements_Action_Plan__c":  "0PR..."}
+        overlay_json    JSONB NOT NULL DEFAULT '{}'::jsonb,
+        -- applies_when is an optional per-variant filter (same shape as
+        -- routing_json.match). Empty = blanket — applies to every source row
+        -- in the family. Reserved for future selective fanout.
+        applies_when    JSONB DEFAULT '{}'::jsonb,
+        position        INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (family_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_key_map_variants_family
+        ON key_map_variants (family_id);
+
+    CREATE TABLE IF NOT EXISTS key_map_runs (
+        id              SERIAL PRIMARY KEY,
+        key_map_id      INTEGER REFERENCES key_maps(id) ON DELETE CASCADE,
+        org             VARCHAR(50),
+        started_at      TIMESTAMP DEFAULT NOW(),
+        finished_at     TIMESTAMP,
+        status          VARCHAR(20),                   -- pending | success | partial | failed
+        source_count    INTEGER DEFAULT 0,
+        output_count    INTEGER DEFAULT 0,
+        unresolved_fks  JSONB DEFAULT '[]'::jsonb,     -- list of {row_idx, source_column, value}
+        output_rows     JSONB DEFAULT '[]'::jsonb,     -- the expanded preview rows
+        summary         JSONB DEFAULT '{}'::jsonb      -- counts, family/variant breakdown
+    );
+    CREATE INDEX IF NOT EXISTS idx_key_map_runs_key_map
+        ON key_map_runs (key_map_id);
     """
     try:
         with get_cursor() as cur:
