@@ -71,7 +71,7 @@ def list_scenarios(org: Optional[str] = None) -> list:
         return []
     sql = (
         'SELECT id, name, description, org, steps_json, created_by, '
-        '       created_at, updated_at '
+        '       created_at, updated_at, schedule_approved '
         'FROM scenarios '
     )
     params: list = []
@@ -92,7 +92,7 @@ def get_scenario(scenario_id: int) -> Optional[dict]:
     with get_cursor() as cur:
         cur.execute(
             'SELECT id, name, description, org, steps_json, created_by, '
-            '       created_at, updated_at '
+            '       created_at, updated_at, schedule_approved '
             'FROM scenarios WHERE id = %s',
             (scenario_id,),
         )
@@ -113,7 +113,7 @@ def create_scenario(name: str, description: str, org: str, steps: list,
             'INSERT INTO scenarios (name, description, org, steps_json, created_by) '
             'VALUES (%s, %s, %s, %s, %s) '
             'RETURNING id, name, description, org, steps_json, created_by, '
-            '          created_at, updated_at',
+            '          created_at, updated_at, schedule_approved',
             (name.strip(), description, org, json.dumps(steps), created_by),
         )
         row = cur.fetchone()
@@ -134,7 +134,7 @@ def update_scenario(scenario_id: int, name: str, description: str,
             'SET name = %s, description = %s, steps_json = %s, updated_at = NOW() '
             'WHERE id = %s '
             'RETURNING id, name, description, org, steps_json, created_by, '
-            '          created_at, updated_at',
+            '          created_at, updated_at, schedule_approved',
             (name.strip(), description, json.dumps(steps), scenario_id),
         )
         row = cur.fetchone()
@@ -148,6 +148,27 @@ def delete_scenario(scenario_id: int) -> bool:
     with get_cursor() as cur:
         cur.execute('DELETE FROM scenarios WHERE id = %s', (scenario_id,))
         return cur.rowcount > 0
+
+
+def set_schedule_approved(scenario_id: int, approved: bool) -> Optional[dict]:
+    """Flip the manual sign-off that gates scheduled (Argo) runs.
+
+    Approval is deliberately a human action — a scenario can only be triggered
+    by the token-authed scheduled-run endpoint once someone has set this True
+    after testing the scenario interactively.
+    """
+    if not db_available():
+        raise RuntimeError('Scenarios require a database connection.')
+    with get_cursor() as cur:
+        cur.execute(
+            'UPDATE scenarios SET schedule_approved = %s, updated_at = NOW() '
+            'WHERE id = %s '
+            'RETURNING id, name, description, org, steps_json, created_by, '
+            '          created_at, updated_at, schedule_approved',
+            (bool(approved), scenario_id),
+        )
+        row = cur.fetchone()
+    return _serialize(row) if row else None
 
 
 # ── Run history ──────────────────────────────────────────────────────────────

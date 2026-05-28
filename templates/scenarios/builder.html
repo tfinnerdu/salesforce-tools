@@ -42,6 +42,26 @@
           </div>
         </div>
       </div>
+
+      <!-- Scheduling (Argo) -->
+      <div class="card shadow-sm mt-3" id="scheduleCard">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Scheduling
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-content="Approve a scenario after testing it, then generate an Argo CronWorkflow to run it on a schedule. Argo POSTs the token-authed scheduled-run endpoint; results land in the Argo logs.">ⓘ</span>
+        </div>
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="schedApproved">
+            <label class="form-check-label fw-semibold" for="schedApproved">
+              Approved for scheduled runs</label>
+          </div>
+          <label class="form-label fw-semibold small mb-1">Cron schedule</label>
+          <input id="schedCron" class="form-control form-control-sm mb-1" placeholder="0 6 * * 0">
+          <div class="form-text mb-2">5 fields. e.g. <code>0 6 * * 0</code> = 6am every Sunday.</div>
+          <button id="btnGenManifest" class="btn btn-outline-secondary btn-sm">Generate Argo CronWorkflow</button>
+        </div>
+      </div>
     </div>
 
     <!-- ── Steps editor ────────────────────────────────────────────────── -->
@@ -120,6 +140,28 @@
     </div>
   </div>
 </template>
+
+<!-- Argo manifest modal -->
+<div class="modal fade" id="manifestModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Argo CronWorkflow</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Commit this to your manifests repo. The scheduler
+          token must exist in the app's secret under key <code>scheduler-token</code>
+          (and <code>SCHEDULER_TOKEN</code> must be set on the app).</p>
+        <textarea id="manifestText" class="form-control font-monospace" rows="18" readonly></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-doane" id="btnCopyManifest">Copy</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

@@ -131,10 +131,24 @@ is PTAT (`ProgramTermApplnTimeline`) but the model is generic.
 **Preview-only** — `resolve_and_expand` reads from SF to resolve FKs but never
 writes; the run returns the would-be-inserted rows + an unresolved-FK list,
 exportable as CSV. Wired as a `key_map_expand` Scenario step so a scheduled
-Argo run can trigger it. Live SQL uses the shared `services.sqlserver`
+Argo run can trigger it (see Scheduled runs below). Live SQL uses the shared `services.sqlserver`
 connection (MS ODBC driver, not Devart). FK resolution batches distinct values
 into one `IN()` query per (sobject, field). SHOW_MOCK synthesises stable
 `MOCK_<sobject>_<value>` ids so previews are demoable without touching SF.
+
+## Scheduled runs (Argo)
+
+A scenario can be promoted to scheduled execution by flipping `schedule_approved`
+(a manual sign-off in the builder; gated by `MC.confirm` when turning on). The
+app does **not** talk to the Argo API — the builder generates an Argo
+`CronWorkflow` YAML (`services/argo.py`) you commit to your manifests repo. On
+its schedule, Argo POSTs `/scenarios/<id>/scheduled-run` with the
+`X-MC-Scheduler-Token` header; the app validates it against
+`Config.SCHEDULER_TOKEN` (constant-time), refuses unless `schedule_approved` is
+set, runs the scenario with its stored org, and logs one structured summary
+line to stdout (the Argo-visible notification). A non-clean run returns HTTP 500
+so `curl -f` fails and Argo flags the workflow. Blank `SCHEDULER_TOKEN` disables
+scheduled runs entirely.
 
 ## Confirmation dialogs
 

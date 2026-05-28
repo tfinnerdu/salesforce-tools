@@ -215,6 +215,12 @@ MC.scenarios = {
     document.getElementById('btnSaveScenario')?.addEventListener('click', () => this._save());
     document.getElementById('btnRunScenario')?.addEventListener('click', () => this._run());
     document.getElementById('btnManageTags')?.addEventListener('click', () => this._manageTags());
+    document.getElementById('schedApproved')?.addEventListener('change', (e) => this._toggleApproved(e));
+    document.getElementById('btnGenManifest')?.addEventListener('click', () => this._genManifest());
+    document.getElementById('btnCopyManifest')?.addEventListener('click', () => {
+      const t = document.getElementById('manifestText');
+      MC.copyToClipboard(t.value);
+    });
 
     if (this._scenarioId) {
       try {
@@ -224,6 +230,8 @@ MC.scenarios = {
         document.getElementById('scenDescription').value = s.description || '';
         this._steps = s.steps || [];
         this._scenarioTags = s.tags || [];
+        const appr = document.getElementById('schedApproved');
+        if (appr) appr.checked = !!s.schedule_approved;
         document.getElementById('btnRunScenario').disabled = false;
       } catch (err) {
         MC.showToast(`Failed to load scenario: ${err.message}`, 'danger');
@@ -442,6 +450,50 @@ MC.scenarios = {
         <td class="text-muted small">${MC._escHtml(detail).slice(0, 300)}</td>
       </tr>`;
     }).join('');
+  },
+
+  // ── Scheduling (Argo) ──────────────────────────────────────────────────
+
+  async _toggleApproved(e) {
+    const box = e.target;
+    if (!this._scenarioId) {
+      MC.showToast('Save the scenario before approving.', 'info');
+      box.checked = false; return;
+    }
+    // Confirm only when turning approval ON (unattended writes).
+    if (box.checked) {
+      const ok = await MC.confirm({
+        title: 'Approve for scheduled runs',
+        body: 'Approving lets this scenario run unattended via Argo on a schedule — '
+            + 'it performs its writes with no one watching. Only approve after '
+            + 'testing it interactively.',
+        confirmText: 'Approve',
+        requireAck: true,
+      });
+      if (!ok) { box.checked = false; return; }
+    }
+    try {
+      await MC.api(`/scenarios/${this._scenarioId}/approve`, 'POST',
+                   {approved: box.checked});
+      MC.showToast(box.checked ? 'Approved for scheduled runs' : 'Approval removed',
+                   box.checked ? 'success' : 'info');
+    } catch (err) {
+      MC.showToast(err.message, 'danger');
+      box.checked = !box.checked;  // revert on failure
+    }
+  },
+
+  async _genManifest() {
+    if (!this._scenarioId) { MC.showToast('Save the scenario first.', 'info'); return; }
+    const schedule = document.getElementById('schedCron').value.trim();
+    try {
+      const data = await MC.api(`/scenarios/${this._scenarioId}/argo-manifest`,
+                                'POST', {schedule});
+      document.getElementById('manifestText').value = data.manifest;
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('manifestModal')).show();
+    } catch (err) {
+      MC.showToast(err.message, 'danger');
+    }
   },
 };
 

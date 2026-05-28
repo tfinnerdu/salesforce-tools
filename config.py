@@ -26,6 +26,13 @@ class Config:
     # credentials are unavailable. All-or-nothing: there is no per-system
     # mock toggle. Default false; the production path requires real creds.
     SHOW_MOCK = os.environ.get('SHOW_MOCK', 'false').lower() == 'true'
+    # Shared secret that Argo (or any scheduler) must present on the
+    # /scenarios/<id>/scheduled-run endpoint. Blank = scheduled runs disabled.
+    SCHEDULER_TOKEN = os.environ.get('SCHEDULER_TOKEN', '')
+    # Externally-reachable base URL, used when generating Argo CronWorkflow
+    # manifests so the curl target is correct. Defaults to the prod ingress.
+    PUBLIC_BASE_URL = os.environ.get(
+        'PUBLIC_BASE_URL', 'https://du-int.doane.edu/prod/sf-mission-control')
     DEFAULT_ORG = os.environ.get('DEFAULT_ORG', 'dev')
     SCHEDULER_ENABLED = os.environ.get('SCHEDULER_ENABLED', 'false').lower() == 'true'
     BACKUP_ENABLED = os.environ.get('BACKUP_ENABLED', 'false').lower() == 'true'

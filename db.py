@@ -200,6 +200,11 @@ def init_db() -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_key_map_runs_key_map
         ON key_map_runs (key_map_id);
+
+    -- Manual sign-off that gates scheduled (Argo) runs. Added via ALTER so
+    -- existing scenarios tables pick it up (init_db only CREATEs IF NOT EXISTS).
+    ALTER TABLE scenarios
+        ADD COLUMN IF NOT EXISTS schedule_approved BOOLEAN NOT NULL DEFAULT FALSE;
     """
     try:
         with get_cursor() as cur:

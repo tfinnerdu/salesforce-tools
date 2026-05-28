@@ -32,6 +32,11 @@ spec:
               value: "false"
             - name: DEFAULT_ORG
               value: "prod"
+            - name: SCHEDULER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sf-mission-control-secrets
+                  key: scheduler-token
             - name: SF_DEV_USERNAME
               valueFrom:
                 secretKeyRef:
