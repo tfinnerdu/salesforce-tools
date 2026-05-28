@@ -23,15 +23,16 @@ logger = logging.getLogger(__name__)
 # function_name, required_params, optional_params) tuple — the dispatcher uses
 # this both to validate scenarios on save and to execute them.
 _VALID_STEP_TYPES = {
-    'delete', 'modify', 'reassign', 'bulk_update', 'tune',
+    'delete', 'modify', 'reassign', 'bulk_update', 'tune', 'key_map_expand',
 }
 
 _REQUIRED_PARAMS = {
-    'delete':      {'object', 'where_clause'},
-    'modify':      {'object', 'where_clause', 'field', 'value'},
-    'reassign':    {'object', 'where_clause', 'new_owner_id'},
-    'bulk_update': {'object', 'where_clause', 'field', 'value'},
-    'tune':        {'object', 'where_clause', 'field_rules'},
+    'delete':         {'object', 'where_clause'},
+    'modify':         {'object', 'where_clause', 'field', 'value'},
+    'reassign':       {'object', 'where_clause', 'new_owner_id'},
+    'bulk_update':    {'object', 'where_clause', 'field', 'value'},
+    'tune':           {'object', 'where_clause', 'field_rules'},
+    'key_map_expand': {'key_map_id', 'source'},
 }
 
 
@@ -262,6 +263,19 @@ def _dispatch_step(step_type: str, org: str, params: dict) -> dict:
             org, params['object'], params['where_clause'],
             params['field_rules'], bypass_triggers=bypass,
         )
+    if step_type == 'key_map_expand':
+        # Preview-only: ingest source rows, expand them through the key_map,
+        # persist the full result to key_map_runs, and return just the summary
+        # so the scenario_runs row stays small. (No Salesforce writes — the
+        # upsert phase is deliberately out of scope until the external-ID
+        # field exists on the target SObject.)
+        from services import ingest, key_map
+        source_rows = ingest.load_source_rows(params['source'], org)
+        result = key_map.resolve_and_expand(params['key_map_id'], source_rows, org)
+        run_id = key_map.save_run(params['key_map_id'], org, result)
+        summary = dict(result['summary'])
+        summary['key_map_run_id'] = run_id
+        return summary
     raise ValueError(f'Unknown step type: {step_type!r}')
 
 

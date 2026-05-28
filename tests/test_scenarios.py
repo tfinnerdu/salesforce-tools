@@ -5,6 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import services
+# Import the dispatch-target submodules so they're attributes on the `services`
+# package for monkeypatch.setattr regardless of test run order.
+import services.bulk_ops          # noqa: F401
+import services.bulk_dml          # noqa: F401
+import services.data_tuner        # noqa: F401
+import services.ingest            # noqa: F401
+import services.key_map           # noqa: F401
 from services import scenarios as svc
 
 
@@ -317,3 +324,66 @@ class TestDispatchPerStepType:
         svc.run_scenario(sid, 'dev')
         args, kwargs = fake_mod.apply_tune.call_args
         assert args[3] == rules
+
+
+# ── key_map_expand step type ─────────────────────────────────────────────────
+
+class TestKeyMapExpandStep:
+    def test_validate_requires_key_map_id_and_source(self):
+        with pytest.raises(ValueError, match='missing required params'):
+            svc.validate_steps([{'type': 'key_map_expand', 'params': {'key_map_id': 1}}])
+
+    def test_validate_accepts_complete_step(self):
+        steps = [{'type': 'key_map_expand',
+                  'params': {'key_map_id': 1, 'source': {'mode': 'inline', 'rows': []}}}]
+        assert svc.validate_steps(steps) is steps
+
+    def test_run_dispatches_to_ingest_and_key_map(self, fake_db, monkeypatch):
+        sid = svc.create_scenario('ptat', '', 'dev', [{
+            'type': 'key_map_expand',
+            'params': {
+                'key_map_id': 7,
+                'source': {'mode': 'inline', 'rows': [{'TERMS_ID': '23/AUTM'}]},
+            },
+        }])['id']
+
+        fake_ingest = MagicMock()
+        fake_ingest.load_source_rows.return_value = [{'TERMS_ID': '23/AUTM'}]
+        fake_key_map = MagicMock()
+        fake_key_map.resolve_and_expand.return_value = {
+            'output_rows': [{'AcademicTermId': 'T1'}],
+            'unresolved_fks': [],
+            'summary': {'source_count': 1, 'output_count': 1},
+        }
+        fake_key_map.save_run.return_value = 42
+        monkeypatch.setattr(services, 'ingest', fake_ingest)
+        monkeypatch.setattr(services, 'key_map', fake_key_map)
+
+        result = svc.run_scenario(sid, 'dev')
+
+        assert result['status'] == 'success'
+        step = result['step_results'][0]
+        assert step['status'] == 'success'
+        # The step returns the summary, not the full (potentially huge) rows.
+        assert step['detail']['output_count'] == 1
+        assert step['detail']['key_map_run_id'] == 42
+        assert 'output_rows' not in step['detail']
+        # Ingest got the source spec; key_map got the ingested rows + run saved.
+        fake_ingest.load_source_rows.assert_called_once_with(
+            {'mode': 'inline', 'rows': [{'TERMS_ID': '23/AUTM'}]}, 'dev')
+        fake_key_map.resolve_and_expand.assert_called_once_with(
+            7, [{'TERMS_ID': '23/AUTM'}], 'dev')
+        fake_key_map.save_run.assert_called_once()
+
+    def test_run_records_failure_when_ingest_raises(self, fake_db, monkeypatch):
+        sid = svc.create_scenario('ptat', '', 'dev', [{
+            'type': 'key_map_expand',
+            'params': {'key_map_id': 7, 'source': {'mode': 'sql', 'query': 'x'}},
+        }])['id']
+        fake_ingest = MagicMock()
+        fake_ingest.load_source_rows.side_effect = ValueError("source mode 'sql' is not available yet")
+        monkeypatch.setattr(services, 'ingest', fake_ingest)
+
+        result = svc.run_scenario(sid, 'dev')
+        assert result['status'] == 'failed'
+        assert 'not available yet' in result['step_results'][0]['detail']['error']
