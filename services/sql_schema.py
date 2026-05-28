@@ -9,8 +9,15 @@ import logging
 from datetime import datetime, timezone
 
 from config import Config
+from services import sqlserver
 
 logger = logging.getLogger(__name__)
+
+# Connection-string helpers live in services.sqlserver now (shared with the
+# key-map SQL ingester). Aliased here so existing call sites + tests keep
+# working against sql_schema.* while the implementation stays single-sourced.
+_normalize_keywords = sqlserver.normalize_keywords
+_ensure_driver = sqlserver.ensure_driver
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS sql_schema_cache (
@@ -130,47 +137,6 @@ def _friendly_odbc_error(exc: Exception) -> str:
     if 'timeout' in text.lower() or 'HYT00' in text or 'HYT01' in text:
         return f'SQL Server did not respond before the connection timed out. {tail}'
     return f'SQL Server refresh failed: {text}. {tail}'
-
-
-def _normalize_keywords(conn_str: str) -> str:
-    """Translate common .NET-style connection string keywords to ODBC-compatible ones.
-
-    ADO.NET uses 'Data Source', 'User ID', 'Password', 'Initial Catalog';
-    pyodbc/ODBC Driver expects 'SERVER', 'UID', 'PWD', 'DATABASE'.
-    """
-    import re
-    pairs = [
-        (r'(?i)\bData\s+Source\s*=', 'SERVER='),
-        (r'(?i)\bInitial\s+Catalog\s*=', 'DATABASE='),
-        (r'(?i)\bUser\s+ID\s*=', 'UID='),
-        (r'(?i)\bUser\s+Id\s*=', 'UID='),
-        (r'(?i)\bPassword\s*=', 'PWD='),
-    ]
-    for pattern, replacement in pairs:
-        conn_str = re.sub(pattern, replacement, conn_str)
-    return conn_str
-
-
-def _ensure_driver(conn_str: str) -> str:
-    """Prepend an installed SQL Server ODBC driver when the connection string
-    names neither a DRIVER nor a DSN, and normalise .NET-style keywords.
-
-    A generic 'server=...;database=...;user id=...;password=...' string omits
-    the driver, so pyodbc fails with IM002. Most admins write the string this
-    way, so detect an installed driver and prepend it rather than failing.
-    """
-    import pyodbc  # noqa: lazy — only needed for a live refresh
-    conn_str = _normalize_keywords(conn_str)
-    lowered = conn_str.lower()
-    if 'driver=' in lowered or 'dsn=' in lowered:
-        return conn_str
-    sql_drivers = [d for d in pyodbc.drivers() if 'sql server' in d.lower()]
-    if not sql_drivers:
-        return conn_str  # none installed — let pyodbc raise its own IM002
-    # Prefer the highest-numbered "ODBC Driver NN for SQL Server".
-    odbc = sorted((d for d in sql_drivers if 'odbc driver' in d.lower()), reverse=True)
-    driver = odbc[0] if odbc else sql_drivers[0]
-    return f'DRIVER={{{driver}}};{conn_str}'
 
 
 def refresh_schema() -> dict:

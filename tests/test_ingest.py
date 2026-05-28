@@ -93,7 +93,52 @@ class TestModeValidation:
         with pytest.raises(ValueError, match='Unknown source mode'):
             ingest.load_source_rows({'mode': 'telepathy'})
 
-    @pytest.mark.parametrize('mode', ['csv', 'sql'])
-    def test_planned_modes_raise_clear_not_yet(self, mode):
-        with pytest.raises(ValueError, match='not available yet'):
-            ingest.load_source_rows({'mode': mode, 'data': 'x', 'query': 'x'})
+
+# ── csv ──────────────────────────────────────────────────────────────────────
+
+class TestCsvMode:
+    def test_comma_delimited(self):
+        text = 'id,name\n1,Ada\n2,Babbage'
+        rows = ingest.load_source_rows({'mode': 'csv', 'data': text})
+        assert rows == [{'id': '1', 'name': 'Ada'}, {'id': '2', 'name': 'Babbage'}]
+
+    def test_tab_delimited(self):
+        text = 'id\tname\n1\tAda'
+        rows = ingest.load_source_rows({'mode': 'csv', 'data': text})
+        assert rows == [{'id': '1', 'name': 'Ada'}]
+
+    def test_trims_whitespace(self):
+        text = 'id, name\n1, Ada '
+        rows = ingest.load_source_rows({'mode': 'csv', 'data': text})
+        assert rows[0]['name'] == 'Ada'
+
+    def test_empty_raises(self):
+        with pytest.raises(ValueError, match='CSV/TSV text'):
+            ingest.load_source_rows({'mode': 'csv', 'data': '   '})
+
+
+# ── sql ──────────────────────────────────────────────────────────────────────
+
+class TestSqlMode:
+    def test_runs_read_only_query(self, monkeypatch):
+        from services import sqlserver
+        calls = {}
+        def _fake_run(query, max_rows):
+            calls['query'] = query
+            calls['max_rows'] = max_rows
+            return [{'TERMS_ID': '23/AUTM'}]
+        monkeypatch.setattr(sqlserver, 'run_query', _fake_run)
+        rows = ingest.load_source_rows(
+            {'mode': 'sql', 'query': 'SELECT TERMS_ID FROM dbo.PTAT', 'max_rows': 500})
+        assert rows == [{'TERMS_ID': '23/AUTM'}]
+        assert calls['max_rows'] == 500
+
+    def test_requires_query(self):
+        with pytest.raises(ValueError, match='source.query is required'):
+            ingest.load_source_rows({'mode': 'sql'})
+
+    def test_rejects_write_query(self, monkeypatch):
+        # assert_read_only runs before any connection attempt.
+        with pytest.raises(ValueError, match='Only SELECT'):
+            ingest.load_source_rows(
+                {'mode': 'sql', 'query': 'DELETE FROM dbo.PTAT'})

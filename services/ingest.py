@@ -6,22 +6,22 @@ came from. This module is the seam that produces those rows from a declarative
 
     {"mode": "inline", "rows": [{...}, ...]}
     {"mode": "json",   "data": "<json string>", "records_path": "applicants"}
+    {"mode": "csv",    "data": "<csv or tsv text>"}
+    {"mode": "sql",    "query": "SELECT ...", "max_rows": 100000}
 
-Phase 3 will add:
-    {"mode": "csv", "data": "<csv text>"}                      (paste/upload)
-    {"mode": "sql", "query": "SELECT ...", "connection": ...}  (live SQL Server)
-
-Until then, those modes raise a clear "not yet available" error rather than
-pretending to work.
+The ``sql`` mode runs a read-only query against the Colleague SQL Server via
+the shared services.sqlserver connection (the same one the Join Builder uses —
+standard MS ODBC driver, no Devart).
 """
+import csv as _csv
+import io
 import json
 import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_MODES = {'inline', 'json'}
-PLANNED_MODES = {'csv', 'sql'}
+SUPPORTED_MODES = {'inline', 'json', 'csv', 'sql'}
 
 
 def load_source_rows(source_spec: dict, org: str = 'dev') -> list:
@@ -44,11 +44,11 @@ def load_source_rows(source_spec: dict, org: str = 'dev') -> list:
     if mode == 'json':
         return _load_json(source_spec)
 
-    if mode in PLANNED_MODES:
-        raise ValueError(
-            f"source mode '{mode}' is not available yet (planned for a later "
-            f"phase). Use 'inline' or 'json' for now."
-        )
+    if mode == 'csv':
+        return _load_csv(source_spec)
+
+    if mode == 'sql':
+        return _load_sql(source_spec)
 
     raise ValueError(
         f"Unknown source mode '{mode}' — must be one of {sorted(SUPPORTED_MODES)}"
@@ -101,6 +101,38 @@ def _find_records(parsed: Any, records_path: str = None) -> list:
             return list_values[0]
         return [parsed]   # single record
     raise ValueError('JSON must be an object or an array of objects')
+
+
+def _load_csv(source_spec: dict) -> list:
+    """Parse pasted/uploaded CSV or TSV text into rows. The first line is the
+    header. Delimiter is sniffed (comma vs tab); falls back to comma."""
+    text = source_spec.get('data')
+    if not text or not str(text).strip():
+        raise ValueError('source.data (CSV/TSV text) is required for mode "csv"')
+    text = str(text)
+    sample = text[:4096]
+    try:
+        dialect = _csv.Sniffer().sniff(sample, delimiters=',\t;|')
+    except _csv.Error:
+        dialect = _csv.excel  # default comma dialect
+    reader = _csv.DictReader(io.StringIO(text), dialect=dialect)
+    rows = []
+    for row in reader:
+        # DictReader keys/values can carry surrounding whitespace; trim both.
+        rows.append({(k or '').strip(): (v.strip() if isinstance(v, str) else v)
+                     for k, v in row.items() if k is not None})
+    return rows
+
+
+def _load_sql(source_spec: dict) -> list:
+    """Run a read-only SELECT against the Colleague SQL Server and return rows."""
+    query = source_spec.get('query')
+    if not query or not str(query).strip():
+        raise ValueError('source.query is required for mode "sql"')
+    from services import sqlserver
+    sqlserver.assert_read_only(query)
+    max_rows = int(source_spec.get('max_rows') or sqlserver.DEFAULT_MAX_ROWS)
+    return sqlserver.run_query(query, max_rows=max_rows)
 
 
 def _flatten(record: Any, prefix: str = '') -> dict:
