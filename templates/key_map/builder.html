@@ -97,11 +97,7 @@
       <thead class="table-light"><tr><th>Variant</th><th>Overlay</th><th>Applies when</th><th></th></tr></thead>
       <tbody class="mc-variant-body"></tbody>
     </table>
-    <div class="row g-1 align-items-end">
-      <div class="col-3"><input class="form-control form-control-sm mc-var-name" placeholder="variant name"></div>
-      <div class="col"><input class="form-control form-control-sm mc-var-overlay" placeholder='overlay JSON e.g. {"ActionPlanTemplateVersionId":"0PR..."}'></div>
-      <div class="col-auto"><button class="btn btn-outline-secondary btn-sm mc-var-add">+ Variant</button></div>
-    </div>
+    <button class="btn btn-outline-secondary btn-sm mc-var-add">+ Variant</button>
   </div>
 </template>
 
@@ -123,6 +119,66 @@
     </div>
   </div>
 </div>
+
+<!-- Add variant modal -->
+<div class="modal fade" id="variantModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add variant <span id="variantFamilyName" class="text-muted fw-normal"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Variant name</label>
+          <input id="variantName" class="form-control" placeholder="e.g. International Transfer">
+        </div>
+
+        <label class="form-label fw-semibold mb-1">Overlay
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-content="Target fields this variant sets on top of the resolved-FK base. Each row is a target field + the literal Salesforce value (e.g. an ActionPlanTemplateVersion Id). Partial overlays are fine — list only the fields this variant changes.">ⓘ</span>
+        </label>
+        <div id="overlayRows" class="mb-1"></div>
+        <button class="btn btn-outline-secondary btn-sm mb-3" id="btnAddOverlayRow">+ Field</button>
+
+        <label class="form-label fw-semibold mb-1 d-block">Applies to</label>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="appliesMode" id="appliesAll" value="all" checked>
+          <label class="form-check-label" for="appliesAll">Every row in this family</label>
+        </div>
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="appliesMode" id="appliesWhen" value="when">
+          <label class="form-check-label" for="appliesWhen">Only when… (source column = value)</label>
+        </div>
+        <div id="appliesWhenBlock" class="d-none ms-3">
+          <div id="appliesRows" class="mb-1"></div>
+          <button class="btn btn-outline-secondary btn-sm" id="btnAddAppliesRow">+ Condition</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-doane" id="btnConfirmVariant">Add variant</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="tplOverlayRow">
+  <div class="row g-1 mb-1 overlay-row">
+    <div class="col"><input class="form-control form-control-sm ov-field" placeholder="target field e.g. ActionPlanTemplateVersionId"></div>
+    <div class="col"><input class="form-control form-control-sm ov-value" placeholder="value e.g. 0PR..."></div>
+    <div class="col-auto"><button class="btn btn-outline-danger btn-sm ov-del">&times;</button></div>
+  </div>
+</template>
+
+<template id="tplAppliesRow">
+  <div class="row g-1 mb-1 applies-row">
+    <div class="col"><input class="form-control form-control-sm aw-col" placeholder="source column"></div>
+    <div class="col-auto align-self-center">=</div>
+    <div class="col"><input class="form-control form-control-sm aw-val" placeholder="value"></div>
+    <div class="col-auto"><button class="btn btn-outline-danger btn-sm aw-del">&times;</button></div>
+  </div>
+</template>
 {% endblock %}
 
 {% block scripts %}

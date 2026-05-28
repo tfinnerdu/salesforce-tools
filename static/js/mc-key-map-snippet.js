@@ -60,6 +60,15 @@ MC.keyMap = {
     document.getElementById('btnAddFamily').addEventListener('click', () => this._openFamilyModal());
     document.getElementById('btnConfirmFamily').addEventListener('click', () => this._createFamily());
     document.getElementById('btnAddClause').addEventListener('click', () => this._addClauseRow());
+    // Variant modal wiring
+    document.getElementById('btnAddOverlayRow').addEventListener('click', () => this._addOverlayRow());
+    document.getElementById('btnAddAppliesRow').addEventListener('click', () => this._addAppliesRow());
+    document.getElementById('btnConfirmVariant').addEventListener('click', () => this._saveVariant());
+    document.querySelectorAll('input[name="appliesMode"]').forEach(r =>
+      r.addEventListener('change', () => {
+        const when = document.getElementById('appliesWhen').checked;
+        document.getElementById('appliesWhenBlock').classList.toggle('d-none', !when);
+      }));
     if (this._kmId) await this._loadBuilder();
   },
 
@@ -162,20 +171,77 @@ MC.keyMap = {
         b.addEventListener('click', async () => {
           await MC.api(`/key-maps/variants/${b.dataset.var}`, 'DELETE'); this._loadBuilder();
         }));
-      node.querySelector('.mc-var-add').addEventListener('click', () => this._addVariant(node, fam.id));
+      node.querySelector('.mc-var-add').addEventListener('click', () => this._openVariantModal(fam.id, fam.name));
       host.appendChild(node);
     }
   },
 
-  async _addVariant(famNode, familyId) {
-    const name = famNode.querySelector('.mc-var-name').value.trim();
-    const overlayRaw = famNode.querySelector('.mc-var-overlay').value.trim() || '{}';
+  // ── Variant modal (structured overlay + applies_when) ──────────────────────
+
+  _variantFamilyId: null,
+
+  _openVariantModal(familyId, familyName) {
+    this._variantFamilyId = familyId;
+    document.getElementById('variantFamilyName').textContent = `→ ${familyName}`;
+    document.getElementById('variantName').value = '';
+    document.getElementById('overlayRows').innerHTML = '';
+    document.getElementById('appliesRows').innerHTML = '';
+    document.getElementById('appliesAll').checked = true;
+    document.getElementById('appliesWhenBlock').classList.add('d-none');
+    this._addOverlayRow();  // start with one empty overlay row
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('variantModal')).show();
+  },
+
+  _addOverlayRow() {
+    const node = document.getElementById('tplOverlayRow').content.firstElementChild.cloneNode(true);
+    node.querySelector('.ov-del').addEventListener('click', () => node.remove());
+    document.getElementById('overlayRows').appendChild(node);
+  },
+
+  _addAppliesRow() {
+    const node = document.getElementById('tplAppliesRow').content.firstElementChild.cloneNode(true);
+    node.querySelector('.aw-del').addEventListener('click', () => node.remove());
+    document.getElementById('appliesRows').appendChild(node);
+  },
+
+  async _saveVariant() {
+    const name = document.getElementById('variantName').value.trim();
     if (!name) { MC.showToast('Variant name required', 'warning'); return; }
-    let overlay;
-    try { overlay = JSON.parse(overlayRaw); }
-    catch (e) { MC.showToast('Overlay must be valid JSON', 'danger'); return; }
+
+    // Build overlay from the (field, value) rows. A field with no name is skipped.
+    const overlay = {};
+    let blankValue = false;
+    document.querySelectorAll('#overlayRows .overlay-row').forEach(r => {
+      const field = r.querySelector('.ov-field').value.trim();
+      const value = r.querySelector('.ov-value').value.trim();
+      if (!field) return;
+      if (!value) blankValue = true;
+      overlay[field] = value;
+    });
+    if (!Object.keys(overlay).length) {
+      MC.showToast('Add at least one overlay field', 'warning'); return;
+    }
+    if (blankValue) { MC.showToast('Overlay fields need a value', 'warning'); return; }
+
+    // Build applies_when only when "Only when…" is selected.
+    let applies_when = {};
+    if (document.getElementById('appliesWhen').checked) {
+      const clauses = [];
+      document.querySelectorAll('#appliesRows .applies-row').forEach(r => {
+        const col = r.querySelector('.aw-col').value.trim();
+        const val = r.querySelector('.aw-val').value.trim();
+        if (col) clauses.push({source_column: col, equals: val});
+      });
+      if (!clauses.length) {
+        MC.showToast('Add at least one condition, or choose "Every row"', 'warning'); return;
+      }
+      applies_when = {match: clauses};
+    }
+
     try {
-      await MC.api(`/key-maps/families/${familyId}/variants`, 'POST', {name, overlay});
+      await MC.api(`/key-maps/families/${this._variantFamilyId}/variants`, 'POST',
+                   {name, overlay, applies_when});
+      bootstrap.Modal.getInstance(document.getElementById('variantModal')).hide();
       this._loadBuilder();
     } catch (e) { MC.showToast(e.message, 'danger'); }
   },

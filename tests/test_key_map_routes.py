@@ -94,6 +94,23 @@ class TestChildRoutes:
                            json={'name': 'Base', 'overlay': {}})
         assert resp.status_code == 400
 
+    def test_add_variant_forwards_applies_when(self, client, monkeypatch):
+        captured = {}
+        def _capture(family_id, name, overlay, applies_when, position):
+            captured.update(family_id=family_id, name=name, overlay=overlay,
+                            applies_when=applies_when)
+            return {'id': 9, 'name': name}
+        monkeypatch.setattr(route.svc, 'add_variant', _capture)
+        resp = client.post('/key-maps/families/2/variants', json={
+            'name': 'International',
+            'overlay': {'Pre_decision_Requirements_Action_Plan__c': 'PRE_INTL'},
+            'applies_when': {'match': [{'source_column': 'is_intl', 'equals': 'Y'}]},
+        })
+        assert resp.status_code == 201
+        assert captured['family_id'] == 2
+        assert captured['overlay']['Pre_decision_Requirements_Action_Plan__c'] == 'PRE_INTL'
+        assert captured['applies_when']['match'][0]['source_column'] == 'is_intl'
+
 
 # ── Preview + export ─────────────────────────────────────────────────────────
 
