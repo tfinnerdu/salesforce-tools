@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Key Map Run - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid" data-key-map-id="{{ key_map_id }}">
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <a href="/key-maps/{{ key_map_id }}" class="text-muted small">&larr; Builder</a>
+    <h4 class="mc-page-title mb-0 ms-2" id="runTitle">Run / Preview</h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="alert alert-secondary d-flex align-items-start gap-2 mb-3">
+    <span style="font-size:1.1rem">&#9432;</span>
+    <div><strong>Preview only.</strong> This resolves every foreign key and shows what
+      <em>would</em> be inserted — it does not write to Salesforce. Export the result for review.</div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Source picker -->
+    <div class="col-md-5">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Source</div>
+        <div class="card-body">
+          <div class="btn-group btn-group-sm mb-3" role="group" id="sourceModeGroup">
+            <input type="radio" class="btn-check" name="srcMode" id="modeSql" value="sql" checked>
+            <label class="btn btn-outline-secondary" for="modeSql">SQL</label>
+            <input type="radio" class="btn-check" name="srcMode" id="modeCsv" value="csv">
+            <label class="btn btn-outline-secondary" for="modeCsv">CSV</label>
+            <input type="radio" class="btn-check" name="srcMode" id="modeJson" value="json">
+            <label class="btn btn-outline-secondary" for="modeJson">JSON</label>
+          </div>
+
+          <div id="paneSql" class="src-pane">
+            <label class="form-label fw-semibold small">SELECT query (Colleague SQL Server, read-only)</label>
+            <textarea id="srcSql" class="form-control font-monospace" rows="8"
+                      placeholder="SELECT TERMS_ID, ACAD_PROGRAMS_ID, ACPG_ACAD_LEVEL FROM dbo.PTAT_BASE"></textarea>
+          </div>
+          <div id="paneCsv" class="src-pane d-none">
+            <label class="form-label fw-semibold small">Paste CSV / TSV (first row = header)</label>
+            <textarea id="srcCsv" class="form-control font-monospace" rows="8"
+                      placeholder="TERMS_ID,ACAD_PROGRAMS_ID,ACPG_ACAD_LEVEL&#10;23/AUTM,ACCT.BA,UG"></textarea>
+          </div>
+          <div id="paneJson" class="src-pane d-none">
+            <label class="form-label fw-semibold small">Paste JSON (array of objects, or {records_path})</label>
+            <textarea id="srcJson" class="form-control font-monospace" rows="7"
+                      placeholder='[{"TERMS_ID":"23/AUTM","ACAD_PROGRAMS_ID":"ACCT.BA","ACPG_ACAD_LEVEL":"UG"}]'></textarea>
+            <label class="form-label fw-semibold small mt-2">records_path (optional)</label>
+            <input id="srcJsonPath" class="form-control form-control-sm" placeholder="e.g. result.rows">
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button id="btnPreview" class="btn btn-doane btn-sm">&#9654; Preview</button>
+            <button id="btnExport" class="btn btn-outline-secondary btn-sm" disabled>&#11123; Export CSV</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="col-md-7">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold d-flex align-items-center justify-content-between"
+             style="color:var(--doane-slate)">
+          <span>Preview result</span>
+          <span id="previewBadge"></span>
+        </div>
+        <div class="card-body">
+          <div id="previewEmpty" class="text-muted text-center py-4">
+            Pick a source and click <strong>Preview</strong>.
+          </div>
+          <div id="previewBody" class="d-none">
+            <div id="previewSummary" class="row g-2 mb-3"></div>
+            <ul class="nav nav-tabs" role="tablist">
+              <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabRows" type="button">Output rows</button></li>
+              <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabUnresolved" type="button">Unresolved FKs <span id="unresolvedCount" class="badge badge-red"></span></button></li>
+            </ul>
+            <div class="tab-content pt-2">
+              <div class="tab-pane fade show active" id="tabRows">
+                <div class="text-muted small mb-1" id="rowsNote"></div>
+                <div class="table-responsive" style="max-height:480px;overflow:auto">
+                  <table class="table table-sm table-hover"><thead id="rowsHead" class="table-light"></thead><tbody id="rowsBody"></tbody></table>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="tabUnresolved">
+                <div class="text-muted small mb-1" id="unresolvedNote"></div>
+                <div class="table-responsive" style="max-height:480px;overflow:auto">
+                  <table class="table table-sm"><thead class="table-light"><tr><th>Row</th><th>Source column</th><th>Value</th><th>Lookup</th></tr></thead><tbody id="unresolvedBody"></tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-key-map-snippet.js') }}"></script>
+{% endblock %}

@@ -26,6 +26,7 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 | Schema | `/schema` | `schema_bp` |
 | Data Ops | `/data-ops` | `data_ops_bp` |
 | Scenarios | `/scenarios` | `scenarios_bp` |
+| Key Maps | `/key-maps` | `key_map_bp` |
 | Settings | `/settings` | `settings_bp` |
 
 **API routes live UNDER the blueprint prefix**, not at `/api/v1/`. Example: `POST /migration/readiness/run` (not `/api/v1/migration/readiness/run`). The blueprint prefix IS the namespace.
@@ -68,10 +69,15 @@ services/            Business logic, one module per feature
   join_builder.py          §14 SF↔SQL Server join query builder
   collection_manager.py    §13 Postman collection runner
   scenarios.py             Multi-step Data Ops pipelines (delete / modify /
-                           reassign / bulk_update / tune chained together)
+                           reassign / bulk_update / tune / key_map_expand)
   tags.py                  App-level tagging for saved artifacts (scenarios
                            first); see tag_sync.py for the future SF-field
                            sync scaffold
+  key_map.py               Source → SF Key Map engine: FK resolution +
+                           family routing + variant fanout (preview-only)
+  ingest.py                Source ingestion → list[dict] (inline/json/csv/sql)
+  sqlserver.py             Shared SQL Server connection (Colleague backend,
+                           MS ODBC driver — no Devart in the app)
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
 static/js/           mission-control.js (MC.* namespace, vanilla JS)
@@ -111,6 +117,24 @@ scenarios (extendable to saved queries / collections / snapshots). Stored in
 `tags` + `artifact_tags` tables. `services/tag_sync.py` is a scaffold for the
 future ability to push tags up to a real Salesforce field (`Config.TAG_SF_FIELD`);
 its entry points raise `NotImplementedError` until wired.
+
+## Key Maps (Source → Salesforce)
+
+The Key Maps tab turns source rows (a Colleague SQL result, pasted CSV, or
+JSON) into Salesforce records of one SObject. Three layers: FK lookups
+resolve foreign keys by an external-ID field (e.g. `AcademicTerm.SIS_ID__c`);
+family routing picks a family per source row by column-equals-value rules;
+each variant in the family produces one output row, merging its `overlay_json`
+onto the resolved-FK base (one source row → many target rows). First consumer
+is PTAT (`ProgramTermApplnTimeline`) but the model is generic.
+
+**Preview-only** — `resolve_and_expand` reads from SF to resolve FKs but never
+writes; the run returns the would-be-inserted rows + an unresolved-FK list,
+exportable as CSV. Wired as a `key_map_expand` Scenario step so a scheduled
+Argo run can trigger it. Live SQL uses the shared `services.sqlserver`
+connection (MS ODBC driver, not Devart). FK resolution batches distinct values
+into one `IN()` query per (sobject, field). SHOW_MOCK synthesises stable
+`MOCK_<sobject>_<value>` ids so previews are demoable without touching SF.
 
 ## Confirmation dialogs
 
