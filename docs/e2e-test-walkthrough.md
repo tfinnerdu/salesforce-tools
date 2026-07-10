@@ -619,6 +619,14 @@ picker.
    `Case_Assistance_Fields`). **Expected:** the deploy snippets now include a
    second `-m "PermissionSet:..."`, the assign box shows a second `sf org
    assign permset` line, and the package zip contains both permission sets.
+6c. **Existing-fields-only path:** with the field builder empty and the
+   integration permission-set name cleared, paste two names under **Existing
+   fields** (`Case.Group_Information__c`, `Case.Occurrence_Date__c`), and name
+   the **Human permission set**. **Expected:** the deploy snippet is
+   permission-set only (no `CustomField:` members), and **Download package**
+   yields a zip containing only the permission set (no `/fields/` files) with a
+   `<fieldPermissions>` entry per pasted field. A malformed name (no
+   `Object.Field` dot) returns `{code: "INVALID_INPUT"}`.
 7. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
    downloads. Unzipped, it contains
    `force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml` for

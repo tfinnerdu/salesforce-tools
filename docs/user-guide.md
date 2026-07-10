@@ -1439,8 +1439,11 @@ The permission set **API name** and **Label** come prefilled (`SF_Tools_Importer
 Creating a field doesn't make it visible to anyone — in Salesforce, visibility (field-level security) is separate metadata. Use this section to give your new fields the **same visibility a field has in another org** (e.g. EDA), as a second, human-facing permission set:
 
 - **Source org / Reference object / Reference field:** pick an org and a field to read. Click **Read visibility** — the tool shows which profiles and permission sets can see and edit that field in that org, and (in the muted note) which profiles to assign the new set to.
-- **Human permission set — API name / Label:** fill these to generate a *second* permission set (alongside the integration one) that grants your built fields the same access. **Access granted** (edit vs read-only) is set to match the reference field when you read it; adjust as needed.
+- **Existing fields:** for fields that **already exist** and only need visibility (nothing to create), paste their API names one per line as `Object.Field__c`. They're added to the permission set *without* re-creating them — no CustomField, permission set only. (Fields you built above are included automatically, so you only list ones you didn't build here.)
+- **Human permission set — API name / Label:** fill these to generate a *second* permission set (alongside the integration one) that grants those fields the same access. **Access granted** (edit vs read-only) is set to match the reference field when you read it; adjust as needed.
 - The generated deploy and assign snippets (and the package zip) then include **both** permission sets. Assignment is per user — for bulk, Setup → *Permission Sets → Manage Assignments* is easier.
+
+> **Just adding visibility to existing fields?** Leave the field builder empty, clear the integration permission-set name, paste the field names under *Existing fields*, name the *Human permission set*, and hit **Download package** — you get a permission-set-only zip. Unzip into your project and deploy `-m "PermissionSet:<name>"` (the field definitions are untouched).
 
 > This reads from the source org only — it never writes. It covers **visibility**; page-layout placement and record types are still done in Setup (or a later pass).
 

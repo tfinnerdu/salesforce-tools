@@ -66,7 +66,7 @@ MC.cli = {
 
     // Visibility clone: read FLS from a source org; human-permset inputs.
     document.getElementById('btnReadFls').addEventListener('click', () => this._readFls());
-    ['hpsName', 'hpsLabel'].forEach(id =>
+    ['hpsName', 'hpsLabel', 'cliExistingFields'].forEach(id =>
       document.getElementById(id).addEventListener('input', () => this._refresh()));
     document.getElementById('hpsEditable').addEventListener('change', () => this._refresh());
     // Default the FLS source org to a non-active org (e.g. EDA).
@@ -102,7 +102,13 @@ MC.cli = {
         field_perms: fieldPerms,
       } : {},
       human_permset: this._humanPermset(),
+      existing_fields: this._existingFields(),
     };
+  },
+
+  _existingFields() {
+    return document.getElementById('cliExistingFields').value
+      .split('\n').map(s => s.trim()).filter(Boolean);
   },
 
   _humanPermset() {

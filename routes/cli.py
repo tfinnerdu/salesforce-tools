@@ -113,22 +113,47 @@ def _permset_from(payload) -> dict:
     }
 
 
-def _human_permset_from(payload, fields) -> dict:
+def _existing_fields_from(payload) -> list:
+    """Validate + normalize the existing-field list (fields that already exist in
+    the org and just need visibility). Each entry is an `Object.Field` API name.
+    Raises ValueError on a malformed entry."""
+    out = []
+    for item in (payload.get('existing_fields') or []):
+        name = (item or '').strip()
+        if not name:
+            continue
+        obj, _, fld = name.partition('.')
+        if not obj or not fld:
+            raise ValueError(f'existing field "{name}" must be in Object.Field form (e.g. Case.Group_Information__c)')
+        out.append(name)
+    return out
+
+
+def _human_permset_from(payload, fields, existing_fields=None) -> dict:
     """Build the cloned human-visibility permission set from the plan, or {}.
 
-    plan.human_permset = {api_name, label, description, editable}; its field
-    permissions are the built fields at the chosen access level (read always,
-    edit per `editable`, informed by the cloned EDA FLS).
+    plan.human_permset = {api_name, label, description, editable}. Its field
+    permissions cover the built fields AND any existing fields (fields that
+    already exist and only need visibility), all at the chosen access level
+    (read always, edit per `editable`, informed by the cloned EDA FLS).
     """
     hp = payload.get('human_permset') or {}
     name = (hp.get('api_name') or '').strip()
-    if not name or not fields:
+    existing_fields = existing_fields or []
+    if not name or (not fields and not existing_fields):
         return {}
+    editable = bool(hp.get('editable'))
+    field_perms = cli_fls.human_field_perms(fields, editable)
+    seen = {fp['field'] for fp in field_perms}
+    for ef in existing_fields:
+        if ef not in seen:
+            field_perms.append({'field': ef, 'readable': True, 'editable': editable})
+            seen.add(ef)
     return {
         'api_name': name,
         'label': (hp.get('label') or name).strip(),
         'description': (hp.get('description') or '').strip(),
-        'field_perms': cli_fls.human_field_perms(fields, bool(hp.get('editable'))),
+        'field_perms': field_perms,
     }
 
 
@@ -161,12 +186,13 @@ def api_generate():
     base_path = (payload.get('base_path') or Config.CLI_PROJECT_BASE_PATH).strip()
     try:
         fields = _validate_fields(payload.get('fields') or [])
+        existing = _existing_fields_from(payload)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
 
     permset = _permset_from(payload)
     permset_name = permset.get('api_name', '')
-    human = _human_permset_from(payload, fields)
+    human = _human_permset_from(payload, fields, existing)
     extra_names = [human['api_name']] if human else []
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
@@ -202,8 +228,9 @@ def api_package():
     alias = (payload.get('alias') or '').strip()
     try:
         fields = _validate_fields(payload.get('fields') or [])
+        existing = _existing_fields_from(payload)
         permset = _permset_from(payload)
-        human = _human_permset_from(payload, fields)
+        human = _human_permset_from(payload, fields, existing)
         zip_bytes, filename = cli_script.build_package_zip(
             project, fields, permset or None, alias,
             extra_permsets=[human] if human else None)

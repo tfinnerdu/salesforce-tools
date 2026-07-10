@@ -222,6 +222,14 @@
       </div>
 
       <hr class="my-3">
+      <div class="mb-3">
+        <label for="cliExistingFields" class="form-label fw-semibold small mb-1">
+          Existing fields <span class="text-muted fw-normal">(optional &mdash; fields that already exist and only need visibility)</span>
+        </label>
+        <textarea id="cliExistingFields" class="form-control form-control-sm" rows="3"
+                  placeholder="Case.Group_Information__c&#10;Case.Occurrence_Date__c"></textarea>
+        <div class="form-text">One API name per line as <code>Object.Field__c</code>. These are added to the permission set <strong>without re-creating them</strong> (no CustomField, permission set only). Fields you built above are included automatically.</div>
+      </div>
       <div class="row g-3">
         <div class="col-md-4">
           <label for="hpsName" class="form-label fw-semibold small mb-1">Human permission set &mdash; API name</label>
