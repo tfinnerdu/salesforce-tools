@@ -1428,7 +1428,7 @@ Every command box has a **Copy** button.
 - Set **Field-level security** (Readable / Editable) — these feed the permission set.
 - Click **+ Add field**. Repeat for as many fields as you need; they collect in a table you can remove rows from.
 
-> **Picklist values:** one per line as `CODE=Label`. Prefix a line with `-` to retire (deactivate) a value instead of deleting it — existing records keep their value.
+> **Picklist values:** one value per line. Just type the value — the API value (code) and the label are both set to that text (e.g. `Freshman`). Use `CODE=Label` only when you want them to differ (e.g. `MAJ=Major, Faculty`). Prefix a line with `-` to retire (deactivate) a value instead of deleting it — existing records keep their value.
 
 ### 3. Permission set (optional)
 

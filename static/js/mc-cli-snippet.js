@@ -232,8 +232,8 @@ MC.cli = {
       html = col(chk('propDefaultValue', 'Default checked', false));
     } else if (type === 'Picklist') {
       html = `<div class="col-12">
-        <label class="form-label fw-semibold small mb-1">Values <span class="text-muted fw-normal">(one per line — <code>CODE=Label</code>; prefix <code>-</code> to retire/deactivate)</span></label>
-        <textarea id="propPicklist" class="form-control form-control-sm" rows="4" placeholder="MAJ=Major, Faculty&#10;MIN=Minor, Faculty&#10;-Major=Major"></textarea>
+        <label class="form-label fw-semibold small mb-1">Values <span class="text-muted fw-normal">(one per line — sets the API value and label to that text; optional <code>CODE=Label</code> to differ them, prefix <code>-</code> to retire)</span></label>
+        <textarea id="propPicklist" class="form-control form-control-sm" rows="4" placeholder="Freshman&#10;Sophomore&#10;Junior&#10;Senior"></textarea>
         <div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="propRestricted" checked>
           <label class="form-check-label small" for="propRestricted">Restricted (reject values not in the set)</label></div>
       </div>`;
