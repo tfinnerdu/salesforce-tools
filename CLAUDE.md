@@ -27,6 +27,7 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 | Data Ops | `/data-ops` | `data_ops_bp` |
 | Scenarios | `/scenarios` | `scenarios_bp` |
 | Key Maps | `/key-maps` | `key_map_bp` |
+| CLI | `/cli` | `cli_bp` |
 | Settings | `/settings` | `settings_bp` |
 
 **API routes live UNDER the blueprint prefix**, not at `/api/v1/`. Example: `POST /migration/readiness/run` (not `/api/v1/migration/readiness/run`). The blueprint prefix IS the namespace.
@@ -78,6 +79,9 @@ services/            Business logic, one module per feature
   ingest.py                Source ingestion → list[dict] (inline/json/csv/sql)
   sqlserver.py             Shared SQL Server connection (Colleague backend,
                            MS ODBC driver — no Devart in the app)
+  cli_metadata.py          CLI tab: describe-driven object/field lists (read-only)
+  cli_script.py            CLI tab: sf-command + field/permset XML + zip generator
+utils/responses.py   Shared API helpers: error_response() envelope + request_id
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
 static/js/           mission-control.js (MC.* namespace, vanilla JS)
@@ -135,6 +139,30 @@ Argo run can trigger it (see Scheduled runs below). Live SQL uses the shared `se
 connection (MS ODBC driver, not Devart). FK resolution batches distinct values
 into one `IN()` query per (sobject, field). SHOW_MOCK synthesises stable
 `MOCK_<sobject>_<value>` ids so previews are demoable without touching SF.
+
+## CLI (Salesforce CLI script generator)
+
+The CLI tab turns a describe-driven field/permission-set plan into `sf` command
+snippets (PowerShell backtick style) and a `force-app` metadata package zipped
+for download. It is **read-only** against Salesforce — `cli_metadata` describes
+objects/fields to drive the pickers and prefill External-ID *flips* — and
+**generates only**: the `sf` commands run on the sys admin's own machine, so the
+app never deploys. `cli_script` is pure/deterministic; its generated
+`field-meta.xml` / `permissionset-meta.xml` reproduce the real Conductor EDA→EDF
+artifacts byte-for-byte (pinned in `tests/characterization/test_cli_artifacts_characterization.py`).
+Supports create + flip (with auto backup/verify snippets) for Text, Picklist,
+Checkbox, Number, Date/DateTime, Email, Phone, Url, and (Long)TextArea. Stateless
+— nothing is persisted. Describe-driven pickers demo under `SHOW_MOCK`.
+
+**API-shape note (standards follow-up).** The CLI tab keeps this app's
+blueprint-prefix routing (`/cli/...`) for consistency with the other tabs, and
+introduces the shared standards **error envelope** in `utils/responses.py`
+(`{success:false, error, code, request_id}` — a superset of `{success, data}`,
+so `MC.api` is unaffected) plus an OpenAPI stub at `static/openapi-cli.yaml`.
+Full Doane-standard API conformance — moving data/action routes under `/api/v1/`
+and mounting a `/swagger` UI (`flask-swagger-ui`) across all blueprints — is a
+deliberate, separate pass, not smuggled in via one feature. Adopt
+`utils.responses.error_response` in other blueprints when that pass happens.
 
 ## Scheduled runs (Argo)
 

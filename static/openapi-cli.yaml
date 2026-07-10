@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: SF Mission Control — CLI tab API
+  version: "1.0.0"
+  description: >
+    Endpoints backing the CLI tab (Salesforce CLI script + metadata-package
+    generator). Read-only against Salesforce (describe only); generation is
+    pure. Routes live under the blueprint prefix `/cli` per this app's
+    convention (the blueprint prefix is the namespace).
+
+    NOTE (standards follow-up): the Doane service standard calls for data/action
+    endpoints under `/api/v1/` and a mounted `/swagger` UI. This app currently
+    namespaces by blueprint prefix across all ~15 tabs (see CLAUDE.md). This
+    spec documents the CLI contract as-shipped; adopting `/api/v1/` app-wide and
+    mounting flask-swagger-ui is tracked as a deliberate, separate pass rather
+    than forking one tab onto a divergent convention.
+servers:
+  - url: /cli
+components:
+  schemas:
+    Success:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: {}
+      required: [success, data]
+    Error:
+      type: object
+      description: Standards error envelope (superset of the app's {success,error}).
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
+        code: { type: string, example: INVALID_INPUT }
+        request_id: { type: string }
+      required: [success, error, code, request_id]
+    FieldSpec:
+      type: object
+      properties:
+        object: { type: string, example: CourseOfferingParticipant }
+        api_name: { type: string, example: Ethos_Guid__c }
+        label: { type: string }
+        type:
+          type: string
+          enum: [Text, TextArea, LongTextArea, Picklist, Checkbox, Number, Date, DateTime, Email, Phone, Url]
+        mode: { type: string, enum: [create, flip] }
+        description: { type: string }
+        length: { type: integer }
+        precision: { type: integer }
+        scale: { type: integer }
+        externalId: { type: boolean }
+        unique: { type: boolean }
+        caseSensitive: { type: boolean }
+        defaultValue: { type: boolean }
+        visibleLines: { type: integer }
+        required: { type: boolean }
+        readable: { type: boolean }
+        editable: { type: boolean }
+        picklist:
+          type: object
+          properties:
+            restricted: { type: boolean }
+            sorted: { type: boolean }
+            values:
+              type: array
+              items:
+                type: object
+                properties:
+                  value: { type: string }
+                  label: { type: string }
+                  default: { type: boolean }
+                  active: { type: boolean }
+      required: [object, api_name, type]
+    Plan:
+      type: object
+      properties:
+        alias: { type: string }
+        instance_url: { type: string }
+        project: { type: string }
+        base_path: { type: string }
+        fields:
+          type: array
+          items: { $ref: '#/components/schemas/FieldSpec' }
+        permset:
+          type: object
+          properties:
+            api_name: { type: string }
+            label: { type: string }
+            description: { type: string }
+            field_perms:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  readable: { type: boolean }
+                  editable: { type: boolean }
+paths:
+  /objects:
+    get:
+      summary: List SObjects in the active org (describe-driven picker source).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "502": { description: Salesforce describe failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /objects/{objectName}/fields:
+    get:
+      summary: Describe one object's fields (drives flip prefill + validation).
+      parameters:
+        - in: path
+          name: objectName
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "502": { description: Salesforce describe failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /generate:
+    post:
+      summary: Generate all sf-CLI command snippets for a plan (pure; no SF write).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Plan' } } }
+      responses:
+        "200": { description: Snippets, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Invalid plan, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /package:
+    post:
+      summary: Build the force-app metadata package as a downloadable zip.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Plan' } } }
+      responses:
+        "200":
+          description: Zip archive (force-app tree + manifest + README).
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "400": { description: Nothing to package / invalid input, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }

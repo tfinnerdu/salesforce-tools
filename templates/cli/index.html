@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% block title %}CLI - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid" id="cliRoot"
+     data-default-instance-url="{{ default_instance_url }}"
+     data-default-base-path="{{ default_base_path }}">
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">CLI
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Salesforce CLI script generator"
+            data-bs-content="Build sf CLI scripts and a force-app metadata package for creating fields, flipping External IDs, and permission sets — described live from the selected org. The app composes the commands; you run them on your own machine (the CLI authenticates as you).">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ active_org|upper }}</span>
+    <span class="text-muted small ms-2">Environment follows the <strong>Org</strong> selector in the header.</span>
+  </div>
+
+  <!-- ── Step 1-5: Setup ─────────────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Environment setup &mdash; run once per project
+    </div>
+    <div class="card-body">
+
+      <p class="text-muted small mb-3">
+        <strong>Step 1.</strong> Target org is <span class="badge mc-org-badge">{{ active_org|upper }}</span>
+        (change it with the header <strong>Org</strong> picker). Steps below fill in from the alias and
+        project name you set here.
+      </p>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step 2 &mdash; Install the CLI &amp; check the connection</label>
+        <div class="mc-code" data-copy="snpInstall"><pre id="snpInstall" class="mb-0"></pre></div>
+      </div>
+
+      <div class="row g-3 mb-2">
+        <div class="col-md-4">
+          <label for="cliAlias" class="form-label fw-semibold small mb-1">Alias</label>
+          <input type="text" id="cliAlias" class="form-control form-control-sm" placeholder="DoaneUAT" autocomplete="off">
+          <div class="form-text">Local name for this org connection.</div>
+        </div>
+        <div class="col-md-8">
+          <label for="cliInstanceUrl" class="form-label fw-semibold small mb-1">Sandbox instance URL</label>
+          <input type="text" id="cliInstanceUrl" class="form-control form-control-sm">
+          <div class="form-text">Sandboxes require an explicit login endpoint.</div>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step 3 &mdash; Authorize the org</label>
+        <div class="mc-code" data-copy="snpLogin"><pre id="snpLogin" class="mb-0"></pre></div>
+      </div>
+
+      <div class="row g-3 mb-2">
+        <div class="col-md-4">
+          <label for="cliProject" class="form-label fw-semibold small mb-1">Project name</label>
+          <input type="text" id="cliProject" class="form-control form-control-sm" placeholder="doane-sf" autocomplete="off">
+        </div>
+        <div class="col-md-8">
+          <label for="cliBasePath" class="form-label fw-semibold small mb-1">Local project base path</label>
+          <input type="text" id="cliBasePath" class="form-control form-control-sm">
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step 4 &mdash; Generate the project &amp; check metadata access</label>
+        <div class="mc-code" data-copy="snpProject"><pre id="snpProject" class="mb-0"></pre></div>
+      </div>
+
+      <div class="mb-1">
+        <label class="form-label fw-semibold small mb-1">Step 5 &mdash; Retrieve the metadata you'll edit</label>
+        <div class="mc-code" data-copy="snpRetrieve"><pre id="snpRetrieve" class="mb-0"></pre></div>
+        <div class="form-text">CustomObject carries objects + their fields; PermissionSet carries field-level security.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Step 6: Build fields ────────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Step 6 &mdash; Build fields
+    </div>
+    <div class="card-body">
+
+      <div class="row g-3 align-items-end mb-3">
+        <div class="col-md-5">
+          <label for="cliObject" class="form-label fw-semibold small mb-1">Object</label>
+          <select id="cliObject" class="form-select form-select-sm">
+            <option value="">Loading objects…</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label for="cliFieldMode" class="form-label fw-semibold small mb-1">Operation</label>
+          <select id="cliFieldMode" class="form-select form-select-sm">
+            <option value="create">Create new field</option>
+            <option value="flip">Edit existing field (flip to External ID)</option>
+          </select>
+        </div>
+        <div class="col-md-3" id="existingFieldWrap" style="display:none">
+          <label for="cliExistingField" class="form-label fw-semibold small mb-1">Existing field</label>
+          <select id="cliExistingField" class="form-select form-select-sm">
+            <option value="">Select a field…</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-2">
+        <div class="col-md-4">
+          <label for="cliApiName" class="form-label fw-semibold small mb-1">Field API name</label>
+          <input type="text" id="cliApiName" class="form-control form-control-sm" placeholder="Ethos_Guid__c" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label for="cliLabel" class="form-label fw-semibold small mb-1">Label</label>
+          <input type="text" id="cliLabel" class="form-control form-control-sm" placeholder="Ethos Guid" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label for="cliType" class="form-label fw-semibold small mb-1">Type</label>
+          <select id="cliType" class="form-select form-select-sm">
+            {% for t in supported_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Type-specific properties (rendered by JS) -->
+      <div id="cliProps" class="row g-3 mb-2"></div>
+
+      <div class="row g-3 mb-2">
+        <div class="col-md-8">
+          <label for="cliDescription" class="form-label fw-semibold small mb-1">Description <span class="text-muted fw-normal">(optional)</span></label>
+          <input type="text" id="cliDescription" class="form-control form-control-sm" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small mb-1">Field-level security</label>
+          <div class="d-flex gap-3 pt-1">
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="cliReadable" checked>
+              <label class="form-check-label small" for="cliReadable">Readable</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="cliEditable" checked>
+              <label class="form-check-label small" for="cliEditable">Editable</label></div>
+          </div>
+        </div>
+      </div>
+
+      <button id="btnAddField" class="btn btn-doane btn-sm">+ Add field</button>
+
+      <hr class="my-3">
+      <div id="fieldEmpty" class="text-muted small">No fields added yet.</div>
+      <table id="fieldTable" class="table table-sm table-hover mb-0 d-none">
+        <thead class="table-light">
+          <tr><th>Object</th><th>Field</th><th>Type</th><th>Op</th><th>Attrs</th><th>FLS</th><th class="text-end"></th></tr>
+        </thead>
+        <tbody id="fieldTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Permission set ──────────────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Permission set <span class="text-muted fw-normal">(optional &mdash; field-level security for the added fields)</span>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label for="psName" class="form-label fw-semibold small mb-1">API name</label>
+          <input type="text" id="psName" class="form-control form-control-sm" placeholder="SF_Tools_Importer" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label for="psLabel" class="form-label fw-semibold small mb-1">Label</label>
+          <input type="text" id="psLabel" class="form-control form-control-sm" placeholder="SF Tools Importer" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label for="psDescription" class="form-label fw-semibold small mb-1">Description <span class="text-muted fw-normal">(optional)</span></label>
+          <input type="text" id="psDescription" class="form-control form-control-sm" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-text">Leave the API name blank to skip the permission set. FLS is taken from each field's Readable/Editable above.</div>
+    </div>
+  </div>
+
+  <!-- ── Steps 7-10: Generate & download ─────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Generate &amp; deploy
+    </div>
+    <div class="card-body">
+
+      <div id="flipSection" class="d-none">
+        <div class="mb-3">
+          <label class="form-label fw-semibold small mb-1">Step 0 &mdash; Back up the fields you're modifying (flips only)</label>
+          <div class="mc-code" data-copy="snpBackup"><pre id="snpBackup" class="mb-0"></pre></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small mb-1">Step 1 &mdash; Verify the flip is needed (skip fields already External ID)</label>
+          <div class="mc-code" data-copy="snpVerify"><pre id="snpVerify" class="mb-0"></pre></div>
+          <div class="form-text">If externalId <em>and</em> idLookup already come back true, drop that field — a redeploy would overwrite its other attributes.</div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Package the metadata (.zip)</label>
+        <div>
+          <button id="btnPackage" class="btn btn-slate btn-sm">Download package (.zip)</button>
+        </div>
+        <div class="form-text mb-0">
+          <strong>Step 7.</strong> Unzip and copy the <code>force-app</code> tree into
+          <code id="projPathHint">your project</code>, merging into
+          <code>force-app\main\default\…</code>. (A <code>README.txt</code> and
+          <code>manifest/package.xml</code> are included.)
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step 8 &mdash; Validate with a dry run</label>
+        <div class="mc-code" data-copy="snpDeployDry"><pre id="snpDeployDry" class="mb-0"></pre></div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step 9 &mdash; Deploy for real</label>
+        <div class="mc-code" data-copy="snpDeployFull"><pre id="snpDeployFull" class="mb-0"></pre></div>
+      </div>
+      <div class="mb-1">
+        <label class="form-label fw-semibold small mb-1">Step 10 &mdash; Assign the permission set</label>
+        <div class="mc-code" data-copy="snpAssign"><pre id="snpAssign" class="mb-0"></pre></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-cli-snippet.js') }}"></script>
+{% endblock %}

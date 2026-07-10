@@ -170,6 +170,15 @@
     <Compile Include="tests\test_metadata_diff.py" />
     <Compile Include="services\record_inspector.py" />
     <Compile Include="tests\test_record_inspector.py" />
+    <Compile Include="utils\__init__.py" />
+    <Compile Include="utils\responses.py" />
+    <Compile Include="routes\cli.py" />
+    <Compile Include="services\cli_metadata.py" />
+    <Compile Include="services\cli_script.py" />
+    <Compile Include="tests\test_cli_metadata.py" />
+    <Compile Include="tests\test_cli_script.py" />
+    <Compile Include="tests\test_cli_routes.py" />
+    <Compile Include="tests\characterization\test_cli_artifacts_characterization.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".env" />
@@ -245,6 +254,9 @@
     <Content Include="templates\data_ops\convert.html" />
     <Content Include="templates\data_ops\delete.html" />
     <Content Include="templates\data_ops\reassign.html" />
+    <Content Include="static\js\mc-cli-snippet.js" />
+    <Content Include="templates\cli\index.html" />
+    <Content Include="static\openapi-cli.yaml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="docs\" />
@@ -256,6 +268,8 @@
     <Folder Include="static\js\" />
     <Folder Include="templates\" />
     <Folder Include="templates\admin\" />
+    <Folder Include="templates\cli\" />
+    <Folder Include="utils\" />
     <Folder Include="templates\dashboard\" />
     <Folder Include="templates\data_ops\" />
     <Folder Include="templates\deploy\" />

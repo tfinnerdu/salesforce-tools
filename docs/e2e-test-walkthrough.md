@@ -576,6 +576,52 @@ edit) and a bulk DML execute to confirm none of them proceed without confirmatio
 
 ---
 
+## CLI > Script & Metadata Generator
+
+The CLI tab composes Salesforce CLI (`sf`) scripts and a `force-app` metadata
+package for creating fields, flipping External IDs, and building a permission
+set. It is read-only against Salesforce (describe only) — the generated
+commands run on your own machine. Everything is driven by the header **Org**
+picker.
+
+**Steps:**
+1. Navigate to `/cli`. **Expected:** the page loads with the setup snippets
+   (install / login / project / retrieve) already filled from the defaults, and
+   the **Object** dropdown populates from the selected org's describe.
+2. In *Environment setup*, type an **Alias** (e.g. `DoaneUAT`) and a **Project
+   name**. **Expected:** the Step 3 login and Step 4 project snippets update
+   within ~0.4s to include your alias/project; the instance URL and base path
+   are prefilled and editable.
+3. Click **Copy** on any command box. **Expected:** a "Copied to clipboard"
+   toast; the copied text matches the box.
+4. In *Step 6 — Build fields*, pick an object, keep **Operation = Create new
+   field**, set **Type = Text**, enter an API name ending in `__c` (e.g.
+   `Test_Ext__c`), a label, tick **External ID** + **Unique**, then click
+   **+ Add field**. **Expected:** a row appears in the field table; the Step 8/9
+   deploy snippets now include `-m "CustomField:<Object>.Test_Ext__c"`.
+5. Switch **Operation** to *Edit existing field (flip to External ID)* and pick
+   a field from **Existing field**. **Expected:** the form prefills from the
+   live describe (type, length), External ID is forced on, and after adding it
+   the **Step 0 backup** and **Step 1 verify** snippets appear (they only show
+   when at least one flip is present).
+6. Enter a **Permission set** API name (e.g. `SF_Tools_Importer`). **Expected:**
+   the deploy snippets gain `-m "PermissionSet:SF_Tools_Importer"` and the
+   Step 10 assign snippet names it.
+7. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
+   downloads. Unzipped, it contains
+   `force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml` for
+   each field, a `permissionsets/<Name>.permissionset-meta.xml`, a
+   `manifest/package.xml`, and a `README.txt`.
+8. Enter an invalid API name (no `__c`) and add it. **Expected:** a warning
+   toast; the field is not added (the server also rejects it with a
+   `{code: "INVALID_INPUT"}` error envelope).
+
+**Invariant to eyeball:** a Text External-ID field authored here should be
+byte-identical to a hand-written one. `tests/characterization/test_cli_artifacts_characterization.py`
+pins this against the real Conductor migration artifacts.
+
+---
+
 ## Regression Checks (run after any change)
 
 1. `GET /health` returns 200
@@ -596,5 +642,7 @@ edit) and a bulk DML execute to confirm none of them proceed without confirmatio
 15. `POST /schema/metadata-diff/run` with `{"compare_org": "prod"}` returns `success: true` with `total_differences > 0`
 16. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "TEST001"}` returns `success: true` with `total_fields > 0`
 17. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "12345", "external_id_field": "SIS_ID__c"}` returns `lookup_mode: "external_id:SIS_ID__c"`
-18. `pytest tests/ -q` — full suite green (1,109 tests)
-17. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, and Soundex contracts intact
+18. `pytest tests/ -q` — full suite green (1,301 tests)
+19. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, Soundex, and CLI-artifact contracts intact
+20. `GET /cli` returns 200 and `GET /cli/objects` returns `success: true` with an object list
+21. `POST /cli/generate` with a field plan returns all snippet keys; `POST /cli/package` returns an `application/zip` attachment

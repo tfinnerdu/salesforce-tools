@@ -1401,4 +1401,49 @@ Collections are stored in PostgreSQL and shared across all sessions. Use this fo
 
 ---
 
-*Last updated: May 2026 — covers all features through Wave 6 of SF Mission Control development.*
+## CLI
+
+The **CLI** tab makes the Salesforce CLI (`sf`) approachable for creating fields, flipping External IDs, and building permission sets — without memorizing command syntax or hand-writing metadata XML. You fill in a few boxes and pick fields from live dropdowns; the app writes the exact `sf` commands and a ready-to-deploy metadata package. **The app never changes your org** — it only generates scripts, which you run on your own machine (the CLI logs in as you).
+
+The target org is whatever is selected in the header **Org** picker.
+
+The page reads top-to-bottom in four parts:
+
+### 1. Environment setup (run once per project)
+
+- **Step 2 — Install the CLI:** copy the snippet and run it once per machine to install `sf` and confirm it can see your orgs.
+- **Step 3 — Authorize the org:** enter an **Alias** (a short local name like `DoaneUAT`) and, if needed, adjust the **Sandbox instance URL**. Copy the generated `sf org login web …` command — it opens a browser to log you in. Sandboxes require the instance URL, which is why it's prefilled.
+- **Step 4 — Generate the project:** enter a **Project name** and confirm the **base path**. The snippet creates the local project folder and checks the connection.
+- **Step 5 — Retrieve metadata:** copy the retrieve command to pull down the objects, fields, and permission sets you'll be editing.
+
+Every command box has a **Copy** button.
+
+### 2. Build fields
+
+- Pick an **Object** (the dropdown is loaded live from the selected org).
+- Choose the **Operation:**
+  - **Create new field** — you're adding a brand-new field.
+  - **Edit existing field (flip to External ID)** — you're turning an existing field into an External ID. Pick the field from the **Existing field** dropdown; its current settings prefill so the redeploy doesn't wipe them.
+- Enter the **Field API name** (must end in `__c`), a **Label**, and the **Type**. Type-specific options appear below (length, External ID, Unique, picklist values, etc.).
+- Set **Field-level security** (Readable / Editable) — these feed the permission set.
+- Click **+ Add field**. Repeat for as many fields as you need; they collect in a table you can remove rows from.
+
+> **Picklist values:** one per line as `CODE=Label`. Prefix a line with `-` to retire (deactivate) a value instead of deleting it — existing records keep their value.
+
+### 3. Permission set (optional)
+
+Give the permission set an **API name** and **Label**. It's built from the Readable/Editable choices on each field you added. Leave the API name blank to skip it.
+
+### 4. Generate & deploy
+
+- If any field is a **flip**, a **Step 0 back up** and **Step 1 verify** snippet appear first — run these to save the current field state and to confirm the flip is actually needed (skip fields that are already External IDs).
+- **Download package (.zip)** produces the metadata package. Unzip it and copy the `force-app` folder into your project (a `README.txt` inside spells out exactly where). A `manifest/package.xml` is included too.
+- **Step 8 — Validate with a dry run:** deploy with `--dry-run` first — it checks against the org without changing anything.
+- **Step 9 — Deploy for real:** the same command without `--dry-run`.
+- **Step 10 — Assign the permission set** to the integration user.
+
+**Why use it:** the SF CLI is powerful but easy to get wrong (a backslash instead of a backtick, a sandbox login without its instance URL, a redeploy that clobbers a field's attributes). This tab bakes those lessons in, so a field authored here deploys identically to one written by hand — verified against our real Conductor migration package.
+
+---
+
+*Last updated: July 2026 — covers all features through Wave 6 plus the CLI tab (Salesforce CLI script & metadata generator).*

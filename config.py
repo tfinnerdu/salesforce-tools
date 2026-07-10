@@ -54,3 +54,12 @@ class Config:
     # SObject. Multi-select picklist or text. Leave blank to keep tags
     # interface-only. See services/tag_sync.py.
     TAG_SF_FIELD = os.environ.get('TAG_SF_FIELD', '')
+    # CLI tab (Salesforce CLI script generator) defaults. Doane-specific but
+    # overridable via env so a peer institution can swap them without code
+    # changes (Higher-Ed-agnostic posture). Prefilled into the builder as
+    # editable fields, never baked into generated output.
+    CLI_DEFAULT_INSTANCE_URL = os.environ.get(
+        'CLI_DEFAULT_INSTANCE_URL',
+        'https://doaneu--doanefull.sandbox.my.salesforce.com')
+    CLI_PROJECT_BASE_PATH = os.environ.get(
+        'CLI_PROJECT_BASE_PATH', 'C:\\Doane\\Code\\Salesforce-Projects')
