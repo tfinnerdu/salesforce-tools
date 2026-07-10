@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+{% block title %}Pre-flight Checklist - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/readiness">Readiness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/errors">Error Reconciler</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/batches">Batch Progress</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/migration/preflight">Pre-flight</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/velocity">Velocity &amp; ETA</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Pre-flight Go-Live Checklist
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Pre-flight Checklist"
+              data-bs-content="A persistent checklist of go-live readiness steps stored in PostgreSQL. Check items off as you complete them. Progress persists per org. Click any item description to navigate to the relevant tool.">ⓘ</span>
+      </h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+        &#128438; Print Checklist
+      </button>
+    </div>
+  </div>
+
+  <!-- Overall Progress -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="fw-semibold small">Overall Progress</span>
+        <span id="preflightSummary" class="text-muted small">Loading…</span>
+      </div>
+      <div class="progress" style="height: 20px;">
+        <div id="preflightProgressBar"
+             class="progress-bar bg-warning"
+             role="progressbar"
+             style="width: 0%"
+             aria-valuenow="0"
+             aria-valuemin="0"
+             aria-valuemax="100">
+          <span id="preflightProgressPct" class="fw-bold small">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading spinner -->
+  <div id="preflightLoading" class="text-center py-4">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Loading…</span>
+    </div>
+    <p class="mt-2 text-muted small">Loading checklist…</p>
+  </div>
+
+  <!-- Checklist cards injected by MC.preflight._render() -->
+  <div id="preflightCards"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+MC.preflight = {
+  init() {
+    this.loadItems();
+  },
+
+  async loadItems() {
+    const loading = document.getElementById('preflightLoading');
+    const cards = document.getElementById('preflightCards');
+    loading.classList.remove('d-none');
+    cards.innerHTML = '';
+    try {
+      const resp = await fetch('/migration/preflight/items');
+      const json = await resp.json();
+      if (!json.success) throw new Error(json.error || 'Load failed');
+      this._render(json.data);
+    } catch (err) {
+      cards.innerHTML = `<div class="alert alert-danger">Failed to load checklist: ${err.message}</div>`;
+    } finally {
+      loading.classList.add('d-none');
+    }
+  },
+
+  async toggle(id, checked) {
+    try {
+      const resp = await fetch('/migration/preflight/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, checked}),
+      });
+      const json = await resp.json();
+      if (!json.success) throw new Error(json.error || 'Toggle failed');
+      // Recount progress from current DOM state
+      this._recalcProgress();
+    } catch (err) {
+      console.error('preflight toggle error:', err);
+    }
+  },
+
+  _render(items) {
+    const cards = document.getElementById('preflightCards');
+    if (!items || items.length === 0) {
+      cards.innerHTML = '<div class="text-center py-5 text-muted"><p>No checklist items found.</p></div>';
+      this._updateProgress(0, 0);
+      return;
+    }
+
+    // Group by category preserving order of first appearance
+    const categoryOrder = [];
+    const grouped = {};
+    for (const item of items) {
+      if (!grouped[item.category]) {
+        grouped[item.category] = [];
+        categoryOrder.push(item.category);
+      }
+      grouped[item.category].push(item);
+    }
+
+    let totalAll = 0;
+    let checkedAll = 0;
+    let html = '';
+
+    for (const cat of categoryOrder) {
+      const catItems = grouped[cat];
+      const catTotal = catItems.length;
+      const catChecked = catItems.filter(i => i.checked).length;
+      totalAll += catTotal;
+      checkedAll += catChecked;
+
+      const badgeClass = catChecked === catTotal ? 'bg-success' : 'bg-secondary';
+
+      html += `
+        <div class="card shadow-sm mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">${this._esc(cat)}</span>
+            <span class="badge ${badgeClass}">${catChecked}/${catTotal}</span>
+          </div>
+          <div class="card-body py-2">
+            <ul class="list-unstyled mb-0">`;
+
+      for (const item of catItems) {
+        const checkId = `pf-item-${item.id}`;
+        const checkedAttr = item.checked ? ' checked' : '';
+        const labelClass = item.checked ? 'text-muted text-decoration-line-through' : '';
+        html += `
+              <li class="py-2 border-bottom border-light">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="${checkId}"
+                         data-item-id="${item.id}"${checkedAttr}
+                         onchange="MC.preflight.toggle(${item.id}, this.checked)">
+                  <label class="form-check-label w-100" for="${checkId}">
+                    <span class="fw-semibold ${labelClass}">${this._esc(item.label)}</span>
+                    ${item.description ? `<br><small class="text-muted">${this._esc(item.description)}</small>` : ''}
+                  </label>
+                </div>
+              </li>`;
+      }
+
+      html += `
+            </ul>
+          </div>
+        </div>`;
+    }
+
+    cards.innerHTML = html;
+    this._updateProgress(totalAll, checkedAll);
+  },
+
+  _recalcProgress() {
+    const checkboxes = document.querySelectorAll('#preflightCards input[type="checkbox"]');
+    const total = checkboxes.length;
+    const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+
+    // Update category badges
+    const cards = document.querySelectorAll('#preflightCards .card');
+    for (const card of cards) {
+      const cbs = card.querySelectorAll('input[type="checkbox"]');
+      const catTotal = cbs.length;
+      const catChecked = Array.from(cbs).filter(cb => cb.checked).length;
+      const badge = card.querySelector('.card-header .badge');
+      if (badge) {
+        badge.textContent = `${catChecked}/${catTotal}`;
+        badge.className = `badge ${catChecked === catTotal ? 'bg-success' : 'bg-secondary'}`;
+      }
+      // Update label strikethrough
+      for (const cb of cbs) {
+        const lbl = card.querySelector(`label[for="${cb.id}"] .fw-semibold`);
+        if (lbl) {
+          if (cb.checked) {
+            lbl.classList.add('text-muted', 'text-decoration-line-through');
+          } else {
+            lbl.classList.remove('text-muted', 'text-decoration-line-through');
+          }
+        }
+      }
+    }
+
+    this._updateProgress(total, checked);
+  },
+
+  _updateProgress(total, checked) {
+    const pct = total ? Math.round(checked / total * 100) : 0;
+    const bar = document.getElementById('preflightProgressBar');
+    const pctEl = document.getElementById('preflightProgressPct');
+    const summary = document.getElementById('preflightSummary');
+
+    if (bar) {
+      bar.style.width = `${pct}%`;
+      bar.setAttribute('aria-valuenow', pct);
+      if (pct === 100) {
+        bar.classList.remove('bg-warning');
+        bar.classList.add('bg-success');
+      } else {
+        bar.classList.remove('bg-success');
+        bar.classList.add('bg-warning');
+      }
+    }
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (summary) summary.textContent = `${checked} of ${total} complete (${pct}%)`;
+  },
+
+  _esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => MC.preflight.init());
+</script>
+{% endblock %}

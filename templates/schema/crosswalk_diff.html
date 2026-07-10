@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}Crosswalk Field Diff - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link active" href="/schema/crosswalk">Crosswalk Field Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/org-diff">Org Schema Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/field-usage">Field Usage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/data-dictionary">Data Dictionary</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/apex-search">Apex Code Search</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/snapshots">Snapshots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/inspect">Record Inspector</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Crosswalk Field Diff — Live Checker
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="EDA → Ed Cloud Crosswalk"
+            data-bs-content="Compares the field mapping document (uploaded CSV) against live field metadata from the org. Identifies fields in the crosswalk that no longer exist, fields with changed types, and unmapped fields.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Upload Zone -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Import Mappings</div>
+    <div class="card-body">
+      <div id="uploadArea" class="upload-zone mb-3">
+        <div class="upload-icon">&#128196;</div>
+        <p class="fw-semibold">Drag &amp; drop a CSV file here</p>
+        <p class="small">or click to browse</p>
+        <input id="csvFileInput" type="file" accept=".csv" class="d-none">
+        <button id="btnUploadCsv" class="btn btn-doane btn-sm mt-2">Upload CSV</button>
+      </div>
+      <p class="text-center text-muted small mb-2">— or —</p>
+      <div class="text-center">
+        <button id="btnAddRow" class="btn btn-outline-secondary btn-sm">+ Add Mapping Manually</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Mapping Table -->
+  <div id="mappingTableWrap" class="card shadow-sm mb-3 d-none">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Mapping Rows</span>
+      <button id="btnRunCheck" class="btn btn-doane btn-sm no-print">&#9654; Run Live Check</button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 mapping-table" id="mappingTable">
+          <thead style="background-color: var(--doane-slate); color: #fff;">
+            <tr>
+              <th>EDA Object</th>
+              <th>EDA Field</th>
+              <th>EC Object</th>
+              <th>EC Field</th>
+              <th>Status</th>
+              <th class="no-print" style="width:60px;">Delete</th>
+            </tr>
+          </thead>
+          <tbody id="mappingTableBody">
+            <!-- Rows populated by MC.crosswalk.addMappingRow() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer no-print">
+      <button id="btnRunCheckFooter" class="btn btn-doane btn-sm">&#9654; Run Live Check</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="crosswalkResultsWrap" class="d-none">
+    <!-- Loading -->
+    <div id="crosswalkLoading" class="text-center py-4 d-none">
+      <div class="spinner-border text-warning" role="status">
+        <span class="visually-hidden">Running check…</span>
+      </div>
+      <p class="mt-2 text-muted small">Running live field check…</p>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Diff Results
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Unmapped Fields"
+              data-bs-content="Fields present in the org that have no entry in the crosswalk mapping. These may be custom fields added after the crosswalk was created — verify whether they need to be part of the migration.">ⓘ</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0">
+            <thead>
+              <tr>
+                <th>EDA Field</th>
+                <th>EC Field</th>
+                <th>EDA Coverage</th>
+                <th>EC Coverage</th>
+                <th>Gap</th>
+                <th>Direction</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTable">
+              <!-- Populated by MC.crosswalk.renderResults() -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drill-down panel -->
+    <div id="crosswalkDrillPanel" class="card shadow-sm mt-3 d-none">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold" id="cwDrillTitle">Record Detail</span>
+        <button id="btnCloseCwDrill" class="btn btn-sm btn-outline-secondary">&#10005; Close</button>
+      </div>
+      <div class="card-body">
+        <div id="cwDrillContent" class="font-monospace small"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.crosswalk.init();
+  });
+</script>
+{% endblock %}

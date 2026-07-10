@@ -1,0 +1,1205 @@
+{% extends 'base.html' %}
+{% block title %}Admin - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Admin
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Admin Dashboard"
+              data-bs-content="Org health tools: scheduled job status, Apex test coverage, deployment history, and user activity audit.">ⓘ</span>
+      </h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Nav tabs -->
+  <ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-jobs" data-bs-toggle="tab"
+              data-bs-target="#panel-jobs" type="button" role="tab"
+              aria-controls="panel-jobs" aria-selected="true">
+        Scheduled Jobs
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-coverage" data-bs-toggle="tab"
+              data-bs-target="#panel-coverage" type="button" role="tab"
+              aria-controls="panel-coverage" aria-selected="false">
+        Test Coverage
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-deploys" data-bs-toggle="tab"
+              data-bs-target="#panel-deploys" type="button" role="tab"
+              aria-controls="panel-deploys" aria-selected="false">
+        Deployment History
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-users" data-bs-toggle="tab"
+              data-bs-target="#panel-users" type="button" role="tab"
+              aria-controls="panel-users" aria-selected="false">
+        User Audit
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-anonymizer-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-anonymizer" type="button" role="tab"
+              aria-controls="tab-anonymizer" aria-selected="false">
+        Anonymizer
+        <span class="badge badge-amber ms-1">Stub</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-integrations-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-integrations" type="button" role="tab"
+              aria-controls="tab-integrations" aria-selected="false">
+        Integrations
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-platform-events-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-platform-events" type="button" role="tab"
+              aria-controls="tab-platform-events" aria-selected="false">
+        Platform Events
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-record-types-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-record-types" type="button" role="tab"
+              aria-controls="tab-record-types" aria-selected="false">
+        Record Types
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-email-templates-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-email-templates" type="button" role="tab"
+              aria-controls="tab-email-templates" aria-selected="false">
+        Email Templates
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-audit-trail-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-audit-trail" type="button" role="tab"
+              aria-controls="tab-audit-trail" aria-selected="false">
+        Audit Trail
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-job-queue-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-job-queue" type="button" role="tab"
+              aria-controls="tab-job-queue" aria-selected="false">
+        Job Queue
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-login-history-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-login-history" type="button" role="tab"
+              aria-controls="tab-login-history" aria-selected="false">
+        Login History
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-custom-metadata" data-bs-toggle="tab"
+              data-bs-target="#panel-custom-metadata" type="button" role="tab"
+              aria-controls="panel-custom-metadata" aria-selected="false">
+        Custom Metadata
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-custom-settings" data-bs-toggle="tab"
+              data-bs-target="#panel-custom-settings" type="button" role="tab"
+              aria-controls="panel-custom-settings" aria-selected="false">
+        Custom Settings
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-permissions-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-permissions" type="button" role="tab"
+              aria-controls="tab-permissions" aria-selected="false">
+        Permissions Audit
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-automation-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-automation" type="button" role="tab"
+              aria-controls="tab-automation" aria-selected="false">
+        Automation &amp; Sharing
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="adminTabContent">
+
+    <!-- ── Scheduled Jobs ──────────────────────────────────────────────────── -->
+    <div class="tab-pane fade show active" id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">CronTrigger records from the active org</small>
+        <button id="btnRefreshJobs" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="jobsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading scheduled jobs…</p>
+      </div>
+      <div id="jobsEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No scheduled jobs found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="jobsCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="jobsTable">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>State</th>
+                <th>Next Fire</th>
+                <th>Previous Fire</th>
+                <th class="text-end">Triggered</th>
+                <th>Cron</th>
+              </tr>
+            </thead>
+            <tbody id="jobsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Test Coverage ───────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-coverage" role="tabpanel" aria-labelledby="tab-coverage">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          ApexCodeCoverageAggregate via Tooling API &mdash;
+          <span class="text-warning fw-semibold">75% threshold</span> required for SF deployments
+        </small>
+        <button id="btnRefreshCoverage" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <!-- Summary bar -->
+      <div id="coverageSummary" class="d-none mb-3">
+        <div class="d-flex gap-3 flex-wrap">
+          <span class="badge badge-green fs-6" id="covPassing">— passing</span>
+          <span class="badge badge-amber fs-6" id="covBelow">— below 75%</span>
+          <span class="badge badge-red fs-6" id="covFailing">— below 50%</span>
+        </div>
+      </div>
+      <div id="coverageLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading test coverage…</p>
+      </div>
+      <div id="coverageEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No coverage data found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="coverageCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="coverageTable">
+            <thead class="table-light">
+              <tr>
+                <th>Class / Trigger</th>
+                <th class="text-end">Covered</th>
+                <th class="text-end">Uncovered</th>
+                <th style="width:220px">Coverage</th>
+              </tr>
+            </thead>
+            <tbody id="coverageBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Deployment History ──────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-deploys" role="tabpanel" aria-labelledby="tab-deploys">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">Recent deployments via Tooling API DeployRequest</small>
+        <button id="btnRefreshDeploys" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="deploysLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading deployment history…</p>
+      </div>
+      <div id="deploysEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No deployments found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="deploysCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="deploysTable">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Deployed By</th>
+                <th class="text-end">Components</th>
+                <th class="text-end">Errors</th>
+                <th class="text-end">Tests</th>
+                <th class="text-end">Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="deploysBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── User Audit ──────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-users" role="tabpanel" aria-labelledby="tab-users">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">Standard + portal users ordered by last login</small>
+        <div class="d-flex gap-2">
+          <input id="userFilter" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by name or username…" style="width:220px">
+          <button id="btnRefreshUsers" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <!-- Summary cards -->
+      <div id="usersSummary" class="d-none mb-3">
+        <div class="row g-2">
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-success" id="sumActive">—</div>
+                <div class="small text-muted">Total Active</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-warning" id="sumInactive90">—</div>
+                <div class="small text-muted">Inactive &gt;90 days</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-danger" id="sumNeverLogin">—</div>
+                <div class="small text-muted">Never Logged In</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card text-center py-2">
+              <div class="card-body p-1">
+                <div class="fs-4 fw-bold text-primary" id="sumSysadmins">—</div>
+                <div class="small text-muted">Sys Admins</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="usersLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading user audit…</p>
+      </div>
+      <div id="usersEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No users found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="usersCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="usersTable">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Profile</th>
+                <th>Last Login</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Anonymizer ─────────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-anonymizer" role="tabpanel" aria-labelledby="tab-anonymizer-btn">
+      <div class="row g-3 mt-1">
+        <!-- Config notice -->
+        <div class="col-12">
+          <div class="alert alert-warning py-2 small mb-0">
+            <strong>Stub mode</strong> — <code>PII_SERVICE_URL</code> is not configured.
+            No records will be modified until the PII service is wired in.
+            See <code>services/anonymizer.py</code> for the integration point.
+          </div>
+        </div>
+
+        <!-- Object + field selector -->
+        <div class="col-md-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="fw-semibold mb-3" style="color:var(--doane-slate);">
+                Select Object &amp; Fields
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Data Anonymizer"
+                      data-bs-content="Selects which fields to scrub on sandbox/dev orgs after a refresh. Calls your PII service (PII_SERVICE_URL) to replace real values with synthetic ones. Currently stubbed — no records are modified.">ⓘ</span>
+              </h6>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">Object</label>
+                <select id="anonObjectSelect" class="form-select form-select-sm">
+                  <option value="">— select object —</option>
+                </select>
+              </div>
+              <div class="mb-3" id="anonFieldsWrap">
+                <label class="form-label small fw-semibold">Fields to Anonymize</label>
+                <div id="anonFieldsList" class="d-flex flex-column gap-1">
+                  <span class="text-muted small">Select an object first</span>
+                </div>
+              </div>
+              <button class="btn btn-outline-secondary btn-sm w-100" id="btnAnonPreview">
+                Preview Affected Records
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview + run -->
+        <div class="col-md-8">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="fw-semibold mb-3" style="color:var(--doane-slate);">Preview &amp; Run</h6>
+
+              <div id="anonPreviewWrap" class="d-none mb-3">
+                <div class="d-flex gap-3 mb-2">
+                  <div>
+                    <div class="small text-muted">Records affected</div>
+                    <div class="fs-4 fw-bold" id="anonRecordCount">—</div>
+                  </div>
+                  <div>
+                    <div class="small text-muted">Object</div>
+                    <div class="fw-semibold" id="anonPreviewObject">—</div>
+                  </div>
+                  <div>
+                    <div class="small text-muted">Fields</div>
+                    <div class="small font-monospace" id="anonPreviewFields">—</div>
+                  </div>
+                </div>
+                <div class="bg-light rounded p-2 font-monospace small text-muted" id="anonPreviewSoql"></div>
+              </div>
+
+              <div id="anonResultWrap" class="d-none mb-3">
+                <div class="alert py-2 small mb-0" id="anonResultAlert"></div>
+              </div>
+
+              <div class="d-flex gap-2 no-print">
+                <div class="form-check form-switch mb-0 me-auto">
+                  <input class="form-check-input" type="checkbox" id="anonDryRun" role="switch" checked>
+                  <label class="form-check-label small" for="anonDryRun">
+                    Dry Run <span class="text-muted">(no changes made)</span>
+                  </label>
+                </div>
+                <button class="btn btn-warning btn-sm" id="btnAnonRun" disabled>
+                  Run Anonymizer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Integrations ──────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-integrations" role="tabpanel" aria-labelledby="tab-integrations-btn">
+      <div class="row g-3 mt-1">
+
+        <!-- Named Credentials -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Named Credentials
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Named Credentials"
+                      data-bs-content="Named Credentials store endpoint + authentication for callouts. Queried via Tooling API: SELECT DeveloperName, MasterLabel, Endpoint, Protocol FROM NamedCredential.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm integ-refresh-btn">&#8635; Refresh</button>
+            </div>
+            <div id="namedCredsLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading named credentials…</p>
+            </div>
+            <div id="namedCredsEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No named credentials found.</p>
+            </div>
+            <div class="card-body p-0" id="namedCredsCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Label</th>
+                    <th>Endpoint</th>
+                    <th>Protocol</th>
+                  </tr>
+                </thead>
+                <tbody id="namedCredsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Remote Site Settings -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Remote Site Settings
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Remote Site Settings"
+                      data-bs-content="Remote Site Settings must exist for every external domain your Apex/flows call out to. Inactive sites will cause HTTP callout failures. Queried via Tooling API: SELECT SiteName, Url, IsActive FROM RemoteSiteSetting.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm integ-refresh-btn">&#8635; Refresh</button>
+            </div>
+            <div id="remoteSitesLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading remote site settings…</p>
+            </div>
+            <div id="remoteSitesEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No remote site settings found.</p>
+            </div>
+            <div class="card-body p-0" id="remoteSitesCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Site Name</th>
+                    <th>URL</th>
+                    <th>Active</th>
+                    <th>Security Protocol</th>
+                  </tr>
+                </thead>
+                <tbody id="remoteSitesTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connected Apps -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Connected Apps
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Connected Apps"
+                      data-bs-content="Connected Apps define OAuth scopes and policies for external systems accessing this org's API. Queried via Data API: SELECT Id, Name FROM ConnectedApplication.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm integ-refresh-btn">&#8635; Refresh</button>
+            </div>
+            <div id="connectedAppsLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading connected apps…</p>
+            </div>
+            <div id="connectedAppsEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No connected apps found.</p>
+            </div>
+            <div class="card-body p-0" id="connectedAppsCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Developer Name</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody id="connectedAppsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Platform Events ──────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-platform-events" role="tabpanel" aria-labelledby="tab-platform-events-btn">
+      <div class="row g-3 mt-1">
+
+        <!-- Platform Event Channels -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Platform Event Channels
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Platform Event Channels"
+                      data-bs-content="Platform Events are schema-defined Salesforce events used for real-time integration. Queried via Tooling API: SELECT DeveloperName, MasterLabel, Description FROM PlatformEventChannel. These are the event types your org has defined.">ⓘ</span>
+              </h6>
+              <button class="btn btn-outline-secondary btn-sm" id="btnRefreshPlatformEvents">&#8635; Refresh</button>
+            </div>
+            <div id="eventChannelsLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading platform event channels…</p>
+            </div>
+            <div id="eventChannelsEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No platform event channels found.</p>
+            </div>
+            <div class="card-body p-0" id="eventChannelsCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Label</th>
+                    <th>API Name</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody id="eventChannelsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscriptions (Channel Members) -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Subscriptions (Channel Members)
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                      tabindex="0" data-bs-title="Subscriptions (Channel Members)"
+                      data-bs-content="PlatformEventChannelMember records show which Flows, Apex Triggers, or Process Builders are subscribed to each Platform Event. Missing subscriptions mean events are published but nobody is listening.">ⓘ</span>
+              </h6>
+            </div>
+            <div id="eventMembersLoading" class="text-center py-4 d-none">
+              <div class="spinner-border text-warning" role="status">
+                <span class="visually-hidden">Loading…</span>
+              </div>
+              <p class="mt-2 text-muted small">Loading subscriptions…</p>
+            </div>
+            <div id="eventMembersEmpty" class="text-center py-4 text-muted d-none">
+              <p class="mb-0">No channel subscriptions found.</p>
+            </div>
+            <div class="card-body p-0" id="eventMembersCardBody">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Channel</th>
+                    <th>Subscriber Type</th>
+                  </tr>
+                </thead>
+                <tbody id="eventMembersTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Record Types ───────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-record-types" role="tabpanel" aria-labelledby="tab-record-types-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          RecordType objects from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Record Types"
+                data-bs-content="Queries RecordType for all objects. Record counts (where shown) use GROUP BY RecordTypeId on Account/Opportunity/Case. Inactive record types are grayed out.">ⓘ</span>
+        </small>
+        <button id="btnRefreshRecordTypes" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="recordTypesLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading record types…</p>
+      </div>
+      <div id="recordTypesEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No record types found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="recordTypesCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>SObject</th>
+                <th>Name</th>
+                <th>Developer Name</th>
+                <th>Active</th>
+                <th class="text-end">Count</th>
+              </tr>
+            </thead>
+            <tbody id="recordTypesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Email Templates ────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-email-templates" role="tabpanel" aria-labelledby="tab-email-templates-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          EmailTemplate records from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Email Templates"
+                data-bs-content="Queries EmailTemplate sorted by folder. Inactive templates are grayed out. Encoding other than UTF-8 may need review before migration.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2">
+          <input id="emailTemplateSearch" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by name, folder, or subject…" style="width:260px">
+          <button id="btnRefreshEmailTemplates" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <div id="emailTemplatesLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading email templates…</p>
+      </div>
+      <div id="emailTemplatesEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No email templates found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="emailTemplatesCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Folder</th>
+                <th>Name</th>
+                <th>Subject</th>
+                <th>Encoding</th>
+                <th>Active</th>
+                <th>Last Modified</th>
+              </tr>
+            </thead>
+            <tbody id="emailTemplatesTbody"></tbody>
+          </table>
+        </div>
+        <div id="emailTemplatesPagination" class="d-none card-footer d-flex justify-content-between align-items-center py-2">
+          <small class="text-muted" id="emailTemplatesPageInfo"></small>
+          <div class="btn-group btn-group-sm">
+            <button id="btnEmailTemplatesPrev" class="btn btn-outline-secondary" disabled>&laquo; Prev</button>
+            <button id="btnEmailTemplatesNext" class="btn btn-outline-secondary">Next &raquo;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Setup Audit Trail ─────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-audit-trail" role="tabpanel" aria-labelledby="tab-audit-trail-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          SetupAuditTrail — recent org configuration changes
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Setup Audit Trail"
+                data-bs-content="Queries SetupAuditTrail (standard SF object) for recent org configuration changes. Useful for tracking who changed a permission set, activated a Flow, or modified an integration setting before a go-live. Limited to last N days and 200 records.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2 align-items-center">
+          <select id="auditTrailDays" class="form-select form-select-sm" style="width:auto">
+            <option value="1">Last 1 day</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+          <input id="auditTrailSearch" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by section, user, or detail…" style="width:260px">
+          <button id="btnRefreshAuditTrail" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <div id="auditTrailLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading audit trail…</p>
+      </div>
+      <div id="auditTrailEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No audit trail entries found for the selected period.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="auditTrailCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="auditTrailTable">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>By</th>
+                <th>Section</th>
+                <th>Action</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="auditTrailTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Job Queue ────────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-job-queue" role="tabpanel" aria-labelledby="tab-job-queue-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          AsyncApexJob — Batch, Queueable, Scheduled &amp; Future Apex
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Job Queue"
+                data-bs-content="Queries AsyncApexJob for Batch, Queueable, Scheduled, and Future Apex jobs. Use during migration to monitor bulk loads and catch failures. Status flags: Processing=blue, Queued=amber, Completed=green, Failed=red.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="jobQueueAutoRefresh" role="switch">
+            <label class="form-check-label small" for="jobQueueAutoRefresh">Auto-refresh (10s)</label>
+          </div>
+          <button id="btnRefreshJobQueue" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <!-- Status filter pills -->
+      <div class="d-flex gap-2 flex-wrap mb-2" id="jobQueueFilters">
+        <button class="btn btn-sm btn-outline-secondary active" data-jq-filter="">All</button>
+        <button class="btn btn-sm btn-outline-primary" data-jq-filter="Processing">Processing</button>
+        <button class="btn btn-sm btn-outline-warning" data-jq-filter="Queued">Queued</button>
+        <button class="btn btn-sm btn-outline-success" data-jq-filter="Completed">Completed</button>
+        <button class="btn btn-sm btn-outline-danger" data-jq-filter="Failed">Failed</button>
+      </div>
+      <!-- Summary counts -->
+      <div id="jobQueueSummary" class="d-none mb-2">
+        <small class="text-muted">
+          <span id="jqTotal">0</span> total &nbsp;|&nbsp;
+          <span id="jqRunning" class="text-primary fw-semibold">0</span> running &nbsp;|&nbsp;
+          <span id="jqFailed" class="text-danger fw-semibold">0</span> failed
+        </small>
+      </div>
+      <div id="jobQueueLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading job queue…</p>
+      </div>
+      <div id="jobQueueEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No Apex jobs found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="jobQueueCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="jobQueueTable">
+            <thead class="table-light">
+              <tr>
+                <th>Class</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th class="text-end">Errors</th>
+                <th>By</th>
+                <th>Started</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="jobQueueTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Login History ─────────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-login-history" role="tabpanel" aria-labelledby="tab-login-history-btn">
+      <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2 no-print">
+        <small class="text-muted">
+          LoginHistory — last 200 authentication events
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Login History"
+                data-bs-content="Queries LoginHistory (last 200 records) for authentication events. Failed logins are highlighted red. API OAuth logins show as Platform=API. Use to verify service account credentials and spot unauthorized access attempts.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2">
+          <input id="loginHistorySearch" type="text" class="form-control form-control-sm"
+                 placeholder="Filter by IP, platform, or status…" style="width:260px">
+          <button id="btnRefreshLoginHistory" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+      <!-- Summary stats -->
+      <div id="loginHistorySummary" class="d-none mb-3">
+        <div class="d-flex gap-3 flex-wrap">
+          <span class="badge bg-secondary fs-6" id="lhTotal">— total</span>
+          <span class="badge badge-red fs-6" id="lhFailed">— failed</span>
+          <span class="badge badge-slate fs-6" id="lhIPs">— unique IPs</span>
+          <span class="badge badge-blue fs-6" id="lhUsers">— unique users</span>
+        </div>
+      </div>
+      <div id="loginHistoryLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading login history…</p>
+      </div>
+      <div id="loginHistoryEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No login history found.</p>
+      </div>
+      <div class="card shadow-sm d-none" id="loginHistoryCard">
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" id="loginHistoryTable">
+            <thead class="table-light">
+              <tr>
+                <th>Time</th>
+                <th>IP</th>
+                <th>Platform</th>
+                <th>Login Type</th>
+                <th>Browser</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="loginHistoryTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Custom Metadata ──────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-custom-metadata" role="tabpanel" aria-labelledby="tab-custom-metadata">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          Custom Metadata Types from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Custom Metadata Types"
+                data-bs-content="Lists Custom Metadata Types (suffix __mdt) via the Tooling API. Click a type on the left to browse its records on the right.">ⓘ</span>
+        </small>
+        <button id="btnRefreshCmdts" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="cmdtsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading Custom Metadata Types…</p>
+      </div>
+      <div id="cmdtsEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No Custom Metadata Types found.</p>
+      </div>
+      <div class="row g-3" id="cmdtsContent">
+        <!-- Left: types list -->
+        <div class="col-md-4">
+          <div class="list-group" id="cmdtTypesList"></div>
+        </div>
+        <!-- Right: records table -->
+        <div class="col-md-8 d-none" id="cmdtRecordsWrap">
+          <div class="card shadow-sm">
+            <div class="card-header py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Records — <span id="cmdtSelectedType" class="font-monospace"></span>
+              </h6>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Developer Name</th>
+                    <th>Label</th>
+                  </tr>
+                </thead>
+                <tbody id="cmdtRecordsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Custom Settings ───────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="panel-custom-settings" role="tabpanel" aria-labelledby="tab-custom-settings">
+      <div class="d-flex align-items-center justify-content-between mb-2 no-print">
+        <small class="text-muted">
+          Custom Settings from the active org
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Custom Settings"
+                data-bs-content="Lists Custom Settings (Hierarchy and List type, suffix __c) via the Tooling API. Click a setting on the left to browse its records on the right. Owner Type indicates whether the record is the org default, a profile override, or a user override.">ⓘ</span>
+        </small>
+        <button id="btnRefreshCs" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+      <div id="csLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading Custom Settings…</p>
+      </div>
+      <div id="csEmpty" class="text-center py-5 text-muted d-none">
+        <p class="mb-0">No Custom Settings found.</p>
+      </div>
+      <div class="row g-3" id="csContent">
+        <!-- Left: settings list -->
+        <div class="col-md-4">
+          <div class="list-group" id="csTypesList"></div>
+        </div>
+        <!-- Right: records table -->
+        <div class="col-md-8 d-none" id="csRecordsWrap">
+          <div class="card shadow-sm">
+            <div class="card-header py-2">
+              <h6 class="fw-semibold mb-0" style="color:var(--doane-slate);">
+                Records — <span id="csSelectedType" class="font-monospace"></span>
+              </h6>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>SetupOwner ID</th>
+                    <th>Owner Type</th>
+                  </tr>
+                </thead>
+                <tbody id="csRecordsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Permissions Audit ────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-permissions" role="tabpanel" aria-labelledby="tab-permissions-btn">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <small class="text-muted">
+          Permission sets, user assignments, and object/field access — all in one place.
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Permissions Audit"
+                data-bs-content="Drill into who has what access. Browse by Permission Set to see assigned users and granted CRUD permissions, or search by User to see their full access picture. The Object Matrix and Field Coverage tabs let you audit access to specific objects and fields across all permission sets.">ⓘ</span>
+        </small>
+        <div class="d-flex gap-2">
+          <button id="btnRefreshPermissions" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+        </div>
+      </div>
+
+      <!-- Sub-tabs -->
+      <ul class="nav nav-pills mb-3 gap-1" id="permSubTabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" id="perm-tab-sets" data-bs-toggle="pill" data-bs-target="#perm-panel-sets" type="button">Permission Sets</button></li>
+        <li class="nav-item"><button class="nav-link" id="perm-tab-users" data-bs-toggle="pill" data-bs-target="#perm-panel-users" type="button">By User</button></li>
+        <li class="nav-item"><button class="nav-link" id="perm-tab-object" data-bs-toggle="pill" data-bs-target="#perm-panel-object" type="button">Object Matrix</button></li>
+        <li class="nav-item"><button class="nav-link" id="perm-tab-field" data-bs-toggle="pill" data-bs-target="#perm-panel-field" type="button">Field Coverage</button></li>
+      </ul>
+
+      <div class="tab-content" id="permSubContent">
+
+        <!-- Perm Sets list -->
+        <div class="tab-pane fade show active" id="perm-panel-sets" role="tabpanel">
+          <div id="permSetsLoading" class="text-center py-4">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+            <p class="mt-2 text-muted small">Loading permission sets…</p>
+          </div>
+          <div id="permSetsEmpty" class="text-center py-5 text-muted d-none">No custom permission sets found.</div>
+          <div class="row g-3 d-none" id="permSetsContent">
+            <!-- Left: perm set list -->
+            <div class="col-md-4">
+              <input id="permSetSearch" type="text" class="form-control form-control-sm mb-2" placeholder="Filter perm sets…">
+              <div class="list-group" id="permSetsList" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+            <!-- Right: perm set detail -->
+            <div class="col-md-8" id="permSetDetail">
+              <div class="text-muted text-center py-5 small">Select a permission set to view details.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- By User -->
+        <div class="tab-pane fade" id="perm-panel-users" role="tabpanel">
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <input id="permUserSearch" type="text" class="form-control form-control-sm" placeholder="Search by name or username…">
+            </div>
+            <div class="col-auto">
+              <button id="btnPermUserSearch" class="btn btn-doane btn-sm">Search</button>
+            </div>
+          </div>
+          <div id="permUsersLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div class="row g-3" id="permUsersContent">
+            <div class="col-md-4">
+              <div class="list-group" id="permUsersList" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+            <div class="col-md-8" id="permUserDetail">
+              <div class="text-muted text-center py-5 small">Search for a user and select them to view their permissions.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Object Matrix -->
+        <div class="tab-pane fade" id="perm-panel-object" role="tabpanel">
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <input id="permObjectName" type="text" class="form-control form-control-sm" placeholder="SF Object API name (e.g. Account)" style="max-width:260px">
+            <button id="btnPermObjectLoad" class="btn btn-doane btn-sm">Load Matrix</button>
+          </div>
+          <div id="permObjectLoading" class="d-none text-center py-3">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="permObjectEmpty" class="text-center py-4 text-muted d-none">No permission sets grant access to this object.</div>
+          <div class="card shadow-sm d-none" id="permObjectCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0" id="permObjectTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>Permission Set</th>
+                    <th class="text-center">Read</th>
+                    <th class="text-center">Create</th>
+                    <th class="text-center">Edit</th>
+                    <th class="text-center">Delete</th>
+                    <th class="text-center">View All</th>
+                    <th class="text-center">Modify All</th>
+                  </tr>
+                </thead>
+                <tbody id="permObjectTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Coverage -->
+        <div class="tab-pane fade" id="perm-panel-field" role="tabpanel">
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <input id="permFieldObject" type="text" class="form-control form-control-sm" placeholder="SF Object API name (e.g. Account)" style="max-width:260px">
+            <button id="btnPermFieldLoad" class="btn btn-doane btn-sm">Load Field Coverage</button>
+          </div>
+          <div id="permFieldLoading" class="d-none text-center py-3">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="permFieldEmpty" class="text-center py-4 text-muted d-none">No field permissions found for this object.</div>
+          <div id="permFieldContent" class="d-none">
+            <input id="permFieldFilter" type="text" class="form-control form-control-sm mb-2" placeholder="Filter fields…" style="max-width:300px">
+            <div class="card shadow-sm">
+              <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0" id="permFieldTable">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Field</th>
+                      <th>Permission Set</th>
+                      <th class="text-center">Read</th>
+                      <th class="text-center">Edit</th>
+                    </tr>
+                  </thead>
+                  <tbody id="permFieldTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /permSubContent -->
+    </div><!-- /tab-permissions -->
+
+    <!-- ── Automation & Sharing ─────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-automation" role="tabpanel" aria-labelledby="tab-automation-btn">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <small class="text-muted">
+          Config that normally takes a dozen clicks to find — validation rules, flows, triggers, and sharing defaults.
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus"
+                tabindex="0" data-bs-title="Automation &amp; Sharing"
+                data-bs-content="Read-only org config explorer. Validation Rules, Flows, and Apex Triggers tell you exactly what automation fires on a given object — invaluable when an import row fails. Sharing Model shows the org-wide default (OWD) per object.">ⓘ</span>
+        </small>
+        <button id="btnRefreshAutomation" class="btn btn-outline-secondary btn-sm">&#8635; Refresh</button>
+      </div>
+
+      <ul class="nav nav-pills mb-3 gap-1" id="autoSubTabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" id="auto-tab-vr" data-bs-toggle="pill" data-bs-target="#auto-panel-vr" type="button">Validation Rules</button></li>
+        <li class="nav-item"><button class="nav-link" id="auto-tab-flows" data-bs-toggle="pill" data-bs-target="#auto-panel-flows" type="button">Flows</button></li>
+        <li class="nav-item"><button class="nav-link" id="auto-tab-triggers" data-bs-toggle="pill" data-bs-target="#auto-panel-triggers" type="button">Apex Triggers</button></li>
+        <li class="nav-item"><button class="nav-link" id="auto-tab-sharing" data-bs-toggle="pill" data-bs-target="#auto-panel-sharing" type="button">Sharing Model</button></li>
+      </ul>
+
+      <div class="tab-content" id="autoSubContent">
+
+        <!-- Validation Rules -->
+        <div class="tab-pane fade show active" id="auto-panel-vr" role="tabpanel">
+          <input id="autoVrFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by object, rule name, or message…" style="max-width:340px">
+          <div id="autoVrLoading" class="text-center py-4">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoVrEmpty" class="text-center py-5 text-muted d-none">No validation rules found.</div>
+          <div class="card shadow-sm d-none" id="autoVrCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Object</th><th>Rule</th><th>Status</th><th>Error Field</th><th>Error Message</th>
+                </tr></thead>
+                <tbody id="autoVrTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flows -->
+        <div class="tab-pane fade" id="auto-panel-flows" role="tabpanel">
+          <input id="autoFlowFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by name or type…" style="max-width:340px">
+          <div id="autoFlowLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoFlowEmpty" class="text-center py-5 text-muted d-none">No flows found.</div>
+          <div class="card shadow-sm d-none" id="autoFlowCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Flow</th><th>Type</th><th>Status</th><th>Description</th><th>Last Modified</th>
+                </tr></thead>
+                <tbody id="autoFlowTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Apex Triggers -->
+        <div class="tab-pane fade" id="auto-panel-triggers" role="tabpanel">
+          <input id="autoTriggerFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by object or trigger name…" style="max-width:340px">
+          <div id="autoTriggerLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoTriggerEmpty" class="text-center py-5 text-muted d-none">No Apex triggers found.</div>
+          <div class="card shadow-sm d-none" id="autoTriggerCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Object</th><th>Trigger</th><th>Status</th><th class="text-end">API Version</th><th class="text-end">Length</th>
+                </tr></thead>
+                <tbody id="autoTriggerTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sharing Model -->
+        <div class="tab-pane fade" id="auto-panel-sharing" role="tabpanel">
+          <input id="autoSharingFilter" type="text" class="form-control form-control-sm mb-2"
+                 placeholder="Filter by object…" style="max-width:340px">
+          <div id="autoSharingLoading" class="text-center py-4 d-none">
+            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+          </div>
+          <div id="autoSharingEmpty" class="text-center py-5 text-muted d-none">No sharing settings found.</div>
+          <div class="card shadow-sm d-none" id="autoSharingCard">
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light"><tr>
+                  <th>Object</th><th>API Name</th><th>Internal Access</th><th>External Access</th>
+                </tr></thead>
+                <tbody id="autoSharingTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /autoSubContent -->
+    </div><!-- /tab-automation -->
+
+  </div><!-- /tab-content -->
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-admin-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.admin.init();
+  });
+</script>
+{% endblock %}

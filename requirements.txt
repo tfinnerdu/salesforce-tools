@@ -1,0 +1,12 @@
+Flask==3.0.3
+simple-salesforce==1.12.5
+requests==2.31.0
+psycopg2-binary==2.9.9
+pandas==2.2.2
+APScheduler==3.10.4
+python-dotenv==1.0.1
+pyodbc==5.1.0
+pytest==8.2.2
+pytest-mock==3.14.0
+responses==0.25.3
+tzdata>=2024.1

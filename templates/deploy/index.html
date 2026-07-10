@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+{% block title %}Deploy — Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Change Set Builder
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Change Set Builder"
+              data-bs-content="Select components from the active org, then generate a package.xml and deployment checklist.">ⓘ</span>
+      </h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+    <p class="text-muted mb-0 small">
+      Select components from the active org, then generate a package.xml and deployment checklist.
+    </p>
+  </div>
+
+  <!-- Main two-column layout -->
+  <div class="row g-3">
+
+    <!-- ── Left: Component Picker ─────────────────────────────────────────── -->
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">Component Picker</div>
+        <div class="card-body">
+
+          <!-- Type tabs -->
+          <ul class="nav nav-tabs mb-3" id="typeTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="tab-ApexClass" data-bs-toggle="tab"
+                      data-bs-target="#panel-ApexClass" type="button" role="tab"
+                      data-deploy-type="ApexClass" aria-selected="true">Classes</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-ApexTrigger" data-bs-toggle="tab"
+                      data-bs-target="#panel-ApexTrigger" type="button" role="tab"
+                      data-deploy-type="ApexTrigger" aria-selected="false">Triggers</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-CustomField" data-bs-toggle="tab"
+                      data-bs-target="#panel-CustomField" type="button" role="tab"
+                      data-deploy-type="CustomField" aria-selected="false">Fields</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-Flow" data-bs-toggle="tab"
+                      data-bs-target="#panel-Flow" type="button" role="tab"
+                      data-deploy-type="Flow" aria-selected="false">Flows</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-PermissionSet" data-bs-toggle="tab"
+                      data-bs-target="#panel-PermissionSet" type="button" role="tab"
+                      data-deploy-type="PermissionSet" aria-selected="false">Perm Sets</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-ValidationRule" data-bs-toggle="tab"
+                      data-bs-target="#panel-ValidationRule" type="button" role="tab"
+                      data-deploy-type="ValidationRule" aria-selected="false">Val Rules</button>
+            </li>
+          </ul>
+
+          <!-- Tab panels -->
+          <div class="tab-content" id="typeTabContent">
+            {% for type_name, tab_id in [
+                ('ApexClass',      'ApexClass'),
+                ('ApexTrigger',    'ApexTrigger'),
+                ('CustomField',    'CustomField'),
+                ('Flow',           'Flow'),
+                ('PermissionSet',  'PermissionSet'),
+                ('ValidationRule', 'ValidationRule'),
+            ] %}
+            <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                 id="panel-{{ tab_id }}" role="tabpanel"
+                 aria-labelledby="tab-{{ tab_id }}">
+
+              <div class="d-flex align-items-center justify-content-between mb-2 gap-2 flex-wrap no-print">
+                <button class="btn btn-outline-secondary btn-sm deploy-load-btn"
+                        data-type="{{ type_name }}">
+                  Load {{ type_name }}
+                </button>
+                <div class="d-flex gap-2 align-items-center ms-auto">
+                  <a href="#" class="small deploy-select-all-link" data-type="{{ type_name }}">Select All</a>
+                  <span class="text-muted small">/</span>
+                  <a href="#" class="small deploy-clear-link" data-type="{{ type_name }}">Clear</a>
+                </div>
+              </div>
+
+              <input type="text" class="form-control form-control-sm mb-2 deploy-filter-input"
+                     data-type="{{ type_name }}"
+                     placeholder="Filter {{ type_name }}…"
+                     style="display:none">
+
+              <!-- Loading spinner -->
+              <div class="text-center py-3 d-none deploy-loading" id="loading-{{ tab_id }}">
+                <div class="spinner-border spinner-border-sm text-warning" role="status">
+                  <span class="visually-hidden">Loading…</span>
+                </div>
+                <span class="ms-2 small text-muted">Loading {{ type_name }}…</span>
+              </div>
+
+              <!-- Empty state -->
+              <div class="text-center py-4 text-muted d-none deploy-empty" id="empty-{{ tab_id }}">
+                <p class="mb-0 small">No {{ type_name }} components found — click Load to query.</p>
+              </div>
+
+              <!-- Scrollable checkbox list -->
+              <div class="deploy-list-container" id="list-{{ tab_id }}"
+                   style="max-height:350px; overflow-y:auto; display:none">
+              </div>
+
+            </div>
+            {% endfor %}
+          </div><!-- /tab-content -->
+
+        </div><!-- /card-body -->
+      </div><!-- /card -->
+    </div><!-- /col-lg-8 -->
+
+    <!-- ── Right: Selection Summary ───────────────────────────────────────── -->
+    <div class="col-lg-4">
+      <div class="card shadow-sm" style="position:sticky; top:70px">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+          Selected Components
+          <span class="badge badge-slate" id="selectedCount">0</span>
+        </div>
+        <div class="card-body p-2">
+
+          <!-- Selected items list grouped by type -->
+          <div id="selectionList" class="list-group list-group-flush mb-2"
+               style="max-height:360px; overflow-y:auto">
+            <div class="text-muted text-center small py-3" id="selectionEmpty">
+              No components selected yet.
+            </div>
+          </div>
+
+          <!-- Generate button -->
+          <div class="d-grid gap-2 mt-2">
+            <button id="btnGenerate" class="btn btn-warning fw-semibold" disabled>
+              Generate Package
+            </button>
+          </div>
+
+          <p class="text-muted small mt-2 mb-0">
+            Downloads <code>package.xml</code> — open in VS Code or add components
+            to a change set in <strong>Setup → Deploy → Outbound Change Sets</strong>.
+          </p>
+
+        </div>
+      </div>
+    </div><!-- /col-lg-4 -->
+
+  </div><!-- /row -->
+
+  <!-- ── Output area (hidden until generated) ──────────────────────────────── -->
+  <div id="outputArea" class="row g-3 mt-1 d-none">
+
+    <!-- package.xml card -->
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+          <span>package.xml</span>
+          <div class="d-flex gap-2 no-print">
+            <button class="btn btn-outline-secondary btn-sm" id="btnCopyXml">Copy</button>
+            <button class="btn btn-outline-primary btn-sm" id="btnDownloadXml">
+              Download package.xml
+            </button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <pre id="packageXmlPre"
+               class="m-0 p-3"
+               style="font-size:0.78rem; max-height:500px; overflow:auto; white-space:pre; background:#f8f9fa; border-radius:0 0 0.375rem 0.375rem"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deployment Checklist card -->
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+          <span>Deployment Checklist</span>
+          <button class="btn btn-outline-secondary btn-sm no-print" id="btnPrint">
+            &#128438; Print
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div style="max-height:500px; overflow:auto">
+            <table class="table table-sm table-hover mb-0" id="checklistTable">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>Type</th>
+                  <th>Component</th>
+                  <th>Setup Path</th>
+                </tr>
+              </thead>
+              <tbody id="checklistBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /outputArea -->
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-deploy-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.deploy.init();
+  });
+</script>
+{% endblock %}

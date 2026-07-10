@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Key Maps - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Key Maps
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Source → Salesforce Key Maps"
+            data-bs-content="Transform source rows (SQL result, CSV, or JSON) into Salesforce records of one SObject: resolve foreign keys by external ID, route each row to a family of variants, and fan out one source row into many target records. Preview-only — exports what would be inserted for review.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+    <div class="ms-auto">
+      <a href="/key-maps/new" class="btn btn-doane btn-sm">+ New Key Map</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Saved key maps</div>
+    <div class="card-body p-0">
+      <div id="kmLoading" class="text-center py-4">
+        <div class="spinner-border text-warning" role="status"></div>
+      </div>
+      <div id="kmEmpty" class="text-center py-4 text-muted d-none">
+        No key maps yet — click <strong>+ New Key Map</strong> to build one.
+      </div>
+      <table id="kmTable" class="table table-sm table-hover mb-0 d-none">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Target SObject</th>
+            <th>Updated</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="kmTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-key-map-snippet.js') }}"></script>
+{% endblock %}

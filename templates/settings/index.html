@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+{% block title %}Settings - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Settings</h4>
+  </div>
+
+  <!-- ── Section 1: Org Connections ─────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">Org Connections</div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0" id="orgConnectionsTable">
+            <thead>
+              <tr>
+                <th>Org Name</th>
+                <th>Username</th>
+                <th>Instance URL</th>
+                <th>Status</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="orgConnectionsTbody">
+              {% for org_name in ['dev', 'prod', 'sandbox'] %}
+              {% set org_cap = org_name[0]|upper + org_name[1:] %}
+              {% set cfg = org_configs.get(org_name, {}) %}
+              <tr>
+                <td><strong>{{ org_name }}</strong></td>
+                <td>
+                  {% if cfg.username %}
+                    <span class="masked-value small">{{ cfg.username }}</span>
+                  {% else %}
+                    <span class="text-muted small">Not configured</span>
+                  {% endif %}
+                </td>
+                <td><span id="orgInstance{{ org_cap }}" class="text-muted small">–</span></td>
+                <td><span id="orgStatus{{ org_cap }}" class="badge badge-amber">Unknown</span></td>
+                <td class="no-print">
+                  <button class="btn btn-sm btn-outline-secondary"
+                          onclick="MC.settings.testOrg('{{ org_name }}')">
+                    Test Connection
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Conductor Config ────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">Conductor Config</div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">Conductor Base URL</label>
+            <div class="d-flex align-items-center gap-2">
+              <span class="masked-value" id="conductorUrl">https://conductor.doane.edu/api/••••</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">API Key</label>
+            <div class="d-flex align-items-center gap-2">
+              <span class="masked-value" id="conductorApiKey">••••••••••••••••••••••••</span>
+            </div>
+          </div>
+          <div class="col-12 no-print">
+            <button id="btnTestConductor" class="btn btn-outline-secondary btn-sm">
+              Test Conductor Connection
+            </button>
+            <span id="conductorTestResult" class="ms-2 small"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 3: DML / Trigger Settings ──────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">DML / Trigger Settings</div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Rate Limit (calls/sec)
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="Rate Limit"
+                    data-bs-content="SF_DML_RATE_LIMIT controls the maximum DML operations per second from this app. 0 = unlimited. Set to 2–5 during production migration windows to avoid hitting Apex CPU limits from concurrent trigger execution.">ⓘ</span>
+            </label>
+            <div class="text-muted small">
+              {{ dml_settings.rate_limit if dml_settings.rate_limit else '0 — unlimited' }}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Bypass Setting Object</label>
+            <div class="text-muted small font-monospace">
+              {{ dml_settings.bypass_setting or '(not configured)' }}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold mb-1">Bypass Field</label>
+            <div class="text-muted small font-monospace">{{ dml_settings.bypass_field }}</div>
+          </div>
+          <div class="col-12 no-print">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="bypassTriggersToggle"
+                     role="switch"
+                     {% if bypass_active %}checked{% endif %}
+                     data-mc-confirm="Changing the trigger-bypass setting changes how Salesforce automations run for every write in your session."
+                     data-mc-confirm-title="Change trigger bypass"
+                     data-mc-confirm-btn="Change setting"
+                     onchange="MC.settings.toggleBypass(this.checked)">
+              <label class="form-check-label fw-semibold" for="bypassTriggersToggle">
+                Bypass Triggers <span class="fw-normal text-muted">(session-wide)</span>
+                <span class="mc-info-icon"
+                      data-bs-toggle="popover"
+                      data-bs-trigger="focus"
+                      tabindex="0"
+                      data-bs-title="Bypass Triggers"
+                      data-bs-content="Sets a Hierarchy Custom Setting field (SF_BYPASS_SETTING.SF_BYPASS_FIELD) to true via REST PATCH before each DML op, then clears it in a finally block. Apex triggers check this setting at their top line and return immediately if true. Use during bulk migration loads to prevent trigger storms.">ⓘ</span>
+              </label>
+            </div>
+            {% if not dml_settings.bypass_setting %}
+            <div class="text-muted small mt-1">
+              Set <code>SF_BYPASS_SETTING</code> in your environment to enable this feature.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 4: API Collections ─────────────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">API Collections</div>
+
+    <!-- Upload -->
+    <div class="card shadow-sm mb-3 no-print">
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-sm-auto">
+            <label class="form-label small fw-semibold mb-1">Import Postman Collection (JSON)</label>
+            <input id="collectionFileInput" type="file" accept=".json" class="form-control form-control-sm"
+                   style="max-width:320px;">
+          </div>
+          <div class="col-sm-auto">
+            <button id="btnImportCollection" class="btn btn-doane btn-sm">
+              &#11014; Import
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collections Table -->
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div id="collectionsLoading" class="text-center py-3 d-none">
+          <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+          <span class="ms-2 text-muted small">Loading collections…</span>
+        </div>
+        <div id="collectionsEmpty" class="text-center py-4 text-muted small d-none">
+          No collections imported yet.
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0">
+            <thead>
+              <tr>
+                <th>Collection Name</th>
+                <th>Requests</th>
+                <th>Last Run</th>
+                <th>Last Status</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="collectionsTbody">
+              <!-- Populated by MC.settings.listCollections() -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 5: SQL Server Schema Cache ─────────────────────────── -->
+  <div class="settings-section">
+    <div class="settings-section-title">SQL Server Schema Cache</div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          The Join Builder uses a cached copy of the Colleague SQL Server schema
+          (table and column names) so it keeps working even when the ODBC link
+          is down. The cache never expires on its own — refresh it here only
+          when SQL Server tables actually change.
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="SQL Schema Cache"
+                data-bs-content="Refresh re-introspects INFORMATION_SCHEMA.COLUMNS over the live ODBC connection and overwrites the cached copy stored in Postgres. It is intentionally kept on this page, away from the Join Builder, since a refresh is a relatively heavy SQL Server call that rarely needs running.">ⓘ</span>
+        </p>
+        <div class="d-flex align-items-center gap-3 flex-wrap no-print">
+          <button id="btnRefreshSqlSchema" class="btn btn-outline-secondary btn-sm">
+            &#8635; Refresh SQL Schema
+          </button>
+          <span id="sqlSchemaCacheStatus" class="small text-muted">Checking cache…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Run Collection Modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="runModal" tabindex="-1" aria-labelledby="runModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color: var(--doane-slate); color:#fff;">
+        <h5 class="modal-title" id="runModalLabel">Run Collection</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="runModalCollectionId">
+        <div class="mb-3">
+          <label for="runModalEnvOverrides" class="form-label fw-semibold">
+            Environment Variable Overrides
+            <small class="text-muted fw-normal">(KEY=VALUE, one per line)</small>
+          </label>
+          <textarea id="runModalEnvOverrides" class="form-control font-monospace" rows="4"
+                    placeholder="BASE_URL=https://sandbox.salesforce.com&#10;API_VERSION=59.0"></textarea>
+        </div>
+
+        <!-- Per-request results -->
+        <div id="runResultsWrap" class="d-none">
+          <div class="fw-semibold mb-2 small text-uppercase" style="color:var(--doane-slate);">
+            Request Results
+          </div>
+          <div id="runResultsList" class="list-group list-group-flush small">
+            <!-- Items added per request by JS -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" id="btnRunCollection" class="btn btn-doane">
+          &#9654; Run Collection
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.settings.init();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Org Metadata Diff - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item"><a class="nav-link" href="/schema/crosswalk">Crosswalk Field Diff</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/org-diff">Org Schema Diff</a></li>
+      <li class="nav-item"><a class="nav-link active" href="/schema/metadata-diff">Org Metadata Diff</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/field-usage">Field Usage</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/data-dictionary">Data Dictionary</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/apex-search">Apex Code Search</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/snapshots">Snapshots</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/inspect">Record Inspector</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Org Metadata Diff
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Metadata Diff"
+            data-bs-content="Compares deployable metadata — Apex classes, Apex triggers, flows, validation rules, custom objects — between two orgs. Flags components present in only one org and components present in both but configured differently. Org Schema Diff covers fields; this covers everything else.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Config row -->
+  <div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1">Left Org</label>
+          <div class="d-flex align-items-center gap-2 pt-1">
+            <span class="badge mc-org-badge" id="leftOrgBadge">
+              {{ session.get('active_org', 'dev') | upper }}
+            </span>
+            <small class="text-muted">(active)</small>
+          </div>
+        </div>
+        <div class="col-sm-3 col-lg-2">
+          <label for="rightOrgSelect" class="form-label small fw-semibold mb-1">Right Org</label>
+          {% set default_right = (available_orgs | reject('equalto', active_org) | first) or active_org %}
+          <select id="rightOrgSelect" class="form-select form-select-sm">
+            {% for o in available_orgs %}
+            <option value="{{ o }}"{% if o == default_right %} selected{% endif %}>{{ o }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm">
+          <label class="form-label small fw-semibold mb-1">Metadata Types</label>
+          <div class="d-flex flex-wrap gap-3" id="metaTypePicker">
+            {% for key, label in metadata_types %}
+            <div class="form-check">
+              <input class="form-check-input meta-type-check" type="checkbox"
+                     id="mt-{{ key }}" value="{{ key }}" checked>
+              <label class="form-check-label small" for="mt-{{ key }}">{{ label }}</label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnRunMetaDiff" class="btn btn-doane btn-sm">&#9654; Run Diff</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="metaDiffLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Running diff…</span>
+    </div>
+    <p class="mt-2 text-muted small">Comparing org metadata…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="metaDiffEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No diff results yet.</p>
+    <p class="small">Pick a right org and metadata types, then click <strong>Run Diff</strong>.</p>
+  </div>
+
+  <!-- Summary banner -->
+  <div id="metaDiffSummary" class="alert d-none mb-2"></div>
+
+  <!-- Legend -->
+  <div id="metaDiffLegend" class="d-flex flex-wrap gap-2 mb-2 small d-none">
+    <span class="px-2 py-1 rounded diff-left-only">Left-only (in active org, not in right)</span>
+    <span class="px-2 py-1 rounded diff-right-only">Right-only (in right org, not in active)</span>
+    <span class="px-2 py-1 rounded diff-mismatch">Modified (present in both, configured differently)</span>
+  </div>
+
+  <!-- Results Accordion -->
+  <div class="accordion" id="metaDiffAccordion">
+    <!-- Panels populated by MC.metadataDiff.renderResults() -->
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-schema-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => MC.metadataDiff.init());
+</script>
+{% endblock %}

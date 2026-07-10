@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Record Lock Detector - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Sub-nav: Data Ops pages -->
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Record Lock Detector
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Record Lock Detector"
+            data-bs-content="Queries ProcessInstance WHERE Status='Pending' to find records stuck in approval processes. These can block DML operations during migration.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Controls -->
+  <div class="d-flex flex-wrap gap-2 align-items-end mb-3 no-print">
+    <div>
+      <label for="lockObjectFilter" class="form-label small fw-semibold mb-1">Object Filter</label>
+      <select id="lockObjectFilter" class="form-select form-select-sm" style="width: auto;">
+        <option value="">All Objects</option>
+        <option value="Account">Account</option>
+        <option value="Opportunity">Opportunity</option>
+        <option value="Case">Case</option>
+      </select>
+    </div>
+    <button id="btnRefreshLocks" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+  </div>
+
+  <!-- Summary -->
+  <div id="lockSummary" class="alert alert-info d-none mb-3">
+    <span id="lockSummaryText"></span>
+  </div>
+
+  <!-- Loading spinner -->
+  <div id="lockLoading" class="text-center py-3 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Loading&hellip;</span>
+    </div>
+    <p class="mt-2 text-muted small">Querying pending approvals&hellip;</p>
+  </div>
+
+  <!-- Results area -->
+  <div id="lockResultsWrap" class="d-none">
+    <!-- Tables injected by JS per object -->
+  </div>
+
+  <!-- Empty state -->
+  <div id="lockEmptyState" class="d-none text-center py-5">
+    <span class="badge bg-success fs-6 px-3 py-2">&#10003; No pending approvals found</span>
+    <p class="text-muted small mt-2">All checked objects are free of pending approval processes.</p>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.recordLocks.init();
+  });
+</script>
+{% endblock %}

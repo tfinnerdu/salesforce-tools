@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% block title %}Join Builder - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Sub-nav: Data Ops pages -->
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">SF &#8596; SQL Join Builder
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Join Builder"
+            data-bs-content="Generates a T-SQL OPENQUERY statement joining a Salesforce object (queried via SF REST API) with a SQL Server table. Useful for reconciliation reports that need data from both systems side-by-side.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- ODBC Info Box (shown/hidden by JS) -->
+  <div id="odbcInfoBox" class="info-box mb-3 d-none">
+    <strong>ODBC Setup Required</strong> — SQL Server integration requires an ODBC driver to be
+    configured on the server.
+    <a href="https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server"
+       target="_blank" rel="noopener">View setup instructions &#8599;</a>
+  </div>
+
+  <!-- Two-column config -->
+  <div class="row g-3 mb-3">
+    <!-- Left: SQL Server -->
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold" style="background-color: var(--doane-slate); color:#fff;">
+          &#128421; SQL Server
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="sqlTable" class="form-label small fw-semibold">
+              Table Name
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="SQL Server Table"
+                    data-bs-content="Start typing to filter the cached table list. The schema is cached so this works even when the ODBC/Devart link is down — refresh it from Settings → SQL Server Schema Cache when tables change. The generated query is verbatim and uses WITH (NOLOCK).">ⓘ</span>
+            </label>
+            <div class="position-relative">
+              <input id="sqlTable" type="text" class="form-control form-control-sm font-monospace"
+                     autocomplete="off" placeholder="dbo.STUDENTS">
+              <div id="sqlTableMenu" class="mc-typeahead-menu d-none"></div>
+            </div>
+            <div class="form-text" id="sqlSchemaStatus">SQL schema not loaded.</div>
+          </div>
+          <div class="mb-3">
+            <label for="sqlFields" class="form-label small fw-semibold">
+              Fields
+              <small class="text-muted fw-normal">(one per line)</small>
+            </label>
+            <textarea id="sqlFields" class="form-control form-control-sm font-monospace" rows="6"
+                      placeholder="student_id&#10;first_name&#10;last_name&#10;email"></textarea>
+          </div>
+          <div class="mb-0">
+            <label for="joinFieldSql" class="form-label small fw-semibold">Join Field (SQL side)</label>
+            <input id="joinFieldSql" type="text" class="form-control form-control-sm font-monospace"
+                   placeholder="student_id">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Salesforce -->
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold" style="background-color: var(--doane-orange); color:#fff;">
+          &#9928; Salesforce
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="sfObject" class="form-label small fw-semibold">Object
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="SF Object"
+                    data-bs-content="The Salesforce object to query. Uses SELECT {fields} FROM {object} LIMIT {n}. The result set is aliased as the SF side of the join.">ⓘ</span>
+            </label>
+            <div class="position-relative">
+              <input id="sfObject" type="text" class="form-control form-control-sm font-monospace"
+                     autocomplete="off" placeholder="Account">
+              <div id="sfObjectMenu" class="mc-typeahead-menu d-none"></div>
+            </div>
+            <div class="form-text" id="sfObjectStatus">Loading objects…</div>
+          </div>
+          <div class="mb-3">
+            <label for="sfFields" class="form-label small fw-semibold">
+              SF Fields
+              <small class="text-muted fw-normal">(one per line)</small>
+            </label>
+            <textarea id="sfFields" class="form-control form-control-sm font-monospace" rows="6"
+                      placeholder="Id&#10;SIS_ID__c&#10;FirstName&#10;LastName&#10;PersonEmail"></textarea>
+          </div>
+          <div class="mb-0">
+            <label for="joinFieldSf" class="form-label small fw-semibold">Join Field (SF side)
+              <span class="mc-info-icon"
+                    data-bs-toggle="popover"
+                    data-bs-trigger="focus"
+                    tabindex="0"
+                    data-bs-title="Join Key"
+                    data-bs-content="The field used to match records between systems. Typically SIS_ID__c on the Salesforce side and a person ID column on the SQL Server side.">ⓘ</span>
+            </label>
+            <input id="joinFieldSf" type="text" class="form-control form-control-sm font-monospace"
+                   placeholder="SIS_ID__c">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="d-flex flex-wrap gap-2 mb-3 no-print">
+    <button id="btnBuild" class="btn btn-doane btn-sm">&#9881; Build Query</button>
+    <button id="btnCheckFields" class="btn btn-outline-secondary btn-sm">&#10003; Check Fields</button>
+    <button id="btnRun" class="btn btn-slate btn-sm">&#9654; Run (Python fallback)</button>
+  </div>
+
+  <!-- Field-check result -->
+  <div id="joinCheckResult" class="d-none mb-3"></div>
+
+  <!-- Generated SQL -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Generated SQL</span>
+      <button id="btnCopy" class="btn btn-sm btn-outline-secondary no-print">&#128203; Copy to Clipboard</button>
+    </div>
+    <div class="card-body p-0">
+      <pre id="generatedSql" class="code-block mb-0 p-3">-- Build a query above to see the generated SQL here.</pre>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="joinResultsWrap" class="d-none">
+    <div id="joinLoading" class="text-center py-3 d-none">
+      <div class="spinner-border text-warning" role="status">
+        <span class="visually-hidden">Running…</span>
+      </div>
+      <p class="mt-2 text-muted small">Executing join query…</p>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Results</span>
+        <small class="text-muted" id="joinResultCount"></small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+          <table class="table table-sm table-striped results-table mb-0">
+            <thead id="joinResultsHead"></thead>
+            <tbody id="resultsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.joinBuilder.init();
+  });
+</script>
+{% endblock %}

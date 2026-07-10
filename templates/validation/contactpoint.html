@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block title %}ContactPoint Integrity - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/duplicates">Duplicate Radar</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/external-ids">External ID Coverage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/validation/contactpoints">ContactPoint Integrity</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/completeness">Field Completeness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/orphans">Orphaned Records</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/merge-history">Merge History</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h4 class="mc-page-title">ContactPoint Integrity Scanner
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="ContactPoint Scanner"
+            data-bs-content="Scans ContactPointEmail, ContactPointPhone, and ContactPointAddress for broken parent links. In Ed Cloud, ContactPoints must link to both ParentId (Account) and IndividualId (Individual) to surface correctly.">ⓘ</span>
+    </h4>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <button id="btnScan" class="btn btn-doane btn-sm">&#128269; Scan Now</button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="cpLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Scanning…</span>
+    </div>
+    <p class="mt-2 text-muted small">Scanning ContactPoint records…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="cpEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No scan results yet.</p>
+    <p class="small">Click <strong>Scan Now</strong> to check ContactPoint integrity.</p>
+  </div>
+
+  <!-- Total Issues Banner -->
+  <div id="cpBanner" class="overall-banner d-none mb-3" role="status">
+    <strong>Total Issues Found:</strong>&nbsp;<span id="cpBannerText">—</span>
+  </div>
+
+  <!-- Three CP Cards -->
+  <div id="cpResults" class="row g-3 d-none">
+    <div class="col-md-4">
+      <div class="cp-card h-100" id="cpEmail">
+        <div class="cp-card-title">&#64; ContactPointEmail
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="SIS_ID__c on ContactPoints"
+                data-bs-content="ContactPoint SIS_ID__c allows the migration pipeline to match and update individual contact points. Missing = the pipeline must create new ContactPoints on each run instead of updating existing ones.">ⓘ</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Missing Parent
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="ParentId Missing"
+                  data-bs-content="SELECT COUNT() FROM ContactPointEmail WHERE ParentId = null. A null ParentId means the contact point is completely orphaned — it won't appear on any person record.">ⓘ</span>
+          </span>
+          <span id="cpEmailMissingParent" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Missing Individual
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="IndividualId Missing"
+                  data-bs-content="SELECT COUNT() FROM ContactPointEmail WHERE IndividualId = null. The Individual object is the Ed Cloud privacy layer. Missing IndividualId means consent and data-use tracking won't work.">ⓘ</span>
+          </span>
+          <span id="cpEmailMissingIndividual" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Total Records</span>
+          <span id="cpEmailTotal" class="fw-semibold">—</span>
+        </div>
+        <div id="cpEmailSamples" class="mt-2 d-none">
+          <button class="btn btn-link btn-sm p-0 text-muted small mb-1"
+                  onclick="MC.contactpoints.toggleSamples('cpEmailSampleList', this)">
+            Show sample IDs &#9660;
+          </button>
+          <div id="cpEmailSampleList" class="error-sis-ids d-none"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="cp-card h-100" id="cpPhone">
+        <div class="cp-card-title">&#128222; ContactPointPhone</div>
+        <div class="cp-stat-row">
+          <span>Missing Parent</span>
+          <span id="cpPhoneMissingParent" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Missing Individual</span>
+          <span id="cpPhoneMissingIndividual" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Total Records</span>
+          <span id="cpPhoneTotal" class="fw-semibold">—</span>
+        </div>
+        <div id="cpPhoneSamples" class="mt-2 d-none">
+          <button class="btn btn-link btn-sm p-0 text-muted small mb-1"
+                  onclick="MC.contactpoints.toggleSamples('cpPhoneSampleList', this)">
+            Show sample IDs &#9660;
+          </button>
+          <div id="cpPhoneSampleList" class="error-sis-ids d-none"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="cp-card h-100" id="cpAddress">
+        <div class="cp-card-title">&#127968; ContactPointAddress</div>
+        <div class="cp-stat-row">
+          <span>Missing Parent</span>
+          <span id="cpAddressMissingParent" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Missing Individual</span>
+          <span id="cpAddressMissingIndividual" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Total Records</span>
+          <span id="cpAddressTotal" class="fw-semibold">—</span>
+        </div>
+        <div id="cpAddressSamples" class="mt-2 d-none">
+          <button class="btn btn-link btn-sm p-0 text-muted small mb-1"
+                  onclick="MC.contactpoints.toggleSamples('cpAddressSampleList', this)">
+            Show sample IDs &#9660;
+          </button>
+          <div id="cpAddressSampleList" class="error-sis-ids d-none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.contactpoints.init();
+  });
+</script>
+{% endblock %}

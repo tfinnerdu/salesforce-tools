@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+{% block title %}Schema Snapshots - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/crosswalk">Crosswalk Field Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/org-diff">Org Schema Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/field-usage">Field Usage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/data-dictionary">Data Dictionary</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/apex-search">Apex Code Search</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/schema/snapshots">Snapshots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/inspect">Record Inspector</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Schema Snapshot &amp; Change Tracker
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Schema Snapshot &amp; Change Tracker"
+            data-bs-content="Takes point-in-time snapshots of an org's field metadata and compares them to detect schema drift. Select two snapshots and click Compare to see added, removed, and changed fields.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Section 1: Take Snapshot -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Take Schema Snapshot</div>
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-3 col-lg-2">
+          <label for="snapOrg" class="form-label small fw-semibold mb-1">Org</label>
+          <select id="snapOrg" class="form-select form-select-sm">
+            <option value="dev">dev</option>
+            <option value="prod">prod</option>
+            <option value="sandbox">sandbox</option>
+          </select>
+        </div>
+        <div class="col-sm-3 col-lg-2">
+          <label for="snapSobject" class="form-label small fw-semibold mb-1">Object</label>
+          <input id="snapSobject" type="text" class="form-control form-control-sm"
+                 value="Account" placeholder="e.g. Account, Contact">
+        </div>
+        <div class="col-sm-4 col-lg-3">
+          <label for="snapLabel" class="form-label small fw-semibold mb-1">Label <span class="text-muted fw-normal">(optional)</span></label>
+          <input id="snapLabel" type="text" class="form-control form-control-sm"
+                 placeholder="e.g. Before migration wave 3">
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnTakeSnapshot" class="btn btn-doane btn-sm">
+            &#9654; Take Snapshot
+          </button>
+        </div>
+      </div>
+
+      <!-- Spinner -->
+      <div id="snapTakeLoading" class="d-none mt-2">
+        <div class="d-flex align-items-center gap-2 text-muted small">
+          <div class="spinner-border spinner-border-sm text-warning" role="status">
+            <span class="visually-hidden">Taking snapshot…</span>
+          </div>
+          <span>Capturing field metadata…</span>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div id="snapTakeToast" class="d-none mt-2">
+        <div class="alert alert-success alert-dismissible mb-0 py-2" role="alert">
+          <span id="snapTakeToastMsg"></span>
+          <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Snapshot History -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+      <span>Snapshot History</span>
+      <button id="btnRefreshSnapshots" class="btn btn-outline-secondary btn-sm no-print">&#8635; Refresh</button>
+    </div>
+    <div class="card-body">
+      <!-- Filter row -->
+      <div class="row g-2 align-items-end mb-3">
+        <div class="col-sm-3 col-lg-2">
+          <label for="filterOrg" class="form-label small fw-semibold mb-1">Filter Org</label>
+          <select id="filterOrg" class="form-select form-select-sm">
+            <option value="">All orgs</option>
+            <option value="dev">dev</option>
+            <option value="prod">prod</option>
+            <option value="sandbox">sandbox</option>
+          </select>
+        </div>
+        <div class="col-sm-3 col-lg-2">
+          <label for="filterSobject" class="form-label small fw-semibold mb-1">Filter Object</label>
+          <input id="filterSobject" type="text" class="form-control form-control-sm" placeholder="Account">
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnFilterSnapshots" class="btn btn-outline-secondary btn-sm">Filter</button>
+        </div>
+        <div class="col-sm-auto ms-auto">
+          <button id="btnCompareSelected" class="btn btn-doane btn-sm d-none">
+            &#9654; Compare Selected (<span id="compareCount">0</span>)
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="snapListLoading" class="text-center py-3 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading snapshots…</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading snapshot history…</p>
+      </div>
+
+      <!-- Empty state -->
+      <div id="snapListEmpty" class="text-center py-4 text-muted d-none">
+        <p class="mb-1">No snapshots found.</p>
+        <p class="small">Take a snapshot above to get started.</p>
+      </div>
+
+      <!-- Table -->
+      <div id="snapTableWrap" class="table-responsive d-none">
+        <table class="table table-sm table-hover mb-0" id="snapTable">
+          <thead style="background-color: var(--doane-slate); color: #fff;">
+            <tr>
+              <th style="width:50px;">ID</th>
+              <th>Org</th>
+              <th>Object</th>
+              <th>Label</th>
+              <th>Captured</th>
+              <th class="text-end">Size (bytes)</th>
+              <th class="no-print" style="width:120px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="snapTableBody">
+            <!-- Populated by MC.snapshots._renderList() -->
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-muted small mt-2 mb-0">
+        Select two rows with <strong>Diff</strong> to compare snapshots. At most 2 rows can be selected at a time.
+      </p>
+    </div>
+  </div>
+
+  <!-- Diff Panel -->
+  <div id="snapDiffPanel" class="d-none">
+    <!-- Loading -->
+    <div id="snapDiffLoading" class="text-center py-3 d-none">
+      <div class="spinner-border text-warning" role="status">
+        <span class="visually-hidden">Computing diff…</span>
+      </div>
+      <p class="mt-2 text-muted small">Computing schema diff…</p>
+    </div>
+
+    <div id="snapDiffContent" class="d-none">
+      <!-- Header -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          <span id="snapDiffTitle">Schema Diff</span>
+          <button id="btnCloseDiff" class="btn btn-sm btn-outline-secondary">&#10005; Close</button>
+        </div>
+        <div class="card-body">
+          <!-- Summary badges -->
+          <div id="snapDiffSummary" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+          <!-- Accordion: Added, Removed, Changed -->
+          <div class="accordion" id="snapDiffAccordion">
+
+            <!-- Added Fields -->
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="snapAddedHead">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#snapAddedBody" aria-expanded="true" aria-controls="snapAddedBody">
+                  <span class="badge bg-success me-2" id="snapAddedBadge">0</span> Added Fields
+                </button>
+              </h2>
+              <div id="snapAddedBody" class="accordion-collapse collapse show" aria-labelledby="snapAddedHead">
+                <div class="accordion-body p-0">
+                  <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                      <thead style="background-color: var(--doane-slate); color: #fff;">
+                        <tr>
+                          <th>API Name</th>
+                          <th>Label</th>
+                          <th>Type</th>
+                          <th class="text-end">Length</th>
+                        </tr>
+                      </thead>
+                      <tbody id="snapAddedTableBody">
+                        <tr><td colspan="4" class="text-muted text-center py-3">No added fields.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Removed Fields -->
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="snapRemovedHead">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#snapRemovedBody" aria-expanded="false" aria-controls="snapRemovedBody">
+                  <span class="badge bg-danger me-2" id="snapRemovedBadge">0</span> Removed Fields
+                </button>
+              </h2>
+              <div id="snapRemovedBody" class="accordion-collapse collapse" aria-labelledby="snapRemovedHead">
+                <div class="accordion-body p-0">
+                  <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                      <thead style="background-color: var(--doane-slate); color: #fff;">
+                        <tr>
+                          <th>API Name</th>
+                          <th>Label</th>
+                          <th>Type</th>
+                          <th class="text-end">Length</th>
+                        </tr>
+                      </thead>
+                      <tbody id="snapRemovedTableBody">
+                        <tr><td colspan="4" class="text-muted text-center py-3">No removed fields.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Changed Fields -->
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="snapChangedHead">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#snapChangedBody" aria-expanded="false" aria-controls="snapChangedBody">
+                  <span class="badge bg-warning text-dark me-2" id="snapChangedBadge">0</span> Changed Fields
+                </button>
+              </h2>
+              <div id="snapChangedBody" class="accordion-collapse collapse" aria-labelledby="snapChangedHead">
+                <div class="accordion-body p-0">
+                  <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                      <thead style="background-color: var(--doane-slate); color: #fff;">
+                        <tr>
+                          <th>Field</th>
+                          <th>Before</th>
+                          <th>After</th>
+                        </tr>
+                      </thead>
+                      <tbody id="snapChangedTableBody">
+                        <tr><td colspan="3" class="text-muted text-center py-3">No changed fields.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /accordion -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => MC.snapshots.init());
+</script>
+{% endblock %}

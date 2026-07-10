@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% block title %}Scenario Builder - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid" data-scenario-id="{{ scenario_id }}">
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <a href="/scenarios" class="text-muted small">&larr; Scenarios</a>
+    <h4 class="mc-page-title mb-0 ms-2" id="builderTitle">New Scenario</h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+    <div class="ms-auto d-flex gap-2">
+      <button id="btnSaveScenario" class="btn btn-doane btn-sm">Save</button>
+      <button id="btnRunScenario" class="btn btn-danger btn-sm" disabled
+              data-mc-confirm="This runs every step in the scenario against Salesforce in order. Each step writes live records using the same Bulk API path as the Data Ops tab."
+              data-mc-confirm-title="Run scenario"
+              data-mc-confirm-btn="Run scenario"
+              data-mc-confirm-ack="true">&#9654; Run</button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    <!-- ── Scenario metadata ────────────────────────────────────────────── -->
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Details</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Name</label>
+            <input id="scenName" type="text" class="form-control" maxlength="200" placeholder="e.g. Weekly cleanup">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Description</label>
+            <textarea id="scenDescription" class="form-control" rows="3" placeholder="What does this pipeline do?"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold mb-1">Tags</label>
+            <div id="scenTags" class="d-flex flex-wrap gap-1 mb-2">
+              <span class="text-muted small">No tags attached.</span>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" id="btnManageTags">Manage tags</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scheduling (Argo) -->
+      <div class="card shadow-sm mt-3" id="scheduleCard">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Scheduling
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-content="Approve a scenario after testing it, then generate an Argo CronWorkflow to run it on a schedule. Argo POSTs the token-authed scheduled-run endpoint; results land in the Argo logs.">ⓘ</span>
+        </div>
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="schedApproved">
+            <label class="form-check-label fw-semibold" for="schedApproved">
+              Approved for scheduled runs</label>
+          </div>
+          <label class="form-label fw-semibold small mb-1">Cron schedule</label>
+          <input id="schedCron" class="form-control form-control-sm mb-1" placeholder="0 6 * * 0">
+          <div class="form-text mb-2">5 fields. e.g. <code>0 6 * * 0</code> = 6am every Sunday.</div>
+          <button id="btnGenManifest" class="btn btn-outline-secondary btn-sm">Generate Argo CronWorkflow</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Steps editor ────────────────────────────────────────────────── -->
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold d-flex align-items-center justify-content-between"
+             style="color:var(--doane-slate)">
+          <span>Steps</span>
+          <div class="d-flex gap-1">
+            <select id="stepTypeSelect" class="form-select form-select-sm" style="width:auto">
+              <option value="delete">Delete</option>
+              <option value="modify">Modify field</option>
+              <option value="reassign">Reassign owner</option>
+              <option value="bulk_update">Bulk update</option>
+              <option value="tune">Tune (standardize)</option>
+            </select>
+            <button class="btn btn-doane btn-sm" id="btnAddStep">+ Add</button>
+          </div>
+        </div>
+        <div class="card-body p-2" id="stepList">
+          <div class="text-center py-3 text-muted" id="stepEmpty">No steps yet — pick a type above and click Add.</div>
+        </div>
+      </div>
+
+      <!-- Run output (filled after a run) -->
+      <div class="card shadow-sm mt-3 d-none" id="runResultCard">
+        <div class="card-header py-2 fw-semibold d-flex align-items-center justify-content-between"
+             style="color:var(--doane-slate)">
+          <span>Last run</span>
+          <span id="runStatusBadge"></span>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Step</th>
+                <th>Status</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="runResultBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Per-step parameter template ──────────────────────────────────────── -->
+<template id="tplStepRow">
+  <div class="border rounded p-2 mb-2 mc-step-row" data-step-type="">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="badge badge-slate mc-step-index"></span>
+      <strong class="mc-step-title"></strong>
+      <span class="ms-auto d-flex gap-1">
+        <button class="btn btn-outline-secondary btn-sm mc-step-up" title="Move up">&#9650;</button>
+        <button class="btn btn-outline-secondary btn-sm mc-step-down" title="Move down">&#9660;</button>
+        <button class="btn btn-outline-danger btn-sm mc-step-remove" title="Remove step"
+                data-mc-confirm="Remove this step from the scenario? It is only removed from the local editor until you click Save."
+                data-mc-confirm-title="Remove step"
+                data-mc-confirm-btn="Remove">&times;</button>
+      </span>
+    </div>
+    <div class="mc-step-params row g-2"></div>
+    <div class="mt-2 d-flex align-items-center gap-2 small">
+      <label class="text-muted">On error:</label>
+      <select class="form-select form-select-sm mc-step-on-error" style="width:auto">
+        <option value="stop">Stop pipeline</option>
+        <option value="continue">Continue to next step</option>
+      </select>
+      <div class="form-check form-check-inline ms-2">
+        <input class="form-check-input mc-step-bypass" type="checkbox">
+        <label class="form-check-label">Bypass triggers</label>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Argo manifest modal -->
+<div class="modal fade" id="manifestModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Argo CronWorkflow</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Commit this to your manifests repo. The scheduler
+          token must exist in the app's secret under key <code>scheduler-token</code>
+          (and <code>SCHEDULER_TOKEN</code> must be set on the app).</p>
+        <textarea id="manifestText" class="form-control font-monospace" rows="18" readonly></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-doane" id="btnCopyManifest">Copy</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-scenarios-snippet.js') }}"></script>
+{% endblock %}

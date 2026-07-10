@@ -1,0 +1,453 @@
+{% extends 'base.html' %}
+{% block title %}Impact Analysis - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h4 class="mc-page-title">Impact Analysis</h4>
+    <small class="text-muted">Analyze field dependencies, permissions, and regression safety</small>
+  </div>
+
+  <!-- Tab nav -->
+  <ul class="nav nav-tabs mb-3" id="impactTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-field-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-field" type="button" role="tab"
+              aria-controls="tab-field" aria-selected="true">
+        Field Impact Scanner
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-perms-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-perms" type="button" role="tab"
+              aria-controls="tab-perms" aria-selected="false">
+        Permission Set Audit
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-regression-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-regression" type="button" role="tab"
+              aria-controls="tab-regression" aria-selected="false">
+        Regression Tester
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-perm-gap-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-perm-gap" type="button" role="tab"
+              aria-controls="tab-perm-gap" aria-selected="false">
+        Perm Gap
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="impactTabContent">
+
+    <!-- ── Field Impact Scanner ───────────────────────────────────────────── -->
+    <div class="tab-pane fade show active" id="tab-field" role="tabpanel" aria-labelledby="tab-field-btn">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="card-title fw-semibold mb-3">What breaks if I delete this field?
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Field Impact Scanner"
+                data-bs-content="Uses the Tooling API to find ValidationRule records whose ErrorConditionFormula contains the field name, and queries FlowDefinition for active flows. Flow XML inspection requires manual review — active flows are listed as potentially affected.">ⓘ</span>
+        </h6>
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-4">
+              <label for="fieldScanObject" class="form-label small fw-semibold">Object API Name</label>
+              <input id="fieldScanObject" type="text" class="form-control form-control-sm"
+                     placeholder="e.g. Account" value="Account">
+            </div>
+            <div class="col-sm-4">
+              <label for="fieldScanField" class="form-label small fw-semibold">Field API Name</label>
+              <input id="fieldScanField" type="text" class="form-control form-control-sm"
+                     placeholder="e.g. SIS_ID__c" value="SIS_ID__c">
+            </div>
+            <div class="col-sm-auto">
+              <button id="btnFieldScan" class="btn btn-doane btn-sm">Scan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="fieldScanEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0 small">Enter an object and field name, then click <strong>Scan</strong>.</p>
+      </div>
+      <div id="fieldScanLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Scanning…</span></div>
+        <p class="mt-2 text-muted small">Scanning for references…</p>
+      </div>
+
+      <div id="fieldScanResults" class="d-none">
+        <div class="alert alert-info mb-3" id="fieldScanSummary"></div>
+
+        <div class="accordion" id="fieldScanAccordion">
+
+          <!-- Validation Rules -->
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseVR">
+                Validation Rules
+                <span id="vrCount" class="badge badge-slate ms-2">0</span>
+              </button>
+            </h2>
+            <div id="collapseVR" class="accordion-collapse collapse" data-bs-parent="#fieldScanAccordion">
+              <div class="accordion-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped mb-0">
+                    <thead>
+                      <tr><th>Object</th><th>Rule Name</th><th>Description</th><th>Error Message</th></tr>
+                    </thead>
+                    <tbody id="vrTableBody"></tbody>
+                  </table>
+                </div>
+                <p id="vrEmpty" class="text-muted text-center py-2 small d-none">No validation rules found.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Flows -->
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseFlows">
+                Active Flows
+                <span id="flowCount" class="badge badge-slate ms-2">0</span>
+                <span class="badge bg-warning text-dark ms-2 small">Manual review required</span>
+              </button>
+            </h2>
+            <div id="collapseFlows" class="accordion-collapse collapse" data-bs-parent="#fieldScanAccordion">
+              <div class="accordion-body">
+                <div class="alert alert-warning py-2 mb-2 small">
+                  <strong>Limitation:</strong> The Salesforce REST API does not expose flow XML, so all active
+                  flows are listed below. You must manually inspect each flow in Flow Builder to confirm
+                  whether it references <code id="flowFieldRef"></code>.
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped mb-0">
+                    <thead>
+                      <tr><th>Label</th><th>Type</th><th>Description</th></tr>
+                    </thead>
+                    <tbody id="flowTableBody"></tbody>
+                  </table>
+                </div>
+                <p id="flowEmpty" class="text-muted text-center py-2 small d-none">No active flows found.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reports -->
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseReports">
+                Reports in Org
+                <span id="reportCount" class="badge badge-slate ms-2">0</span>
+                <span class="badge bg-warning text-dark ms-2 small">Manual review required</span>
+              </button>
+            </h2>
+            <div id="collapseReports" class="accordion-collapse collapse" data-bs-parent="#fieldScanAccordion">
+              <div class="accordion-body">
+                <div class="alert alert-warning py-2 small">
+                  <strong>Limitation:</strong> Report column metadata is not queryable via the standard REST API.
+                  The count above is the total number of reports in the org.
+                  Use the Salesforce Reports &amp; Dashboards metadata API or manual review to confirm field usage.
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /accordion -->
+      </div><!-- /fieldScanResults -->
+    </div><!-- /tab-field -->
+
+
+    <!-- ── Permission Set Audit ───────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-perms" role="tabpanel" aria-labelledby="tab-perms-btn">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="card-title fw-semibold mb-3">Who has access to this field?
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Permission Set Audit"
+                  data-bs-content="Queries FieldPermissions (SELECT SobjectType, Field, PermissionsRead, PermissionsEdit FROM FieldPermissions WHERE SobjectType = :obj) across all Permission Sets. Answers 'who can edit this field?' without clicking through dozens of permission sets.">ⓘ</span>
+          </h6>
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-4">
+              <label for="permObject" class="form-label small fw-semibold">Object API Name</label>
+              <input id="permObject" type="text" class="form-control form-control-sm"
+                     placeholder="e.g. Account" value="Account">
+            </div>
+            <div class="col-sm-4">
+              <label for="permField" class="form-label small fw-semibold">Field API Name (optional)</label>
+              <input id="permField" type="text" class="form-control form-control-sm"
+                     placeholder="Leave blank for all fields">
+            </div>
+            <div class="col-sm-auto">
+              <button id="btnPermAudit" class="btn btn-doane btn-sm">Audit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="permEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0 small">Enter an object name and click <strong>Audit</strong>.</p>
+      </div>
+      <div id="permLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mt-2 text-muted small">Querying permissions…</p>
+      </div>
+
+      <div id="permResults" class="d-none">
+        <div class="mb-2 d-flex gap-2 align-items-center">
+          <input id="permFilter" type="text" class="form-control form-control-sm w-auto"
+                 placeholder="Filter by field name…">
+          <small id="permResultCount" class="text-muted"></small>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped" id="permTable">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Permission Sets (Read)</th>
+                <th>Permission Sets (Edit)</th>
+              </tr>
+            </thead>
+            <tbody id="permTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Field-specific panel (shown when field entered) -->
+      <div id="permFieldResults" class="d-none mt-3">
+        <h6 class="fw-semibold mb-2">Access detail: <span id="permFieldLabel" class="text-primary font-monospace"></span></h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr><th>Permission Set</th><th>Read</th><th>Edit</th><th>Users</th></tr>
+            </thead>
+            <tbody id="permFieldTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /tab-perms -->
+
+
+    <!-- ── Regression Tester ──────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-regression" role="tabpanel" aria-labelledby="tab-regression-btn">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-semibold mb-0">Saved Test Suites
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Regression Tester"
+                data-bs-content="Define a suite of SOQL COUNT assertions with expected values. Run before and after a migration batch to verify no records were lost or duplicated. Pass = actual count matches expected; fail = mismatch.">ⓘ</span>
+        </h6>
+        <button class="btn btn-doane btn-sm" id="btnNewSuite">+ New Suite</button>
+      </div>
+
+      <div id="regLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+      </div>
+      <div id="regEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0 small">No regression suites yet. Click <strong>+ New Suite</strong> to create one.</p>
+      </div>
+
+      <div id="regSuiteList" class="d-none">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>Suite</th>
+                <th>Assertions</th>
+                <th>Created</th>
+                <th>Baseline</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="regSuiteTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Run Results -->
+      <div id="regRunResults" class="d-none mt-3">
+        <h6 class="fw-semibold mb-2">Run Results: <span id="regRunSuiteName"></span>
+          <small id="regRunSummary" class="text-muted ms-2"></small>
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Baseline"
+                data-bs-content="The baseline is a snapshot of COUNT query results taken at a known-good state. After running a migration batch, re-run the suite — any count that changed unexpectedly is flagged as a failure.">ⓘ</span>
+        </h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr><th>Assertion</th><th>SOQL</th><th>Baseline</th><th>Actual</th><th>Status</th></tr>
+            </thead>
+            <tbody id="regRunTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /tab-regression -->
+
+
+    <!-- ── Permission Set Gap Analysis ─────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-perm-gap" role="tabpanel" aria-labelledby="tab-perm-gap-btn">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="card-title fw-semibold mb-3">Permission Set Gap Analysis
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Permission Set Gap Analysis"
+                  data-bs-content="Compares ObjectPermissions and FieldPermissions between two permission sets using SOQL on ObjectPermissions/FieldPermissions objects. Gaps are permissions present in one PS but not the other — useful for verifying migration-related permission sets are consistent.">ⓘ</span>
+          </h6>
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-4">
+              <label for="permGapSelectA" class="form-label small fw-semibold">Permission Set A</label>
+              <select id="permGapSelectA" class="form-select form-select-sm">
+                <option value="">— select —</option>
+              </select>
+            </div>
+            <div class="col-sm-4">
+              <label for="permGapSelectB" class="form-label small fw-semibold">Permission Set B</label>
+              <select id="permGapSelectB" class="form-select form-select-sm">
+                <option value="">— select —</option>
+              </select>
+            </div>
+            <div class="col-sm-auto">
+              <button id="btnPermGapCompare" class="btn btn-doane btn-sm">Compare</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="permGapEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0 small">Select two permission sets and click <strong>Compare</strong>.</p>
+      </div>
+      <div id="permGapLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mt-2 text-muted small">Comparing permission sets…</p>
+      </div>
+
+      <div id="permGapResults" class="d-none">
+        <!-- Summary badges -->
+        <div class="d-flex flex-wrap gap-3 mb-3 align-items-center">
+          <span class="fw-semibold small">Summary:</span>
+          <span class="badge bg-warning text-dark fs-6" id="permGapBadgeA">0 only in A</span>
+          <span class="badge badge-slate fs-6" id="permGapBadgeB">0 only in B</span>
+          <span class="badge bg-secondary fs-6" id="permGapBadgeTotal">0 total gaps</span>
+        </div>
+
+        <!-- Inner pill nav -->
+        <ul class="nav nav-pills mb-3" id="permGapPills" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pill-obj-btn" data-bs-toggle="pill"
+                    data-bs-target="#pill-obj" type="button" role="tab">
+              Object Permissions
+              <span id="permGapObjCount" class="badge bg-secondary ms-1">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pill-field-btn" data-bs-toggle="pill"
+                    data-bs-target="#pill-field" type="button" role="tab">
+              Field Permissions
+              <span id="permGapFieldCount" class="badge bg-secondary ms-1">0</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="permGapPillContent">
+
+          <!-- Object gaps table -->
+          <div class="tab-pane fade show active" id="pill-obj" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                  <tr>
+                    <th>Object</th>
+                    <th>Permission</th>
+                    <th class="text-center">In A</th>
+                    <th class="text-center">In B</th>
+                  </tr>
+                </thead>
+                <tbody id="permGapObjTbody"></tbody>
+              </table>
+            </div>
+            <p id="permGapObjEmpty" class="text-muted text-center py-2 small d-none">No object permission gaps found.</p>
+          </div>
+
+          <!-- Field gaps table -->
+          <div class="tab-pane fade" id="pill-field" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                  <tr>
+                    <th>Object</th>
+                    <th>Field</th>
+                    <th>Permission</th>
+                    <th class="text-center">In A</th>
+                    <th class="text-center">In B</th>
+                  </tr>
+                </thead>
+                <tbody id="permGapFieldTbody"></tbody>
+              </table>
+            </div>
+            <p id="permGapFieldEmpty" class="text-muted text-center py-2 small d-none">No field permission gaps found.</p>
+          </div>
+
+        </div><!-- /permGapPillContent -->
+      </div><!-- /permGapResults -->
+    </div><!-- /tab-perm-gap -->
+
+  </div><!-- /tab-content -->
+</div>
+
+<!-- ── New Suite Modal ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="newSuiteModal" tabindex="-1" aria-labelledby="newSuiteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color: var(--doane-slate); color: #fff;">
+        <h5 class="modal-title" id="newSuiteModalLabel">New Regression Suite</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="newSuiteName" class="form-label fw-semibold small">Suite Name</label>
+          <input id="newSuiteName" type="text" class="form-control form-control-sm"
+                 placeholder="e.g. Pre-migration baseline">
+        </div>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="fw-semibold small">Assertions</span>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddAssertion">+ Add</button>
+        </div>
+        <div id="assertionList">
+          <!-- Populated by addAssertion() -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-doane" id="btnSaveSuite">Save Suite</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-impact-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.impact.init();
+  });
+</script>
+{% endblock %}

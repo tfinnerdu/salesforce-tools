@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+{% block title %}Field Usage Heatmap - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/crosswalk">Crosswalk Field Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/org-diff">Org Schema Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/schema/field-usage">Field Usage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/data-dictionary">Data Dictionary</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/apex-search">Apex Code Search</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/snapshots">Snapshots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/inspect">Record Inspector</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Field Usage Heatmap
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Field Usage Heatmap"
+            data-bs-content="For each field, runs SELECT COUNT() FROM {Object} WHERE {field} != null and divides by total record count. Green ≥75% populated, Amber 25–75%, Red &lt;25%, Empty = 0%. Limited to custom fields + key standard fields (max 40) to keep query time manageable.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Controls -->
+  <div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1">Org</label>
+          <div class="d-flex align-items-center gap-2 pt-1">
+            <span class="badge mc-org-badge" id="fuOrgBadge">
+              {{ session.get('active_org', 'dev') | upper }}
+            </span>
+          </div>
+        </div>
+        <div class="col-sm-4 col-lg-3">
+          <label for="fuSobject" class="form-label small fw-semibold mb-1">SObject Name</label>
+          <input id="fuSobject" type="text" class="form-control form-control-sm"
+                 placeholder="Account" value="Account">
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnFuLoad" class="btn btn-doane btn-sm">
+            &#9654; Load
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="fuLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Running field usage queries…</span>
+    </div>
+    <p class="mt-2 text-muted small">Querying field population — this may take a few seconds…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="fuEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No results yet.</p>
+    <p class="small">Enter an SObject name and click <strong>Load</strong> to analyze field completeness.</p>
+  </div>
+
+  <!-- Results -->
+  <div id="fuResultsWrap" class="d-none">
+    <!-- Summary + legend row -->
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+      <span id="fuSummaryLine" class="text-muted small"></span>
+      <div class="d-flex flex-wrap gap-2 small ms-auto">
+        <span class="badge rounded-pill bg-success px-2 py-1">Green ≥75%</span>
+        <span class="badge rounded-pill bg-warning text-dark px-2 py-1">Amber 25–74%</span>
+        <span class="badge rounded-pill bg-danger px-2 py-1">Red &lt;25%</span>
+        <span class="badge rounded-pill bg-secondary px-2 py-1">Empty 0%</span>
+      </div>
+      <button class="btn btn-outline-secondary btn-sm no-print"
+              onclick="MC.exportTableCSV('fuResultsTable', 'field-usage.csv')">
+        &#8681; Export CSV
+      </button>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped mb-0" id="fuResultsTable">
+            <thead style="background-color: var(--doane-slate); color: #fff;">
+              <tr>
+                <th>Field Label</th>
+                <th>API Name</th>
+                <th>Type</th>
+                <th>Custom?</th>
+                <th class="text-end">Populated</th>
+                <th style="min-width: 160px;">Fill %</th>
+              </tr>
+            </thead>
+            <tbody id="fuTableBody">
+              <!-- Populated by MC.fieldUsage._renderResults() -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+MC.fieldUsage = {
+  init() {
+    document.getElementById('btnFuLoad')?.addEventListener('click', () => this.run());
+    document.getElementById('fuSobject')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.run();
+    });
+  },
+
+  async run() {
+    const sobject = (document.getElementById('fuSobject')?.value || '').trim();
+    if (!sobject) {
+      alert('Please enter an SObject name.');
+      return;
+    }
+
+    // Show loading, hide others
+    document.getElementById('fuEmpty').classList.add('d-none');
+    document.getElementById('fuResultsWrap').classList.add('d-none');
+    document.getElementById('fuLoading').classList.remove('d-none');
+
+    try {
+      const resp = await fetch('/schema/field-usage/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sobject }),
+      });
+      const json = await resp.json();
+      document.getElementById('fuLoading').classList.add('d-none');
+
+      if (!json.success) {
+        alert('Error: ' + (json.error || 'Unknown error'));
+        document.getElementById('fuEmpty').classList.remove('d-none');
+        return;
+      }
+      this._renderResults(json.data);
+    } catch (err) {
+      document.getElementById('fuLoading').classList.add('d-none');
+      document.getElementById('fuEmpty').classList.remove('d-none');
+      alert('Request failed: ' + err.message);
+    }
+  },
+
+  _renderResults(data) {
+    const fields = data.fields || [];
+    const total = data.total_records || 0;
+
+    // Summary line
+    const analyzed = fields.filter(f => f.status !== 'skip').length;
+    const pctsWithValues = fields.filter(f => f.pct !== null && f.pct !== undefined);
+    const avgFill = pctsWithValues.length
+      ? (pctsWithValues.reduce((s, f) => s + f.pct, 0) / pctsWithValues.length).toFixed(1)
+      : '—';
+    document.getElementById('fuSummaryLine').textContent =
+      `${total.toLocaleString()} total records | ${analyzed} fields analyzed | avg fill: ${avgFill}%`;
+
+    // Build table rows
+    const tbody = document.getElementById('fuTableBody');
+    tbody.innerHTML = '';
+
+    for (const f of fields) {
+      const tr = document.createElement('tr');
+
+      // Status-based row highlight for skip
+      if (f.status === 'skip') tr.classList.add('table-light', 'text-muted');
+
+      // Progress bar color
+      const barClass = {
+        green: 'bg-success',
+        amber: 'bg-warning',
+        red: 'bg-danger',
+        empty: 'bg-secondary',
+        skip: 'bg-light',
+      }[f.status] || 'bg-secondary';
+
+      const pctDisplay = f.pct !== null && f.pct !== undefined ? f.pct.toFixed(1) + '%' : '—';
+      const barWidth = f.pct !== null && f.pct !== undefined ? f.pct : 0;
+      const populatedDisplay = f.populated !== null && f.populated !== undefined
+        ? f.populated.toLocaleString()
+        : '—';
+
+      const customBadge = f.custom
+        ? '<span class="badge rounded-pill bg-info text-dark ms-1" style="font-size:0.65em;">__c</span>'
+        : '';
+
+      tr.innerHTML = `
+        <td>${MC._esc(f.label)}</td>
+        <td><code class="small">${MC._esc(f.name)}</code></td>
+        <td><span class="badge rounded-pill bg-light text-dark border font-monospace" style="font-size:0.7em;">${MC._esc(f.type)}</span></td>
+        <td>${f.custom ? 'Yes' + customBadge : ''}</td>
+        <td class="text-end">${populatedDisplay}</td>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <div class="progress flex-grow-1" style="height:14px; min-width:80px;">
+              <div class="progress-bar ${barClass}" role="progressbar"
+                   style="width:${barWidth}%"
+                   aria-valuenow="${barWidth}" aria-valuemin="0" aria-valuemax="100">
+              </div>
+            </div>
+            <span class="small text-nowrap" style="min-width:42px;">${pctDisplay}</span>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    document.getElementById('fuResultsWrap').classList.remove('d-none');
+  },
+};
+
+// Simple HTML escaping helper (fallback if MC._esc not defined globally)
+if (!MC._esc) {
+  MC._esc = function(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  };
+}
+
+document.addEventListener('DOMContentLoaded', () => MC.fieldUsage.init());
+</script>
+{% endblock %}

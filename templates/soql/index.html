@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}SOQL Workbench - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="mc-page-header mb-2">
+    <h4 class="mc-page-title">SOQL Workbench
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="SOQL Editor"
+            data-bs-content="Full SOQL supported: WHERE, ORDER BY, LIMIT, OFFSET, aggregates. Use SELECT COUNT() for fast existence checks. 'Run All Pages' calls query_all() to paginate past the 2,000-record default limit.">ⓘ</span>
+    </h4>
+  </div>
+
+  <div class="row g-0">
+    <!-- ── Object Explorer Sidebar (3 cols) ─────────────────────────── -->
+    <div class="col-lg-3 col-md-4 pe-2">
+      <div class="object-explorer">
+        <div class="mb-2">
+          <input id="objectSearch" type="text" class="form-control form-control-sm"
+                 placeholder="Search objects…">
+        </div>
+        <div id="objectListLoading" class="text-center py-3 text-muted small d-none">
+          <div class="spinner-border spinner-border-sm text-warning me-1" role="status"></div>
+          Loading objects…
+        </div>
+        <div id="objectList">
+          <!-- Populated by MC.soql.loadObjects() -->
+        </div>
+        <!-- Fields Panel -->
+        <div id="fieldsPanelWrap" class="d-none mt-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <small class="fw-semibold text-navy" id="fieldsObjectLabel" style="color:var(--doane-slate)"></small>
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Object Explorer"
+                  data-bs-content="Lists all queryable SObjects via the Describe Global API (GET /services/data/v{version}/sobjects/). Custom objects end in __c. Click an object to load its fields.">ⓘ</span>
+            <button id="btnInsertAllFields" class="btn btn-link btn-sm p-0 small text-muted">Insert All</button>
+          </div>
+          <div class="fields-list" id="fieldsList">
+            <!-- Populated by MC.soql.loadFields() -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Main Editor (9 cols) ─────────────────────────────────────── -->
+    <div class="col-lg-9 col-md-8">
+      <!-- Editor -->
+      <div class="mb-2">
+        <textarea id="soqlEditor" class="form-control w-100" rows="8"
+                  spellcheck="false"
+                  placeholder="SELECT Id, Name FROM Account WHERE IsPersonAccount = true LIMIT 100"></textarea>
+      </div>
+
+      <!-- Button row -->
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3 no-print">
+        <button id="btnRun" class="btn btn-doane btn-sm">&#9654; Run</button>
+        <button id="btnRunAll" class="btn btn-slate btn-sm">&#9654;&#9654; Run All Pages</button>
+        <button id="btnExplain" class="btn btn-outline-secondary btn-sm">Explain Plan</button>
+        <button id="btnExport" class="btn btn-outline-secondary btn-sm">&#11123; Download CSV</button>
+        <button id="btnSave" class="btn btn-outline-secondary btn-sm">&#128190; Save Query</button>
+        <select id="savedQueriesSelect" class="form-select form-select-sm">
+          <option value="">-- Saved queries --</option>
+        </select>
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Saved Queries"
+              data-bs-content="Saved queries are stored per IP address in the local PostgreSQL database. They persist across sessions. Share common diagnostic queries here so the whole team uses consistent definitions.">ⓘ</span>
+        <button id="btnDeleteSaved" class="btn btn-outline-danger btn-sm d-none">Delete</button>
+      </div>
+
+      <!-- Field & Operator Helper -->
+      <div class="card shadow-sm mb-3 no-print" id="soqlHelper">
+        <div class="card-header py-1 d-flex justify-content-between align-items-center"
+             style="cursor:pointer" onclick="MC.soql.toggleHelper()">
+          <small class="fw-semibold" style="color:var(--doane-slate)">Field &amp; Operator Helper</small>
+          <small class="text-muted" id="soqlHelperToggle">&#9650;</small>
+        </div>
+        <div class="card-body py-2" id="soqlHelperBody">
+          <div class="mb-2">
+            <small class="text-muted d-block mb-1">Operators &amp; keywords &mdash; click to insert at cursor</small>
+            <div id="soqlOperators" class="d-flex flex-wrap gap-1"></div>
+          </div>
+          <div>
+            <small class="text-muted d-block mb-1" id="soqlHelperFieldsLabel">Fields &mdash; select an object in the explorer</small>
+            <div id="soqlHelperFields" class="d-flex flex-wrap gap-1" style="max-height:150px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results area -->
+      <div id="resultsArea">
+        <!-- Empty state -->
+        <div id="resultsEmpty" class="text-center py-4 text-muted small">
+          Run a query to see results here.
+        </div>
+
+        <!-- Result count + table -->
+        <div id="resultsContent" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted" id="resultCount"></small>
+            <small id="explainResult" class="text-info d-none font-monospace"></small>
+          </div>
+          <div class="table-responsive" style="max-height: calc(100vh - 340px); overflow-y: auto;">
+            <table class="table table-sm table-striped results-table mb-0" id="resultsTable">
+              <thead id="resultsTableHead"></thead>
+              <tbody id="resultsTableBody"></tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div id="paginationBar" class="d-flex justify-content-between align-items-center mt-2 d-none">
+            <small class="text-muted" id="pageInfo"></small>
+            <div class="d-flex gap-2">
+              <button id="btnPrevPage" class="btn btn-sm btn-outline-secondary">&#8592; Prev</button>
+              <button id="btnNextPage" class="btn btn-sm btn-outline-secondary">Next &#8594;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Queries Panel -->
+      <div class="card shadow-sm mt-3" id="historyPanel">
+        <div class="card-header d-flex align-items-center justify-content-between"
+             style="cursor:pointer" onclick="MC.soql.toggleHistory()">
+          <span class="fw-semibold small" style="color:var(--doane-slate);">
+            &#128336; Recent Queries
+            <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                  data-bs-title="Query History"
+                  data-bs-content="The last 25 queries you ran in this org, stored in PostgreSQL. Click any query to load it into the editor. History is per-org and per-session key.">ⓘ</span>
+          </span>
+          <span id="historyToggleIcon">&#9660;</span>
+        </div>
+        <div id="historyPanelBody" class="d-none">
+          <div class="card-body p-0">
+            <div id="historyLoading" class="text-center py-3 d-none">
+              <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+            </div>
+            <div id="historyEmpty" class="text-center py-3 text-muted small d-none">No history yet.</div>
+            <ul class="list-group list-group-flush" id="historyList"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.soql.init();
+  });
+</script>
+{% endblock %}

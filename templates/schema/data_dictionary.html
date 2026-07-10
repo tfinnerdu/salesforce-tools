@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}Data Dictionary - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/crosswalk">Crosswalk Field Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/org-diff">Org Schema Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/field-usage">Field Usage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/schema/data-dictionary">Data Dictionary</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/apex-search">Apex Code Search</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/snapshots">Snapshots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/inspect">Record Inspector</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Data Dictionary Generator
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Data Dictionary Generator"
+            data-bs-content="Calls the SF Describe API to return all field metadata for an object — labels, API names, types, formulas, picklist values, help text, and descriptions. Export as CSV for hand-off documentation and compliance.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Controls -->
+  <div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-4 col-lg-3">
+          <label for="dictSobject" class="form-label small fw-semibold mb-1">SObject Name</label>
+          <input id="dictSobject" type="text" class="form-control form-control-sm"
+                 placeholder="Account" value="Account">
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnDictGenerate" class="btn btn-doane btn-sm">
+            &#9654; Generate
+          </button>
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnDictExport" class="btn btn-outline-secondary btn-sm" disabled>
+            &#8681; Export CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="dictLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Fetching field metadata…</span>
+    </div>
+    <p class="mt-2 text-muted small">Fetching field metadata from Salesforce…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="dictEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No results yet.</p>
+    <p class="small">Enter an SObject name and click <strong>Generate</strong> to build the data dictionary.</p>
+  </div>
+
+  <!-- Results -->
+  <div id="dictResultsWrap" class="d-none">
+    <!-- Summary line -->
+    <p id="dictSummaryLine" class="text-muted small mb-2"></p>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" id="dictTable">
+            <thead style="background-color: var(--doane-slate); color: #fff;">
+              <tr>
+                <th>Label</th>
+                <th>API Name</th>
+                <th>Type</th>
+                <th>Req</th>
+                <th>Unique</th>
+                <th>Ext ID</th>
+                <th>Custom</th>
+                <th>Length</th>
+                <th>Default</th>
+                <th>Formula</th>
+                <th>Picklist Values</th>
+                <th>Help Text</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody id="dictTableBody">
+              <!-- Populated by MC.dataDictionary._render() -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+MC.dataDictionary = {
+  init() {
+    document.getElementById('btnDictGenerate')?.addEventListener('click', () => this.run());
+    document.getElementById('btnDictExport')?.addEventListener('click', () => {
+      const sobject = (document.getElementById('dictSobject')?.value || 'sobject').trim();
+      MC.exportTableCSV('dictTable', `${sobject}-dictionary.csv`);
+    });
+    document.getElementById('dictSobject')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.run();
+    });
+  },
+
+  async run() {
+    const sobject = (document.getElementById('dictSobject')?.value || '').trim();
+    if (!sobject) {
+      alert('Please enter an SObject name.');
+      return;
+    }
+
+    document.getElementById('dictEmpty').classList.add('d-none');
+    document.getElementById('dictResultsWrap').classList.add('d-none');
+    document.getElementById('dictLoading').classList.remove('d-none');
+    document.getElementById('btnDictExport').disabled = true;
+
+    try {
+      const resp = await fetch('/schema/data-dictionary/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sobject }),
+      });
+      const json = await resp.json();
+      document.getElementById('dictLoading').classList.add('d-none');
+
+      if (!json.success) {
+        alert('Error: ' + (json.error || 'Unknown error'));
+        document.getElementById('dictEmpty').classList.remove('d-none');
+        return;
+      }
+      this._render(json.data);
+    } catch (err) {
+      document.getElementById('dictLoading').classList.add('d-none');
+      document.getElementById('dictEmpty').classList.remove('d-none');
+      alert('Request failed: ' + err.message);
+    }
+  },
+
+  _render(data) {
+    const fields = data.fields || [];
+
+    // Summary line
+    document.getElementById('dictSummaryLine').textContent =
+      `${MC._esc(data.label)} — ${data.field_count} fields (${data.custom_count} custom)`;
+
+    // Build rows
+    const tbody = document.getElementById('dictTableBody');
+    tbody.innerHTML = '';
+
+    for (const f of fields) {
+      const tr = document.createElement('tr');
+      if (f.custom) {
+        tr.style.background = 'rgba(255,193,7,0.08)';
+      }
+
+      const check = '<span class="text-success fw-bold" aria-label="yes">&#10003;</span>';
+      const blank = '';
+
+      const formulaDisplay = f.formula
+        ? `<span title="${MC._esc(f.formula)}">${MC._esc(f.formula.substring(0, 40))}${f.formula.length > 40 ? '…' : ''}</span>`
+        : '';
+
+      tr.innerHTML = `
+        <td>${MC._esc(f.label)}</td>
+        <td><code class="small">${MC._esc(f.api_name)}</code></td>
+        <td><span class="badge rounded-pill bg-light text-dark border font-monospace" style="font-size:0.7em;">${MC._esc(f.type)}</span></td>
+        <td>${f.required ? check : blank}</td>
+        <td>${f.unique ? check : blank}</td>
+        <td>${f.external_id ? check : blank}</td>
+        <td>${f.custom ? check : blank}</td>
+        <td class="text-end">${f.length !== '' && f.length !== null ? MC._esc(String(f.length)) : ''}</td>
+        <td class="small">${MC._esc(f.default_value)}</td>
+        <td class="small">${formulaDisplay}</td>
+        <td class="small">${MC._esc(f.picklist_values)}</td>
+        <td class="small">${MC._esc(f.help_text)}</td>
+        <td class="small">${MC._esc(f.description)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    document.getElementById('dictResultsWrap').classList.remove('d-none');
+    document.getElementById('btnDictExport').disabled = false;
+  },
+};
+
+// Simple HTML escaping helper (fallback if MC._esc not defined globally)
+if (!MC._esc) {
+  MC._esc = function(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  };
+}
+
+document.addEventListener('DOMContentLoaded', () => MC.dataDictionary.init());
+</script>
+{% endblock %}

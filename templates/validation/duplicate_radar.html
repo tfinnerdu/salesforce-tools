@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% block title %}Duplicate Radar - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link active" href="/validation/duplicates">Duplicate Radar</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/external-ids">External ID Coverage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/contactpoints">ContactPoint Integrity</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/completeness">Field Completeness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/orphans">Orphaned Records</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/merge-history">Merge History</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h4 class="mc-page-title">Duplicate PersonAccount Radar
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Duplicate PersonAccount Scan"
+            data-bs-content="Scans all PersonAccounts (Account WHERE IsPersonAccount = true) using four exact-match strategies plus fuzzy name matching. SF Duplicate Rules only fire on create/edit — this catches pre-existing duplicates.">ⓘ</span>
+    </h4>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <small class="text-muted">Last scan: <span id="lastScanTime">Never</span></small>
+      <button id="btnScan" class="btn btn-doane btn-sm">&#128269; Run Scan</button>
+    </div>
+  </div>
+
+  <!-- Scan state -->
+  <div id="scanLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Scanning…</span>
+    </div>
+    <p class="mt-2 text-muted small">Scanning for duplicates…</p>
+  </div>
+
+  <div id="scanEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No scan results yet.</p>
+    <p class="small">Click <strong>Run Scan</strong> to detect duplicate PersonAccounts.</p>
+  </div>
+
+  <!-- Strategy key — inline ⓘ popovers -->
+  <div class="d-flex flex-wrap gap-3 mb-2 small text-muted no-print">
+    <span>Strategies:
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same SIS ID"
+            data-bs-content="SELECT Id, SIS_ID__c FROM Account WHERE IsPersonAccount = true AND SIS_ID__c != null. Groups by SIS_ID__c. Two records sharing a SIS ID represent the same Colleague person — one must be merged.">ⓘ</span> Same SIS ID
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same Name + Birthdate"
+            data-bs-content="Groups by lower(Name) + PersonBirthdate. SOQL has no LOWER() — done in Python post-query. A name+DOB match is a strong indicator of a true duplicate even without matching IDs.">ⓘ</span> Name + DOB
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same Email"
+            data-bs-content="SELECT Id, PersonEmail FROM Account WHERE IsPersonAccount = true AND PersonEmail != null. Duplicate emails cause issues with Ethos person matching and student portal login.">ⓘ</span> Same Email
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Same Ethos GUID"
+            data-bs-content="SELECT Id, Ethos_Guid__c FROM Account WHERE IsPersonAccount = true AND Ethos_Guid__c != null. Two records with the same Ethos GUID will cause upsert collisions in the migration pipeline.">ⓘ</span> Same Ethos GUID
+    </span>
+    <span>
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Fuzzy Name"
+            data-bs-content="Python-side Wagner-Fischer edit-distance ≤ 2, comparing names within the same 3-character prefix group. Catches typos (e.g. 'Johnson' vs 'Jonhson'). Higher false-positive rate — review carefully before merging.">ⓘ</span> Fuzzy Name
+    </span>
+  </div>
+
+  <!-- Results Table -->
+  <div id="scanResults" class="card shadow-sm d-none">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped results-table mb-0">
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th>Duplicates Found</th>
+              <th>Sample IDs</th>
+              <th>Status</th>
+              <th class="no-print">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTable">
+            <!-- Populated by MC.duplicates.renderResults() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Merge Modal -->
+<div class="modal fade" id="mergeModal" tabindex="-1" aria-labelledby="mergeModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color: var(--doane-slate); color: #fff;">
+        <h5 class="modal-title" id="mergeModalLabel">Merge Duplicate Records</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning mb-3">
+          <strong>Warning:</strong> This action will merge the victim record into the master. This cannot be undone.
+        </div>
+        <div class="mb-3">
+          <label for="mergeIdMaster" class="form-label fw-semibold">Master Record ID
+            <small class="text-muted fw-normal">(keep this record)</small>
+          </label>
+          <input id="mergeIdMaster" type="text" class="form-control font-monospace"
+                 placeholder="0018c00000XxxXxx">
+        </div>
+        <div class="mb-3">
+          <label for="mergeIdVictim" class="form-label fw-semibold">Victim Record ID
+            <small class="text-muted fw-normal">(will be merged &amp; deleted)</small>
+          </label>
+          <input id="mergeIdVictim" type="text" class="form-control font-monospace"
+                 placeholder="0018c00000YyyYyy">
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="mergeConfirm">
+          <label class="form-check-label small" for="mergeConfirm">
+            I understand this merge is irreversible.
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnConfirmMerge" class="btn btn-danger" disabled>Confirm Merge
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Account Merge"
+                data-bs-content="Calls Account.merge() via the SF REST API. The master record retains its Id; related records (ContactPoints, Opportunities) are re-parented. This is permanent — verify master vs victim before confirming.">ⓘ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.duplicates.init();
+  });
+</script>
+{% endblock %}

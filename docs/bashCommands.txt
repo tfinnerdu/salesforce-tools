@@ -1,0 +1,72 @@
+===== SF Mission Control — Dev Commands =====
+
+-- Activate venv (Windows) --
+cd C:\doane\code\salesforce-tools
+.\.venv\Scripts\Activate.ps1
+
+-- Activate venv (Linux/Mac) --
+cd ~/doane/code/salesforce-tools
+source .venv/bin/activate
+
+-- Install deps --
+pip install -r requirements.txt
+
+-- Run app (dev) --
+python app.py
+
+-- Run app via hub launcher --
+.\start-local.ps1
+.\start-local.ps1 -ForceDeps
+
+-- Run tests --
+pytest tests/ -v
+pytest tests/ -v --tb=short
+pytest tests/test_readiness_validator.py -v
+
+-- Run tests with coverage --
+pytest tests/ --cov=. --cov-report=html
+open htmlcov/index.html
+
+-- DB init (manual) --
+python -c "from db import init_db; init_db()"
+
+-- Check health endpoint --
+curl http://localhost:5000/health
+
+-- Check migration readiness (mock) --
+curl -X POST http://localhost:5000/migration/readiness/run
+
+-- Check batch status (mock) --
+curl "http://localhost:5000/migration/batch/status?workflow_name=EDA_Person_Sync"
+
+-- Check reconciler errors (mock) --
+curl "http://localhost:5000/migration/reconciler/errors?workflow_name=EDA_Person_Sync&hours_back=24"
+
+-- Run validation scans --
+curl -X POST http://localhost:5000/validation/duplicates/scan
+curl http://localhost:5000/validation/external-ids/run
+curl http://localhost:5000/validation/contactpoints/scan
+
+-- SOQL run --
+curl -X POST http://localhost:5000/soql/run \
+  -H "Content-Type: application/json" \
+  -d '{"query":"SELECT Id, Name FROM Account WHERE IsPersonAccount = true LIMIT 10"}'
+
+-- Schema diff --
+curl -X POST http://localhost:5000/schema/org-diff/run \
+  -H "Content-Type: application/json" \
+  -d '{"compare_org":"prod","objects":["Account"]}'
+
+-- Docker build --
+docker build -t doaneu/sf-mission-control:latest .
+
+-- K8s deploy --
+kubectl apply -f k8s/manifest.yaml -n prod
+kubectl rollout restart deployment/sf-mission-control -n prod
+kubectl logs -f deployment/sf-mission-control -n prod
+
+-- K8s secret create --
+kubectl create secret generic sf-mission-control-secrets \
+  --from-env-file=.env \
+  -n prod \
+  --dry-run=client -o yaml | kubectl apply -f -

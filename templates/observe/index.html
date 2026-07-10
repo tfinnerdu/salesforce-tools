@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+{% block title %}Observe - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h4 class="mc-page-title mb-0">Observe</h4>
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+    </div>
+  </div>
+
+  <!-- ── Section 1: API Limits Dashboard ─────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0" style="color:var(--doane-slate);font-weight:700;">API Limits
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="API Limits"
+              data-bs-content="Calls GET /services/data/v{version}/limits/ — a single request returning all org governor limits and remaining capacity. Green = &lt;50% used; amber = 50–80%; red = &gt;80%.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <select id="limitsOrgSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
+          <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
+          <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+        </select>
+        <button id="btnToggleThresholds" class="btn btn-outline-secondary btn-sm">&#9881; Thresholds</button>
+        <button id="btnRefreshLimits" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="limitsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Fetching governor limits…</p>
+      </div>
+      <div id="limitsEmpty" class="text-center py-4 text-muted">
+        <p class="mb-1">No limits data loaded yet.</p>
+        <p class="small">Select an org and click <strong>Refresh</strong>.
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="DailyApiRequests"
+                data-bs-content="Total REST/SOAP API calls allowed per 24-hour period. Resets at midnight GMT. If this approaches 0, integrations start returning REQUEST_LIMIT_EXCEEDED.">ⓘ</span>
+        </p>
+      </div>
+      <div id="thresholdEditorWrap" class="d-none border-top pt-3 mt-2">
+        <p class="small text-muted mb-2">
+          Override the default 50%/80% amber/red thresholds for any limit.
+          Changes persist to the database.
+        </p>
+        <div class="row g-2 align-items-end mb-2">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Limit</label>
+            <select id="thresholdLimitSelect" class="form-select form-select-sm">
+              <option value="">— select —</option>
+              <option value="DailyApiRequests">Daily API Requests</option>
+              <option value="DataStorageMB">Data Storage (MB)</option>
+              <option value="FileStorageMB">File Storage (MB)</option>
+              <option value="DailyBulkApiRequests">Daily Bulk API Requests</option>
+              <option value="DailyAsyncApexExecutions">Daily Async Apex</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Amber %</label>
+            <input type="number" id="thresholdAmber" class="form-control form-control-sm" value="50" min="1" max="99">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Red %</label>
+            <input type="number" id="thresholdRed" class="form-control form-control-sm" value="80" min="1" max="100">
+          </div>
+          <div class="col-md-2">
+            <button id="btnSaveThreshold" class="btn btn-doane btn-sm">Save</button>
+          </div>
+          <div class="col-md-2">
+            <button id="btnResetThreshold" class="btn btn-outline-secondary btn-sm">Reset to Default</button>
+          </div>
+        </div>
+        <div id="thresholdSaveMsg" class="small"></div>
+        <div id="currentThresholdsList" class="mt-2 small text-muted"></div>
+      </div>
+      <div id="limitsGrid" class="row g-3 d-none"></div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Data Quality Trends ──────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h5 class="mb-0" style="color:var(--doane-slate);font-weight:700;">Data Quality Trends
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Data Quality Trends"
+              data-bs-content="Charts daily readiness check results (stored in the readiness_runs PostgreSQL table) over time. Each line is one check's pass rate or coverage percentage. Use to see whether migration is improving or degrading data quality.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <select id="trendsOrgSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
+          <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
+          <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+        </select>
+        <select id="trendsDaysSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="7">7 days</option>
+          <option value="14">14 days</option>
+          <option value="30" selected>30 days</option>
+        </select>
+        <button id="btnRefreshTrends" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="trendsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Loading trend data…</p>
+      </div>
+      <div id="trendsEmpty" class="text-center py-4 text-muted d-none">
+        <p class="mb-0">No trend data available for the selected range.</p>
+      </div>
+      <div id="trendsChartWrap" style="position:relative;height:300px;">
+        <canvas id="trendsChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 3: Cross-Org Record Count ───────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h5 class="mb-0" style="color:var(--doane-slate);font-weight:700;">Cross-Org Record Count
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Cross-Org Comparison"
+              data-bs-content="Runs the same COUNT() SOQL queries against multiple orgs and compares results. Yellow = &gt;10% divergence from baseline; red = &gt;25%. Use after a sandbox refresh to verify the sandbox matches prod.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <span class="small text-muted me-1">Orgs:</span>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input cross-org-check" type="checkbox" id="coOrgDev" value="dev" checked>
+          <label class="form-check-label small" for="coOrgDev">dev</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input cross-org-check" type="checkbox" id="coOrgProd" value="prod">
+          <label class="form-check-label small" for="coOrgProd">prod</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input cross-org-check" type="checkbox" id="coOrgSandbox" value="sandbox" checked>
+          <label class="form-check-label small" for="coOrgSandbox">sandbox</label>
+        </div>
+        <button id="btnRunCrossOrg" class="btn btn-doane btn-sm">&#9654; Run Comparison</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="crossOrgLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Querying orgs…</p>
+      </div>
+      <div id="crossOrgEmpty" class="text-center py-4 text-muted">
+        <p class="mb-1">No comparison run yet.</p>
+        <p class="small">Select orgs and click <strong>Run Comparison</strong>.</p>
+      </div>
+      <div id="crossOrgTableWrap" class="d-none">
+        <div class="info-box mb-3 small">
+          Cells are color-coded: <span class="badge badge-amber">amber</span> = &gt;10% divergence from first org,
+          <span class="badge badge-red">red</span> = &gt;25% divergence.
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered results-table" id="crossOrgTable">
+            <thead id="crossOrgTableHead"></thead>
+            <tbody id="crossOrgTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 4: Record Counts by Object ─────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0" style="color:var(--doane-slate);font-weight:700;">Record Counts by Object
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Record Counts by Object"
+              data-bs-content="COUNT() queries run one per object type to give a live record count snapshot. Useful for validating sandbox refresh completeness and tracking migration volume.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <select id="recordCountsOrgSelect" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev" {% if session.get('active_org','dev') == 'dev' %}selected{% endif %}>dev</option>
+          <option value="prod" {% if session.get('active_org','dev') == 'prod' %}selected{% endif %}>prod</option>
+          <option value="sandbox" {% if session.get('active_org','dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+        </select>
+        <button id="btnRefreshRecordCounts" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="recordCountsLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Querying record counts…</p>
+      </div>
+      <div id="recordCountsEmpty" class="text-center py-4 text-muted">
+        <p class="mb-1">No record counts loaded yet.</p>
+        <p class="small">Select an org and click <strong>Refresh</strong>.</p>
+      </div>
+      <div id="recordCountsTableWrap" class="d-none">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped results-table mb-0" id="recordCountsTable">
+            <thead>
+              <tr>
+                <th>Object</th>
+                <th class="text-end">Count</th>
+                <th class="no-print" style="width:60px;"></th>
+              </tr>
+            </thead>
+            <tbody id="recordCountsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Section 5: Sandbox Drift Detector ──────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h5 class="mb-0" style="color:var(--doane-slate);font-weight:700;">Sandbox Drift Detector
+        <span class="mc-info-icon"
+              data-bs-toggle="popover"
+              data-bs-trigger="focus"
+              tabindex="0"
+              data-bs-title="Sandbox Drift Detector"
+              data-bs-content="Runs identical COUNT() queries against two orgs and computes the delta. Use after a sandbox refresh to verify the sandbox matches prod. Green = &lt;5% drift, amber = 5–20%, red = &gt;20% or object wiped entirely.">ⓘ</span>
+      </h5>
+      <div class="d-flex align-items-center gap-2 no-print flex-wrap">
+        <label class="small text-muted mb-0" for="driftBaselineOrg">Baseline:</label>
+        <select id="driftBaselineOrg" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev">dev</option>
+          <option value="prod" selected>prod</option>
+          <option value="sandbox">sandbox</option>
+        </select>
+        <label class="small text-muted mb-0" for="driftTargetOrg">Target:</label>
+        <select id="driftTargetOrg" class="form-select form-select-sm" style="width:auto;">
+          <option value="dev">dev</option>
+          <option value="prod">prod</option>
+          <option value="sandbox" selected>sandbox</option>
+        </select>
+        <button id="btnRunDrift" class="btn btn-doane btn-sm">&#9654; Run</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="driftLoading" class="text-center py-4 d-none">
+        <div class="spinner-border text-warning" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted small">Querying both orgs…</p>
+      </div>
+      <div id="driftEmpty" class="text-center py-4 text-muted">
+        <p class="mb-0">Select baseline + target orgs and click <strong>Run</strong>.</p>
+      </div>
+      <div id="driftSummary" class="mb-3 d-none"></div>
+      <div id="driftTableWrap" class="d-none">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered results-table mb-0" id="driftTable">
+            <thead>
+              <tr style="background:var(--doane-slate);color:#fff;">
+                <th>Metric</th>
+                <th class="text-end">Baseline</th>
+                <th class="text-end">Target</th>
+                <th class="text-end">Delta</th>
+                <th class="text-end">Δ%</th>
+                <th class="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody id="driftTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"
+        crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/mc-observe-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.observe.init();
+  });
+</script>
+{% endblock %}

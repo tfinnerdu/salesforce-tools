@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Field Completeness - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/duplicates">Duplicate Radar</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/external-ids">External ID Coverage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/contactpoints">ContactPoint Integrity</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/validation/completeness">Field Completeness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/orphans">Orphaned Records</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/validation/merge-history">Merge History</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h4 class="mc-page-title">Field Completeness
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Field Completeness"
+            data-bs-content="Runs two COUNT() queries per field — total records and records where the field is non-null — to compute fill rate. Green ≥95%, Amber ≥75%, Red &lt;75%. Essential for verifying migration completeness before go-live.">ⓘ</span>
+    </h4>
+    <div class="d-flex align-items-center gap-2 no-print">
+      <span class="badge mc-org-badge" id="headerOrgBadge">
+        {{ session.get('active_org', 'dev') | upper }}
+      </span>
+      <button id="btnRunCompleteness" class="btn btn-doane btn-sm">&#9654; Run Check</button>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="completenessLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Running…</span>
+    </div>
+    <p class="mt-2 text-muted small">Running field completeness checks…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="completenessEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No completeness data yet.</p>
+    <p class="small">Click <strong>Run Check</strong> to measure field fill rates.</p>
+  </div>
+
+  <!-- Summary row -->
+  <div id="completenessSummary" class="d-flex gap-3 align-items-center mb-3 d-none">
+    <span class="fw-semibold small text-muted">Summary:</span>
+    <span id="summaryGreen" class="badge badge-green">0 green</span>
+    <span id="summaryAmber" class="badge badge-amber">0 amber</span>
+    <span id="summaryRed" class="badge badge-red">0 red</span>
+  </div>
+
+  <!-- Results table -->
+  <div id="completenessTableWrap" class="card shadow-sm d-none">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped results-table mb-0" id="completenessTable">
+          <thead>
+            <tr>
+              <th>Object</th>
+              <th>Field</th>
+              <th>Label</th>
+              <th class="text-end">Total</th>
+              <th class="text-end">Populated</th>
+              <th class="text-end">Missing</th>
+              <th style="min-width:180px;">Fill %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="completenessBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-validation-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.validation.init();
+  });
+</script>
+{% endblock %}

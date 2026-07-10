@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Record Inspector - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item"><a class="nav-link" href="/schema/crosswalk">Crosswalk Field Diff</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/org-diff">Org Schema Diff</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/field-usage">Field Usage</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/data-dictionary">Data Dictionary</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/apex-search">Apex Code Search</a></li>
+      <li class="nav-item"><a class="nav-link" href="/schema/snapshots">Snapshots</a></li>
+      <li class="nav-item"><a class="nav-link active" href="/schema/inspect">Record Inspector</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Record Inspector
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Record Inspector"
+            data-bs-content="Fetch every queryable field for a single Salesforce record — by Salesforce ID or by external ID (SIS_ID__c, Ethos_Guid__c, etc.). Useful for confirming migrated record values without opening Salesforce Inspector or writing a SOQL query.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Config card -->
+  <div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+
+        <!-- Object name -->
+        <div class="col-sm-3 col-lg-2">
+          <label for="riObject" class="form-label small fw-semibold mb-1">Object API Name</label>
+          <input id="riObject" type="text" class="form-control form-control-sm font-monospace"
+                 placeholder="e.g. Account" autocomplete="off" spellcheck="false">
+        </div>
+
+        <!-- Lookup mode toggle -->
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1 d-block">Lookup By</label>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Lookup mode">
+            <input type="radio" class="btn-check" name="riLookupMode" id="riModeSfId" value="sf_id" checked>
+            <label class="btn btn-outline-secondary" for="riModeSfId">Salesforce ID</label>
+            <input type="radio" class="btn-check" name="riLookupMode" id="riModeExtId" value="ext_id">
+            <label class="btn btn-outline-secondary" for="riModeExtId">External ID</label>
+          </div>
+        </div>
+
+        <!-- Record / external ID value -->
+        <div class="col-sm-3 col-lg-2">
+          <label for="riRecordId" class="form-label small fw-semibold mb-1" id="riRecordIdLabel">Record ID</label>
+          <input id="riRecordId" type="text" class="form-control form-control-sm font-monospace"
+                 placeholder="18-char Salesforce ID" autocomplete="off" spellcheck="false">
+        </div>
+
+        <!-- External ID field (shown only in ext_id mode) -->
+        <div class="col-sm-3 col-lg-2 d-none" id="riExtIdFieldWrap">
+          <label for="riExtIdField" class="form-label small fw-semibold mb-1">External ID Field</label>
+          <input id="riExtIdField" type="text" class="form-control form-control-sm font-monospace"
+                 placeholder="e.g. SIS_ID__c" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="col-sm-auto">
+          <button id="btnInspect" class="btn btn-doane btn-sm">&#9654; Inspect</button>
+        </div>
+      </div>
+
+      <!-- Search filter (shown after results load) -->
+      <div class="row mt-2 d-none" id="riFilterRow">
+        <div class="col-sm-4 col-lg-3">
+          <input id="riFilter" type="search" class="form-control form-control-sm"
+                 placeholder="Filter fields…" autocomplete="off">
+        </div>
+        <div class="col-sm-auto d-flex align-items-center">
+          <small class="text-muted" id="riFilterCount"></small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="riLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Loading record…</span>
+    </div>
+    <p class="mt-2 text-muted small">Fetching record fields…</p>
+  </div>
+
+  <!-- Empty / instruction state -->
+  <div id="riEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No record loaded yet.</p>
+    <p class="small">Enter an object name and record ID (or external ID), then click <strong>Inspect</strong>.</p>
+  </div>
+
+  <!-- Error state -->
+  <div id="riError" class="alert alert-danger d-none"></div>
+
+  <!-- Results -->
+  <div id="riResults" class="d-none">
+    <!-- Record meta bar -->
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+      <span class="badge mc-org-badge" id="riOrgBadge">ORG</span>
+      <span class="fw-semibold font-monospace" id="riObjectLabel"></span>
+      <span class="text-muted small font-monospace" id="riIdLabel"></span>
+      <span class="badge bg-secondary" id="riModeLabel"></span>
+      <span class="text-muted small ms-auto" id="riFieldCount"></span>
+      <a id="riDeepLink" href="#" target="_blank" rel="noopener noreferrer"
+         class="btn btn-outline-secondary btn-sm d-none">
+        Open in Salesforce &#8599;
+      </a>
+    </div>
+
+    <!-- Field table -->
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mc-table" id="riTable">
+        <thead>
+          <tr>
+            <th style="width:22%">Field API Name</th>
+            <th style="width:25%">Label</th>
+            <th style="width:10%">Type</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody id="riTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-schema-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => MC.recordInspector.init());
+</script>
+{% endblock %}

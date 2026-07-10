@@ -1,0 +1,425 @@
+{% extends 'base.html' %}
+{% block title %}Logs - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1" id="logsSubNav">
+      <li class="nav-item">
+        <a class="nav-link active" href="#" id="tabApexLogs" data-tab="apex">Apex Logs</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" id="tabFlowErrors" data-tab="flows">Flow Errors</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" id="tabCpuSummary" data-tab="cpu">CPU Summary</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" id="tabTraceFlags" data-tab="trace">Trace Flags</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+
+  <!-- ── Apex Logs panel ─────────────────────────────────────────────────── -->
+  <div id="panelApex">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Apex Debug Logs
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Apex Logs"
+                data-bs-content="Lists the 50 most recent Apex debug logs via the Tooling API (SELECT Id,LogUser,Operation,Status,LogLength FROM ApexLog ORDER BY LastModifiedDate DESC). Click a row to parse the full log body.">ⓘ</span>
+        </h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <button id="btnRefreshApex" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    </div>
+
+    <!-- Time-range toolbar -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3 no-print">
+      <label class="small fw-semibold mb-0">Show logs from:</label>
+      <select id="logTimeRange" class="form-select form-select-sm" style="width:auto;">
+        <option value="">All available</option>
+        <option value="15m">Last 15 minutes</option>
+        <option value="1h" selected>Last 1 hour</option>
+        <option value="6h">Last 6 hours</option>
+        <option value="24h">Last 24 hours</option>
+        <option value="custom">Custom…</option>
+      </select>
+      <div id="customRangeWrap" class="d-none d-flex gap-2 align-items-center">
+        <input type="datetime-local" id="logCustomSince" class="form-control form-control-sm" style="width:auto;">
+      </div>
+      <div class="form-check form-switch mb-0 ms-2">
+        <input class="form-check-input" type="checkbox" id="autoRefreshToggle" role="switch">
+        <label class="form-check-label small" for="autoRefreshToggle">Auto-refresh (10s)</label>
+      </div>
+      <button class="btn btn-outline-danger btn-sm ms-auto" id="btnDeleteAllLogs"
+              data-mc-confirm="This permanently deletes ALL Apex debug logs in this org."
+              data-mc-confirm-title="Delete all Apex logs"
+              data-mc-confirm-btn="Delete all logs"
+              data-mc-confirm-ack="true">
+        Delete All Logs
+      </button>
+    </div>
+
+    <!-- Log list -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-body p-0">
+        <div id="apexLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching Apex logs…</p>
+        </div>
+
+        <div id="apexEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-1">No Apex logs found.</p>
+          <p class="small">Enable debug logging in Setup → Debug Logs.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="apexTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>User</th>
+                <th>Operation</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Duration</th>
+                <th>Date</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody id="apexBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log detail panel -->
+    <div id="apexDetailPanel" class="d-none">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <strong id="detailTitle">Log Detail</strong>
+          <button type="button" class="btn-close" id="btnCloseDetail" aria-label="Close"></button>
+        </div>
+        <div class="card-body">
+          <div id="detailLoading" class="text-center py-3 d-none">
+            <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+            <span class="ms-2 text-muted small">Parsing log…</span>
+          </div>
+
+          <!-- Governor Limits -->
+          <h6 class="fw-semibold mb-2">Governor Limits
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Governor Limits"
+                  data-bs-content="Extracted from the LIMIT_USAGE_FOR_NS block at the end of each log. Shows actual usage vs maximum for SOQL queries, DML statements, CPU time, heap, and callouts. Amber = &gt;50% used; red = &gt;80%.">ⓘ</span>
+          </h6>
+          <div id="detailLimitsEmpty" class="text-muted small mb-3 d-none">No limit data found in log.</div>
+          <div class="table-responsive mb-3">
+            <table id="detailLimitsTable" class="table table-sm table-bordered mb-0 d-none">
+              <thead class="table-light">
+                <tr>
+                  <th>Limit</th>
+                  <th>Used</th>
+                  <th>Max</th>
+                  <th>Usage</th>
+                </tr>
+              </thead>
+              <tbody id="detailLimitsBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Exceptions -->
+          <h6 class="fw-semibold mb-2">Exceptions
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Exceptions"
+                  data-bs-content="Lines matching FATAL_ERROR or EXCEPTION_THROWN in the log body. A FATAL_ERROR terminates the transaction and rolls back all DML in that context.">ⓘ</span>
+          </h6>
+          <div id="detailExceptionsEmpty" class="text-muted small mb-3 d-none">No exceptions found.</div>
+          <ul id="detailExceptionsList" class="list-group list-group-flush mb-3 d-none"></ul>
+
+          <!-- Timeline -->
+          <h6 class="fw-semibold mb-2">Timeline</h6>
+          <div id="detailTimelineEmpty" class="text-muted small d-none">No timeline events.</div>
+          <ol id="detailTimelineList" class="list-group list-group-numbered d-none" style="max-height:260px;overflow-y:auto;"></ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-Time Stream skeleton -->
+    <div class="card shadow-sm mt-3">
+      <div class="card-header d-flex align-items-center gap-2" style="background:var(--doane-slate);color:#fff;">
+        <span class="fw-semibold">Real-Time Log Stream</span>
+        <span class="badge badge-amber ms-1">Coming Soon</span>
+        <span class="mc-info-icon"
+              data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+              data-bs-title="Real-Time Streaming"
+              data-bs-content="Subscribes to the Salesforce Streaming API (CometD) to push new Apex logs to this page as they are generated. Requires a WebSocket bridge — currently stubbed. Poll mode (above) works today.">ⓘ</span>
+      </div>
+      <div class="card-body text-center py-4">
+        <p class="text-muted small mb-3">
+          Real-time log streaming via the Salesforce Streaming API is not yet active.<br>
+          Use the <strong>Auto-refresh</strong> toggle above for near-real-time polling.
+        </p>
+        <button class="btn btn-outline-secondary btn-sm" id="btnStreamConnect" disabled>
+          Connect to Stream
+        </button>
+        <span class="ms-2 small text-muted" id="streamStatus">Not connected</span>
+      </div>
+      <div id="streamFeed" class="d-none p-3 font-monospace small" style="max-height:300px;overflow-y:auto;background:#1e1e1e;color:#d4d4d4;">
+        <!-- Live events will appear here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CPU Summary panel ─────────────────────────────────────────────── -->
+  <div id="panelCpuSummary" class="d-none">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Apex Execution Summary
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Apex Execution Summary"
+                data-bs-content="Shows DurationMilliseconds from the ApexLog metadata for the 20 most recent logs — no log body download needed. Logs &gt;5s are highlighted amber; non-Success status highlighted red. Use to quickly spot slow transactions without downloading full log bodies.">ⓘ</span>
+        </h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <button id="btnRefreshCpuSummary" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-body p-0">
+        <div id="cpuLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching Apex execution summary…</p>
+        </div>
+
+        <div id="cpuEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-0">No Apex log data found.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="cpuTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>User</th>
+                <th>Operation</th>
+                <th>Duration (ms)</th>
+                <th>Log Size</th>
+                <th>Status</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cpuSummaryTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Trace Flags panel ─────────────────────────────────────────────── -->
+  <div id="panelTrace" class="d-none">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Trace Flag Manager
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Trace Flag Manager"
+                data-bs-content="TraceFlags tell Salesforce to generate Apex debug logs for a specific user or class. Without a TraceFlag, no logs are generated. Managed via Tooling API: SELECT Id, LogType, ExpirationDate, DebugLevel.DeveloperName FROM TraceFlag.">ⓘ</span>
+        </h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button id="btnDeleteExpired" class="btn btn-outline-secondary btn-sm"
+                data-mc-confirm="This deletes all expired trace flags in this org."
+                data-mc-confirm-title="Delete expired trace flags"
+                data-mc-confirm-btn="Delete expired">Delete Expired</button>
+        <button id="btnRefreshTraceFlags" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+      </div>
+    </div>
+
+    <!-- Current Flags table -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Current Trace Flags</div>
+      <div class="card-body p-0">
+        <div id="traceFlagsLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching trace flags…</p>
+        </div>
+
+        <div id="traceFlagsEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-1">No trace flags found.</p>
+          <p class="small">Create one below to start capturing Apex debug logs.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="traceFlagsTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>Entity ID</th>
+                <th>Entity Type</th>
+                <th>Debug Level</th>
+                <th>Log Type</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody id="traceFlagsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create New Flag form -->
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Create New Trace Flag</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">Entity Type</label>
+            <select id="traceFlagEntityType" class="form-select form-select-sm">
+              <option value="User">User</option>
+              <option value="ApexClass">ApexClass</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">User / Class</label>
+            <input type="text" id="traceFlagEntitySearch" class="form-control form-control-sm"
+                   placeholder="Type to search…" autocomplete="off" list="traceFlagUserList">
+            <datalist id="traceFlagUserList"></datalist>
+            <input type="hidden" id="traceFlagEntityId">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Debug Level</label>
+            <select id="traceFlagDebugLevel" class="form-select form-select-sm">
+              <option value="">Loading…</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold">Duration</label>
+            <select id="traceFlagDuration" class="form-select form-select-sm">
+              <option value="15">15 minutes</option>
+              <option value="30" selected>30 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="120">2 hours</option>
+              <option value="until_midnight" data-dynamic="true">Until midnight</option>
+            </select>
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+          </div>
+        </div>
+        <div class="mt-3 d-flex gap-2 flex-wrap">
+          <button id="btnCreateTraceFlag" class="btn btn-doane btn-sm">Create Trace Flag</button>
+          <button class="btn btn-outline-warning btn-sm" onclick="MC.logs.traceMe()">&#9889; Trace Me (30 min)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Flow Errors panel ───────────────────────────────────────────────── -->
+  <div id="panelFlows" class="d-none">
+    <div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <h4 class="mc-page-title mb-0">Flow Errors
+          <span class="mc-info-icon"
+                data-bs-toggle="popover"
+                data-bs-trigger="focus"
+                tabindex="0"
+                data-bs-title="Flow Errors"
+                data-bs-content="Queries FlowInterview WHERE InterviewStatus = 'Error' via the Tooling API. Shows which flow element caused the failure and the error message. ProcessExceptions are created when a flow fails and the error is surfaced to the record.">ⓘ</span>
+        </h4>
+        <span class="badge mc-org-badge">{{ session.get('active_org', 'dev') | upper }}</span>
+      </div>
+      <button id="btnRefreshFlows" class="btn btn-doane btn-sm">&#8635; Refresh</button>
+    </div>
+
+    <!-- Flow Interviews -->
+    <h6 class="fw-semibold mb-2 mt-2">Flow Interview Errors</h6>
+    <div class="card shadow-sm mb-4">
+      <div class="card-body p-0">
+        <div id="flowsLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          <p class="mt-2 text-muted small">Fetching flow errors…</p>
+        </div>
+
+        <div id="flowsEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-0">No flow interview errors found.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="flowsTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>Flow</th>
+                <th>Element</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="flowsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Process Exceptions -->
+    <h6 class="fw-semibold mb-2">Process Exceptions</h6>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div id="procExEmpty" class="text-center py-5 text-muted d-none">
+          <p class="mb-0">No pending process exceptions.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table id="procExTable" class="table table-sm table-hover mb-0 d-none">
+            <thead class="table-dark">
+              <tr>
+                <th>Exception Type</th>
+                <th>Message</th>
+                <th>Source Object</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="procExBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.logs.init();
+  });
+</script>
+{% endblock %}

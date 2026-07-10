@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Error Reconciler - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/readiness">Readiness</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/migration/errors">Error Reconciler</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/batches">Batch Progress</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/preflight">Pre-flight</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/migration/velocity">Velocity &amp; ETA</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header">
+    <h4 class="mc-page-title">Error Reconciler
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Error Reconciler"
+            data-bs-content="Queries Conductor for failed workflows in the last N hours and groups them by error type with suggested remediation. Designed for post-migration triage — identify highest-volume error classes first.">ⓘ</span>
+    </h4>
+  </div>
+
+  <!-- Controls -->
+  <div class="card shadow-sm mb-3 no-print" data-conductor-card>
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-4 col-lg-3">
+          <label for="wfName" class="form-label small fw-semibold mb-1">Workflow Name</label>
+          <input id="wfName" type="text" class="form-control form-control-sm"
+                 placeholder="EDA_Person_Sync" value="EDA_Person_Sync">
+        </div>
+        <div class="col-sm-3 col-lg-2">
+          <label for="hoursBack" class="form-label small fw-semibold mb-1">Time Range
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Hours Back"
+                  data-bs-content="Looks back this many hours into Conductor's execution history. Conductor retains failed workflow state indefinitely, but very large windows may be slow to query.">ⓘ</span>
+          </label>
+          <select id="hoursBack" class="form-select form-select-sm">
+            <option value="1">Last 1 hour</option>
+            <option value="6" selected>Last 6 hours</option>
+            <option value="24">Last 24 hours</option>
+            <option value="72">Last 72 hours</option>
+          </select>
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnRefreshReconciler" class="btn btn-doane btn-sm">
+            &#8635; Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div id="errorSummary" class="mb-3 text-muted small d-none">
+    <!-- e.g. "12 failures across 3 error types" -->
+  </div>
+
+  <!-- Error Cards -->
+  <div id="errorCardsLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Loading…</span>
+    </div>
+    <p class="mt-2 text-muted small">Loading error categories…</p>
+  </div>
+
+  <div id="errorCardsEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No error data loaded.</p>
+    <p class="small">Select a workflow and click <strong>Refresh</strong>.</p>
+  </div>
+
+  <div id="errorCards">
+    <!-- Error cards injected by MC.reconciler.renderErrors() -->
+    <!-- Each card includes a Requeue button rendered by MC.reconciler.buildCard() -->
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.reconciler.init();
+  });
+</script>
+{% endblock %}

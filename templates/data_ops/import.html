@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% block title %}Data Import - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">Data Import
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="Data Import"
+            data-bs-content="Two-step import: (1) Validate — check your CSV against the SF schema for type errors, missing required fields, and invalid picklist values without writing anything; (2) Import — map columns to SF fields and load via Bulk API with per-record error reporting.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <!-- Step wizard nav -->
+  <div class="d-flex gap-0 mb-4" id="importStepNav">
+    <div class="import-step active" id="stepBtn1" onclick="MC.importer.goStep(1)">
+      <span class="step-num">1</span> Configure
+    </div>
+    <div class="import-step" id="stepBtn2" onclick="MC.importer.goStep(2)">
+      <span class="step-num">2</span> Map Fields
+    </div>
+    <div class="import-step" id="stepBtn3" onclick="MC.importer.goStep(3)">
+      <span class="step-num">3</span> Validate
+    </div>
+    <div class="import-step" id="stepBtn4" onclick="MC.importer.goStep(4)">
+      <span class="step-num">4</span> Import
+    </div>
+  </div>
+
+  <!-- Step 1: Configure -->
+  <div id="importStep1" class="import-step-panel">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Step 1 — Configure</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">SF Object API Name</label>
+              <input id="importObject" type="text" class="form-control" placeholder="e.g. Account, ContactPointEmail__c">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Operation</label>
+              <select id="importOperation" class="form-select">
+                <option value="insert">Insert — create new records</option>
+                <option value="upsert">Upsert — insert or update by external ID</option>
+                <option value="update">Update — update existing records by Id</option>
+                <option value="delete">Delete — delete records by Id</option>
+              </select>
+            </div>
+            <div class="mb-3 d-none" id="extIdFieldWrap">
+              <label class="form-label fw-semibold">External ID Field</label>
+              <input id="importExtIdField" type="text" class="form-control" placeholder="e.g. SIS_ID__c">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">CSV File</label>
+              <input id="importCsvFile" type="file" class="form-control" accept=".csv,.txt">
+              <div class="form-text">UTF-8 CSV, first row is header. Max 50,000 rows.</div>
+            </div>
+            <div class="mb-3 form-check">
+              <input type="checkbox" class="form-check-input" id="importBypassTriggers">
+              <label class="form-check-label" for="importBypassTriggers">Bypass triggers
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                      data-bs-content="Sets the SF bypass trigger flag before the import. Only available if your org has a bypass field configured.">ⓘ</span>
+              </label>
+            </div>
+            <button id="btnImportStep1Next" class="btn btn-doane">Next: Map Fields →</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">CSV Preview</div>
+          <div class="card-body p-0">
+            <div id="csvPreviewEmpty" class="text-muted text-center py-5 small">Upload a CSV to preview.</div>
+            <div id="csvPreviewWrap" class="d-none" style="overflow-x:auto;max-height:300px">
+              <table class="table table-sm table-hover mb-0" id="csvPreviewTable">
+                <thead class="table-light" id="csvPreviewHead"></thead>
+                <tbody id="csvPreviewBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Map Fields -->
+  <div id="importStep2" class="import-step-panel d-none">
+    <div class="card shadow-sm">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold" style="color:var(--doane-slate)">Step 2 — Map CSV Columns to SF Fields</span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="MC.importer.autoMap()">Auto-Map</button>
+          <button id="btnImportStep2Back" class="btn btn-outline-secondary btn-sm">← Back</button>
+          <button id="btnImportStep2Next" class="btn btn-doane btn-sm">Next: Validate →</button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="p-3" id="fieldMappingWrap">
+          <p class="text-muted small">Loading SF fields…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Validate -->
+  <div id="importStep3" class="import-step-panel d-none">
+    <div class="card shadow-sm">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold" style="color:var(--doane-slate)">Step 3 — Validation Results</span>
+        <div class="d-flex gap-2">
+          <button id="btnRunValidation" class="btn btn-doane btn-sm">&#9654; Run Validation</button>
+          <button id="btnImportStep3Back" class="btn btn-outline-secondary btn-sm">← Back</button>
+          <button id="btnImportStep3Next" class="btn btn-doane btn-sm d-none">Next: Import →</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="validationLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning"></div>
+          <p class="mt-2 text-muted small">Validating rows…</p>
+        </div>
+        <div id="validationResults" class="d-none">
+          <!-- Summary stats -->
+          <div class="row g-2 mb-3" id="validationStats"></div>
+          <!-- Error table -->
+          <div id="validationErrorWrap" class="d-none">
+            <h6 class="fw-semibold mb-2">Validation Issues</h6>
+            <input id="validationErrorFilter" type="text" class="form-control form-control-sm mb-2"
+                   placeholder="Filter by row or field…" style="max-width:300px">
+            <div style="max-height:350px;overflow-y:auto">
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
+                  <tr><th>#</th><th>Field</th><th>Severity</th><th>Message</th></tr>
+                </thead>
+                <tbody id="validationErrorTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Import Results -->
+  <div id="importStep4" class="import-step-panel d-none">
+    <div class="card shadow-sm">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold" style="color:var(--doane-slate)">Step 4 — Import</span>
+        <div class="d-flex gap-2">
+          <button id="btnExecuteImport" class="btn btn-danger btn-sm"
+                  data-mc-confirm="This imports the CSV into Salesforce, creating or updating live records."
+                  data-mc-confirm-title="Execute import"
+                  data-mc-confirm-btn="Execute import">&#9654; Execute Import</button>
+          <button id="btnImportStep4Back" class="btn btn-outline-secondary btn-sm">← Back</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="importConfirmWrap">
+          <div class="alert alert-warning">
+            <strong>Review before executing:</strong>
+            <span id="importConfirmSummary"></span>
+          </div>
+        </div>
+        <div id="importLoading" class="text-center py-4 d-none">
+          <div class="spinner-border text-warning"></div>
+          <p class="mt-2 text-muted small">Importing records via Bulk API…</p>
+        </div>
+        <div id="importResultsWrap" class="d-none">
+          <div class="row g-2 mb-3" id="importResultStats"></div>
+          <div id="importErrorWrap" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-semibold mb-0">Failed Records</h6>
+              <button id="btnDownloadErrors" class="btn btn-outline-secondary btn-sm">&#11123; Download Error CSV</button>
+            </div>
+            <div style="max-height:350px;overflow-y:auto">
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
+                  <tr><th>#</th><th>SF Id</th><th>Error</th></tr>
+                </thead>
+                <tbody id="importErrorTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => MC.importer.init());
+</script>
+{% endblock %}

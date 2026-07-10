@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}Key Map Builder - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid" data-key-map-id="{{ key_map_id }}">
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <a href="/key-maps" class="text-muted small">&larr; Key Maps</a>
+    <h4 class="mc-page-title mb-0 ms-2" id="kmTitle">New Key Map</h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+    <div class="ms-auto d-flex gap-2">
+      <button id="btnSaveKm" class="btn btn-doane btn-sm">Save</button>
+      <a id="btnGoRun" class="btn btn-slate btn-sm d-none" href="#">Run / Preview &rarr;</a>
+    </div>
+  </div>
+
+  <!-- Details -->
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Details</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Name</label>
+            <input id="kmName" type="text" class="form-control" maxlength="200" placeholder="e.g. PTAT">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Target SObject</label>
+            <input id="kmTarget" type="text" class="form-control" placeholder="e.g. ProgramTermApplnTimeline">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Description</label>
+            <textarea id="kmDescription" class="form-control" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FK lookups -->
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Foreign-key lookups
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-content="Each lookup resolves a target FK field from a source column by matching another SObject's external-ID field. e.g. source TERMS_ID → AcademicTermId via AcademicTerm.SIS_ID__c.">ⓘ</span>
+        </div>
+        <div class="card-body p-2">
+          <p class="text-muted small mb-2" id="fkEmpty">No FK lookups yet.</p>
+          <table class="table table-sm mb-2 d-none" id="fkTable">
+            <thead class="table-light">
+              <tr><th>Source column</th><th>Target field</th><th>Lookup SObject</th><th>Lookup field</th><th></th></tr>
+            </thead>
+            <tbody id="fkTbody"></tbody>
+          </table>
+          <div class="row g-1 align-items-end">
+            <div class="col"><input id="fkSource" class="form-control form-control-sm" placeholder="source column"></div>
+            <div class="col"><input id="fkTarget" class="form-control form-control-sm" placeholder="target field"></div>
+            <div class="col"><input id="fkSobject" class="form-control form-control-sm" placeholder="lookup SObject"></div>
+            <div class="col"><input id="fkField" class="form-control form-control-sm" value="SIS_ID__c"></div>
+            <div class="col-auto"><button id="btnAddFk" class="btn btn-outline-secondary btn-sm">+ Add</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Families + variants -->
+      <div class="card shadow-sm mt-3">
+        <div class="card-header py-2 fw-semibold d-flex align-items-center justify-content-between"
+             style="color:var(--doane-slate)">
+          <span>Families &amp; variants
+            <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                  data-bs-content="A family is chosen per source row by its routing rule (column = value). Each variant in the chosen family produces one output row, merging its overlay (target_field → value) onto the resolved-FK base. A family with no routing rule is the default.">ⓘ</span>
+          </span>
+          <div class="d-flex gap-1">
+            <input id="famName" class="form-control form-control-sm" style="width:auto" placeholder="family name">
+            <button id="btnAddFamily" class="btn btn-doane btn-sm">+ Family</button>
+          </div>
+        </div>
+        <div class="card-body p-2" id="familyList">
+          <p class="text-muted small" id="famEmpty">No families yet — add one (leave routing blank for a default).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Family card template -->
+<template id="tplFamily">
+  <div class="border rounded p-2 mb-2 mc-family" data-family-id="">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <strong class="mc-family-name"></strong>
+      <span class="text-muted small mc-family-routing"></span>
+      <button class="btn btn-outline-danger btn-sm ms-auto mc-family-del"
+              data-mc-confirm="Delete this family and all its variants?"
+              data-mc-confirm-title="Delete family" data-mc-confirm-btn="Delete">&times;</button>
+    </div>
+    <table class="table table-sm mb-2">
+      <thead class="table-light"><tr><th>Variant</th><th>Overlay</th><th>Applies when</th><th></th></tr></thead>
+      <tbody class="mc-variant-body"></tbody>
+    </table>
+    <button class="btn btn-outline-secondary btn-sm mc-var-add">+ Variant</button>
+  </div>
+</template>
+
+<!-- New family routing modal -->
+<div class="modal fade" id="famRoutingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Routing for family</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="small text-muted">When does this family apply? Leave blank to make it the default (used when no other family matches).</p>
+        <div id="routingClauses"></div>
+        <button class="btn btn-outline-secondary btn-sm mt-1" id="btnAddClause">+ Condition</button>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-doane" id="btnConfirmFamily">Create family</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add variant modal -->
+<div class="modal fade" id="variantModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add variant <span id="variantFamilyName" class="text-muted fw-normal"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Variant name</label>
+          <input id="variantName" class="form-control" placeholder="e.g. International Transfer">
+        </div>
+
+        <label class="form-label fw-semibold mb-1">Overlay
+          <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                data-bs-content="Target fields this variant sets on top of the resolved-FK base. Each row is a target field + the literal Salesforce value (e.g. an ActionPlanTemplateVersion Id). Partial overlays are fine — list only the fields this variant changes.">ⓘ</span>
+        </label>
+        <div id="overlayRows" class="mb-1"></div>
+        <button class="btn btn-outline-secondary btn-sm mb-3" id="btnAddOverlayRow">+ Field</button>
+
+        <label class="form-label fw-semibold mb-1 d-block">Applies to</label>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="appliesMode" id="appliesAll" value="all" checked>
+          <label class="form-check-label" for="appliesAll">Every row in this family</label>
+        </div>
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="appliesMode" id="appliesWhen" value="when">
+          <label class="form-check-label" for="appliesWhen">Only when… (source column = value)</label>
+        </div>
+        <div id="appliesWhenBlock" class="d-none ms-3">
+          <div id="appliesRows" class="mb-1"></div>
+          <button class="btn btn-outline-secondary btn-sm" id="btnAddAppliesRow">+ Condition</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-doane" id="btnConfirmVariant">Add variant</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="tplOverlayRow">
+  <div class="row g-1 mb-1 overlay-row">
+    <div class="col"><input class="form-control form-control-sm ov-field" placeholder="target field e.g. ActionPlanTemplateVersionId"></div>
+    <div class="col"><input class="form-control form-control-sm ov-value" placeholder="value e.g. 0PR..."></div>
+    <div class="col-auto"><button class="btn btn-outline-danger btn-sm ov-del">&times;</button></div>
+  </div>
+</template>
+
+<template id="tplAppliesRow">
+  <div class="row g-1 mb-1 applies-row">
+    <div class="col"><input class="form-control form-control-sm aw-col" placeholder="source column"></div>
+    <div class="col-auto align-self-center">=</div>
+    <div class="col"><input class="form-control form-control-sm aw-val" placeholder="value"></div>
+    <div class="col-auto"><button class="btn btn-outline-danger btn-sm aw-del">&times;</button></div>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-key-map-snippet.js') }}"></script>
+{% endblock %}
