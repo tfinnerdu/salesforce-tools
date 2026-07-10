@@ -195,6 +195,7 @@
     <Content Include="docs\e2e-test-walkthrough.md" />
     <Content Include="docs\notes.md" />
     <Content Include="docs\user-guide.md" />
+    <Content Include="docs\verifying-field-visibility.md" />
     <Content Include="k8s\manifest.yaml" />
     <Content Include="requirements.txt" />
     <Content Include=".env.example" />

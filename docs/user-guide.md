@@ -1469,7 +1469,11 @@ On an object that uses record types, a picklist's values aren't available on a r
 
 > Only picklist fields on record-type objects need this. **Heads-up:** Salesforce percent-encodes some value names in record types (e.g. `/`) — plain code values are fine; for special characters, paste the exact form from a retrieved record type and dry-run.
 
-> This reads from the source org only — it never writes. It covers **visibility**; page-layout placement and record types are still done in Setup (or a later pass).
+> **New to Salesforce visibility/accessibility?** After you deploy, use
+> [Verifying field visibility & accessibility](verifying-field-visibility.md) —
+> a step-by-step, Case-based walkthrough of what "correct" looks like in Setup
+> for all four switches (field · FLS · layout · record type), plus the `sf` CLI
+> commands that check the same thing from the terminal.
 
 ### 4. Generate & deploy
 
