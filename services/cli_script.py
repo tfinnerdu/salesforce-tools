@@ -248,6 +248,14 @@ def deploy_snippet(fields: list, permset_name: str, alias: str,
     return '\n'.join(lines)
 
 
+def deploy_dir_snippet(alias: str, dry_run: bool = False) -> str:
+    """Alternative deploy: push the whole force-app folder (no -m). Avoids the
+    'No source-backed components present' gotcha when the -m components aren't
+    unzipped into the project yet."""
+    tail = ' --dry-run' if dry_run else ''
+    return f'sf project deploy start --source-dir force-app -o {alias or "<alias>"}{tail}'
+
+
 def assign_snippet(permset_name: str, alias: str, username: str) -> str:
     """Step 10 — assign the permission set to the integration user."""
     return (f'sf org assign permset --name {permset_name or "<permission-set>"} '

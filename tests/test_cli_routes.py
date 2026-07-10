@@ -124,6 +124,20 @@ class TestGenerate:
         assert d['assign'].count('sf org assign permset') == 2
         assert 'Case_Assistance_Fields' in d['assign']
 
+    def test_generate_readonly_companion_permset(self, client):
+        plan = self._plan()
+        plan['human_permset'] = {'api_name': 'Case_Assistance_Fields', 'editable': True,
+                                 'readonly_companion': True}
+        d = client.post('/cli/generate', json=plan).get_json()['data']
+        assert 'PermissionSet:Case_Assistance_Fields' in d['members']
+        assert 'PermissionSet:Case_Assistance_Fields_ReadOnly' in d['members']
+        # integration + edit + read-only = 3 assign lines
+        assert d['assign'].count('sf org assign permset') == 3
+
+    def test_generate_includes_source_dir_deploy(self, client):
+        d = client.post('/cli/generate', json=self._plan()).get_json()['data']
+        assert d['deploy_dir'] == 'sf project deploy start --source-dir force-app -o DoaneUAT'
+
     def test_generate_permset_for_existing_fields_only(self, client):
         # No built fields, no integration permset — just clothe existing fields.
         plan = {'alias': 'DoaneUAT', 'fields': [], 'permset': {},
@@ -228,3 +242,18 @@ class TestPackage:
         assert not any('/fields/' in n for n in names)
         xml = zf.read('force-app/main/default/permissionsets/Case_Assistance_Fields.permissionset-meta.xml').decode()
         assert '<field>Case.Group_Information__c</field>' in xml
+
+    def test_package_readonly_companion_two_permsets(self, client):
+        plan = {'project': 'p', 'alias': 'DoaneUAT', 'fields': [], 'permset': {},
+                'human_permset': {'api_name': 'Case_Assistance_Fields', 'editable': True,
+                                  'readonly_companion': True},
+                'existing_fields': ['Case.Group_Information__c']}
+        resp = client.post('/cli/package', json=plan)
+        assert resp.status_code == 200
+        names = zipfile.ZipFile(io.BytesIO(resp.data)).namelist()
+        assert 'force-app/main/default/permissionsets/Case_Assistance_Fields.permissionset-meta.xml' in names
+        assert 'force-app/main/default/permissionsets/Case_Assistance_Fields_ReadOnly.permissionset-meta.xml' in names
+        # the companion grants read-only (no edit)
+        ro = zipfile.ZipFile(io.BytesIO(resp.data)).read(
+            'force-app/main/default/permissionsets/Case_Assistance_Fields_ReadOnly.permissionset-meta.xml').decode()
+        assert '<editable>false</editable>' in ro and '<editable>true</editable>' not in ro

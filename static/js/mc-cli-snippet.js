@@ -69,7 +69,9 @@ MC.cli = {
     document.getElementById('btnReadFls').addEventListener('click', () => this._readFls());
     ['hpsName', 'hpsLabel', 'cliExistingFields'].forEach(id =>
       document.getElementById(id).addEventListener('input', () => this._refresh()));
-    document.getElementById('hpsEditable').addEventListener('change', () => this._refresh());
+    ['hpsEditable', 'hpsReadonlyCompanion'].forEach(id =>
+      document.getElementById(id).addEventListener('change', () => this._refresh()));
+    document.getElementById('btnLoadExistingFields').addEventListener('click', () => this._loadExistingFields());
     // Default the FLS source org to a non-active org (e.g. EDA).
     const flsOrg = document.getElementById('cliFlsOrg');
     const other = Array.from(flsOrg.options).map(o => o.value).find(v => v !== MC.activeOrg());
@@ -129,7 +131,24 @@ MC.cli = {
       api_name: name,
       label: document.getElementById('hpsLabel').value.trim(),
       editable: document.getElementById('hpsEditable').checked,
+      readonly_companion: document.getElementById('hpsReadonlyCompanion').checked,
     };
+  },
+
+  async _loadExistingFields() {
+    const obj = document.getElementById('cliExistingObj').value.trim();
+    if (!obj) { MC.showToast('Enter an object first', 'warning'); return; }
+    try {
+      const data = await MC.api(`/cli/objects/${encodeURIComponent(obj)}/fields`);
+      const custom = (data.fields || []).filter(f => f.custom).map(f => `${obj}.${f.name}`);
+      if (!custom.length) { MC.showToast(`No custom fields found on ${obj}`, 'info'); return; }
+      const ta = document.getElementById('cliExistingFields');
+      const have = new Set(ta.value.split('\n').map(s => s.trim()).filter(Boolean));
+      custom.forEach(c => have.add(c));
+      ta.value = [...have].join('\n');
+      this._refresh();
+      MC.showToast(`Loaded ${custom.length} custom fields from ${obj}`, 'success');
+    } catch (e) { MC.showToast(e.message, 'danger'); }
   },
 
   // ── Visibility: clone FLS from a source org ────────────────────────────────
@@ -252,6 +271,7 @@ MC.cli = {
       set('snpDeployDry', s.deploy_dry_run);
       set('snpDeployFull', s.deploy_full);
       set('snpAssign', s.assign);
+      set('snpDeployDir', s.deploy_dir);
       set('snpLayoutRetrieve', s.layout_retrieve);
       set('snpLayoutDeploy', s.layout_deploy);
       document.getElementById('flipSection').classList.toggle('d-none', !s.has_flips);

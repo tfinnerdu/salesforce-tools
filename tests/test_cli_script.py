@@ -173,6 +173,14 @@ def test_backup_and_verify_only_for_flips():
     assert 'Select-Object name, externalId, idLookup, unique, length' in verify
 
 
+def test_deploy_dir_snippet():
+    assert cs.deploy_dir_snippet('DoaneUAT', dry_run=True) == \
+        'sf project deploy start --source-dir force-app -o DoaneUAT --dry-run'
+    assert cs.deploy_dir_snippet('DoaneUAT', dry_run=False) == \
+        'sf project deploy start --source-dir force-app -o DoaneUAT'
+    assert '-m ' not in cs.deploy_dir_snippet('DoaneUAT')  # no per-component gotcha
+
+
 def test_layout_snippets():
     assert cs.layout_retrieve_snippet('Case-Case Layout', 'DoaneUAT') == \
         'sf project retrieve start -m "Layout:Case-Case Layout" -o DoaneUAT'

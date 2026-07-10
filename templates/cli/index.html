@@ -226,6 +226,10 @@
         <label for="cliExistingFields" class="form-label fw-semibold small mb-1">
           Existing fields <span class="text-muted fw-normal">(optional &mdash; fields that already exist and only need visibility)</span>
         </label>
+        <div class="d-flex gap-2 mb-1">
+          <input id="cliExistingObj" class="form-control form-control-sm" style="max-width:220px" placeholder="object, e.g. Case" autocomplete="off">
+          <button id="btnLoadExistingFields" type="button" class="btn btn-outline-secondary btn-sm text-nowrap">Load custom fields</button>
+        </div>
         <textarea id="cliExistingFields" class="form-control form-control-sm" rows="3"
                   placeholder="Case.Group_Information__c&#10;Case.Occurrence_Date__c"></textarea>
         <div class="form-text">One API name per line as <code>Object.Field__c</code>. These are added to the permission set <strong>without re-creating them</strong> (no CustomField, permission set only). Fields you built above are included automatically.</div>
@@ -244,6 +248,10 @@
           <div class="form-check form-switch pt-1">
             <input class="form-check-input" type="checkbox" id="hpsEditable" checked>
             <label class="form-check-label small" for="hpsEditable">Grant edit (off = read-only)</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="hpsReadonlyCompanion">
+            <label class="form-check-label small" for="hpsReadonlyCompanion">+ read-only companion set (<code>_ReadOnly</code>) for a view-only audience</label>
           </div>
         </div>
       </div>
@@ -367,6 +375,11 @@
       <div class="mb-3">
         <label class="form-label fw-semibold small mb-1">Step 9 &mdash; Deploy for real</label>
         <div class="mc-code" data-copy="snpDeployFull"><pre id="snpDeployFull" class="mb-0"></pre></div>
+        <div class="form-text"><code>-m</code> deploys from your project &mdash; make sure you ran <strong>Download package</strong> and unzipped it first, or you'll get <em>"No source-backed components present"</em>.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Or &mdash; deploy the whole folder <span class="text-muted fw-normal">(no <code>-m</code>; deploys everything under <code>force-app</code>)</span></label>
+        <div class="mc-code" data-copy="snpDeployDir"><pre id="snpDeployDir" class="mb-0"></pre></div>
       </div>
       <div class="mb-1">
         <label class="form-label fw-semibold small mb-1">Step 10 &mdash; Assign the permission set</label>
