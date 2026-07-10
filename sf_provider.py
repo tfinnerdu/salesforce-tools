@@ -178,12 +178,16 @@ def assert_orgs_comparable(left_org: str, right_org: str) -> None:
 
 
 def available_orgs() -> list:
-    """Org names to offer in diff pickers.
+    """Configured orgs to offer in the diff/compare pickers.
 
-    With SHOW_MOCK on, every demo org is valid. In real mode only orgs that have
-    credentials are offered, so an unconfigured name can't be picked by mistake.
+    Candidate list comes from the explicit AVAILABLE_ORGS environment list
+    (comma-separated; defaults to dev,prod,sandbox). With SHOW_MOCK on every
+    candidate is offered; in real mode only orgs that have credentials are
+    offered, so you can't pick an unconfigured org to diff by mistake. (The
+    navbar picker shows the full AVAILABLE_ORGS list — it's where you choose
+    your working org, which you may configure afterward.)
     """
-    candidates = ['dev', 'prod', 'sandbox']
+    candidates = list(Config.AVAILABLE_ORGS)
     if Config.SHOW_MOCK:
         return candidates
     return [o for o in candidates if _configured(o)]

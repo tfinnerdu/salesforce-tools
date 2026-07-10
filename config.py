@@ -34,6 +34,13 @@ class Config:
     PUBLIC_BASE_URL = os.environ.get(
         'PUBLIC_BASE_URL', 'https://du-int.doane.edu/prod/sf-mission-control')
     DEFAULT_ORG = os.environ.get('DEFAULT_ORG', 'dev')
+    # Orgs exposed in the navbar picker + diff/CLI pickers. Comma-separated;
+    # the single source of truth for which environments the app offers. Add a
+    # name here (plus its SF_<NAME>_* credentials) to surface a new org.
+    AVAILABLE_ORGS = [
+        o.strip() for o in os.environ.get('AVAILABLE_ORGS', 'dev,prod,sandbox').split(',')
+        if o.strip()
+    ]
     SCHEDULER_ENABLED = os.environ.get('SCHEDULER_ENABLED', 'false').lower() == 'true'
     BACKUP_ENABLED = os.environ.get('BACKUP_ENABLED', 'false').lower() == 'true'
     BACKUP_RETAIN = int(os.environ.get('BACKUP_RETAIN', '14'))

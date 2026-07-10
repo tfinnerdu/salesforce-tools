@@ -63,6 +63,9 @@ def create_app() -> Flask:
         return {
             'show_mock_mode': Config.SHOW_MOCK,
             'sf_instance': session.get(f'sf_instance_{active_org}', ''),
+            # Navbar picker shows the full explicit list (your environments);
+            # the diff pickers use available_orgs() (configured subset).
+            'nav_orgs': list(Config.AVAILABLE_ORGS),
         }
 
     @app.route('/')

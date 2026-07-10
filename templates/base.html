@@ -100,9 +100,12 @@
         <div class="d-flex align-items-center gap-2 me-2">
           <label for="orgPicker" class="text-white mb-0 small fw-semibold">Org:</label>
           <select id="orgPicker" class="form-select form-select-sm mc-org-picker">
-            <option value="dev" {% if session.get('active_org', 'dev') == 'dev' %}selected{% endif %}>dev</option>
-            <option value="prod" {% if session.get('active_org', 'dev') == 'prod' %}selected{% endif %}>prod</option>
-            <option value="sandbox" {% if session.get('active_org', 'dev') == 'sandbox' %}selected{% endif %}>sandbox</option>
+            {% set current = session.get('active_org', 'dev') %}
+            {% for org in nav_orgs %}
+            <option value="{{ org }}" {% if current == org %}selected{% endif %}>{{ org }}</option>
+            {% else %}
+            <option value="{{ current }}" selected>{{ current }}</option>
+            {% endfor %}
           </select>
           <span id="activeOrgBadge" class="badge mc-org-badge">
             {{ session.get('active_org', 'dev') | upper }}
