@@ -14,6 +14,7 @@ MC.cli = {
   _refreshTimer: null,
   _apiNameEdited: false, // once the user hand-edits the API name, stop auto-deriving
   _editIndex: null,      // index of the field being edited in place (null = adding new)
+  _layoutXml: null,      // last-built modified layout XML (for download)
 
   // SF describe type (lowercase) -> our builder type.
   _TYPE_MAP: {
@@ -74,6 +75,15 @@ MC.cli = {
     const other = Array.from(flsOrg.options).map(o => o.value).find(v => v !== MC.activeOrg());
     if (other) flsOrg.value = other;
 
+    // Page layout card.
+    document.getElementById('cliLayoutName').addEventListener('input', () => this._refresh());
+    document.querySelectorAll('input[name="layoutMode"]').forEach(r =>
+      r.addEventListener('change', () => this._onLayoutMode()));
+    document.getElementById('btnLayoutSections').addEventListener('click', () => this._loadLayoutSections());
+    document.getElementById('btnLayoutFillFields').addEventListener('click', () => this._fillLayoutFields());
+    document.getElementById('btnBuildLayout').addEventListener('click', () => this._buildLayout());
+    document.getElementById('btnDownloadLayout').addEventListener('click', () => this._downloadLayout());
+
     document.getElementById('btnPackage').addEventListener('click', () => this._package());
 
     this._renderProps();
@@ -103,6 +113,7 @@ MC.cli = {
       } : {},
       human_permset: this._humanPermset(),
       existing_fields: this._existingFields(),
+      layout_name: document.getElementById('cliLayoutName').value.trim(),
     };
   },
 
@@ -160,6 +171,69 @@ MC.cli = {
     this._refresh();
   },
 
+  // ── Page layout: add fields to a pasted layout ─────────────────────────────
+
+  _onLayoutMode() {
+    const mode = document.querySelector('input[name="layoutMode"]:checked').value;
+    document.getElementById('layoutNewWrap').style.display = mode === 'new' ? '' : 'none';
+    document.getElementById('layoutExistingWrap').style.display = mode === 'existing' ? '' : 'none';
+  },
+
+  async _loadLayoutSections() {
+    const xml = document.getElementById('cliLayoutXml').value;
+    if (!xml.trim()) { MC.showToast('Paste the layout XML first', 'warning'); return; }
+    try {
+      const r = await MC.api('/cli/layout/sections', 'POST', { layout_xml: xml });
+      const editable = (r.sections || []).filter(s => s.has_editable_column);
+      document.getElementById('cliLayoutSection').innerHTML =
+        '<option value="">Select a section…</option>' +
+        editable.map(s => `<option value="${MC._escHtml(s.label)}">${MC._escHtml(s.label)}</option>`).join('');
+      if (!editable.length) MC.showToast('No editable sections found in that layout', 'warning');
+    } catch (e) { MC.showToast(e.message, 'danger'); }
+  },
+
+  _fillLayoutFields() {
+    const names = this.fields.map(f => f.api_name)
+      .concat(this._existingFields().map(ef => ef.split('.').pop()));
+    document.getElementById('cliLayoutFields').value = [...new Set(names.filter(Boolean))].join('\n');
+  },
+
+  async _buildLayout() {
+    const xml = document.getElementById('cliLayoutXml').value;
+    if (!xml.trim()) { MC.showToast('Paste the layout XML first', 'warning'); return; }
+    const fields = document.getElementById('cliLayoutFields').value
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    if (!fields.length) { MC.showToast('Add fields to place (or click "fill from my fields")', 'warning'); return; }
+    const mode = document.querySelector('input[name="layoutMode"]:checked').value;
+    const body = { layout_xml: xml, fields, behavior: document.getElementById('cliLayoutBehavior').value };
+    if (mode === 'new') body.new_section = document.getElementById('cliLayoutNewSection').value.trim() || 'New Fields';
+    else body.section = document.getElementById('cliLayoutSection').value;
+    MC.showSpinner();
+    try {
+      const r = await MC.api('/cli/layout', 'POST', body);
+      this._layoutXml = r.xml;
+      const res = document.getElementById('layoutResult');
+      res.classList.remove('d-none');
+      res.innerHTML = `<span class="badge badge-green">added ${r.added.length}</span> `
+        + (r.skipped.length ? `<span class="badge badge-slate">skipped ${r.skipped.length} already on layout</span> ` : '')
+        + `<span class="text-muted">${MC._escHtml(r.added.join(', '))}</span>`;
+      document.getElementById('layoutDownloadWrap').classList.remove('d-none');
+      MC.showToast('Layout built — download it', 'success');
+    } catch (e) {
+      MC.showToast(`Build failed: ${e.message}`, 'danger');
+    } finally { MC.hideSpinner(); }
+  },
+
+  _downloadLayout() {
+    if (!this._layoutXml) { MC.showToast('Build the layout first', 'info'); return; }
+    const name = document.getElementById('cliLayoutName').value.trim() || 'Object-Layout';
+    const blob = new Blob([this._layoutXml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${name}.layout-meta.xml`; a.click();
+    URL.revokeObjectURL(url);
+  },
+
   _refresh() {
     clearTimeout(this._refreshTimer);
     this._refreshTimer = setTimeout(() => this._doRefresh(), 350);
@@ -178,6 +252,8 @@ MC.cli = {
       set('snpDeployDry', s.deploy_dry_run);
       set('snpDeployFull', s.deploy_full);
       set('snpAssign', s.assign);
+      set('snpLayoutRetrieve', s.layout_retrieve);
+      set('snpLayoutDeploy', s.layout_deploy);
       document.getElementById('flipSection').classList.toggle('d-none', !s.has_flips);
       const proj = document.getElementById('cliProject').value.trim();
       const base = document.getElementById('cliBasePath').value.trim().replace(/[\\/]+$/, '');

@@ -15,7 +15,7 @@ import logging
 from flask import Blueprint, Response, render_template, request, session
 
 from config import Config, get_org_config
-from services import cli_fls, cli_metadata, cli_script
+from services import cli_fls, cli_layout, cli_metadata, cli_script
 from sf_provider import available_orgs
 from utils.responses import error_response, new_request_id, ok
 
@@ -175,6 +175,35 @@ def api_fls():
         return error_response(str(exc), 'SF_FLS_READ_FAILED', 502)
 
 
+# ── Page layout: add fields to a pasted layout (org-to-org clone-assist) ─────
+
+@cli_bp.route('/layout/sections', methods=['POST'])
+def api_layout_sections():
+    layout_xml = (request.get_json(silent=True) or {}).get('layout_xml') or ''
+    if '<Layout' not in layout_xml:
+        return error_response('Paste a retrieved Layout (.layout-meta.xml) first.', 'INVALID_INPUT', 400)
+    return ok({'sections': cli_layout.list_sections(layout_xml)})
+
+
+@cli_bp.route('/layout', methods=['POST'])
+def api_layout():
+    payload = request.get_json(silent=True) or {}
+    layout_xml = payload.get('layout_xml') or ''
+    if '<Layout' not in layout_xml:
+        return error_response('Paste a retrieved Layout (.layout-meta.xml) first.', 'INVALID_INPUT', 400)
+    try:
+        result = cli_layout.place_fields(
+            layout_xml,
+            payload.get('fields') or [],
+            (payload.get('behavior') or 'Edit').strip(),
+            section=(payload.get('section') or '').strip() or None,
+            new_section=(payload.get('new_section') or '').strip() or None,
+        )
+    except ValueError as exc:
+        return error_response(str(exc), 'INVALID_INPUT', 400)
+    return ok(result)
+
+
 # ── Snippet generation ───────────────────────────────────────────────────────
 
 @cli_bp.route('/generate', methods=['POST'])
@@ -196,6 +225,7 @@ def api_generate():
     extra_names = [human['api_name']] if human else []
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
+    layout_name = (payload.get('layout_name') or '').strip()
 
     assign_entries = [{'name': permset_name, 'username': username}]
     if human:
@@ -216,6 +246,8 @@ def api_generate():
         'members': cli_script._members(fields, permset_name, extra_names),
         'has_flips': bool(flip_fields),
         'has_human_permset': bool(human),
+        'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, alias),
+        'layout_deploy': cli_script.layout_deploy_snippet(layout_name, alias, dry_run=False),
     })
 
 

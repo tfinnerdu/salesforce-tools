@@ -1445,6 +1445,19 @@ Creating a field doesn't make it visible to anyone — in Salesforce, visibility
 
 > **Just adding visibility to existing fields?** Leave the field builder empty, clear the integration permission-set name, paste the field names under *Existing fields*, name the *Human permission set*, and hit **Download package** — you get a permission-set-only zip. Unzip into your project and deploy `-m "PermissionSet:<name>"` (the field definitions are untouched).
 
+### Page layout — place the fields on a layout (optional)
+
+Creating a field and granting visibility still doesn't put it **on the page** — that's the page layout, a third piece of metadata. This section adds your fields to a real layout by cloning its metadata (it is *not* a layout editor — it edits the actual layout you retrieve, org to org):
+
+1. **Layout full name:** enter the layout's `fullName` (e.g. `Case-Case Layout`). Find it with `sf org list metadata -m Layout` (filter to `Case-*`).
+2. **Step A — retrieve:** copy/run the generated retrieve command to pull the layout to your project.
+3. **Step B — paste:** open the retrieved `.layout-meta.xml` and paste its contents into the box.
+4. **Placement:** either **New section** (name it, e.g. `Case Assistance`) or **Existing section** (click *load* to pick one from the pasted layout). Choose **Edit** or **Read-only**.
+5. **Fields to place:** click *fill from my fields* (or type API names, one per line). Fields already on the layout are skipped automatically.
+6. **Build modified layout** → **Download** it, save back over the file in `force-app\main\default\layouts\`, and deploy with the generated command (add `--dry-run` first).
+
+> Everything else in the layout — sections, related lists, buttons — is preserved byte-for-byte; only your fields are added. Do one layout at a time (Case has several: Case Layout, Advisee Case, CARE Referral, Close Case).
+
 > This reads from the source org only — it never writes. It covers **visibility**; page-layout placement and record types are still done in Setup (or a later pass).
 
 ### 4. Generate & deploy

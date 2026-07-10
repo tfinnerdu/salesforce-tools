@@ -123,6 +123,33 @@ paths:
         "200": { description: FLS map (parents + summary), content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
         "400": { description: Missing/invalid params or unknown org, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         "502": { description: Salesforce FLS read failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /layout/sections:
+    post:
+      summary: List the sections of a pasted Layout (with editable-column flag) for the picker.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { layout_xml: { type: string } } } } }
+      responses:
+        "200": { description: Sections, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Not a Layout, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /layout:
+    post:
+      summary: Add fields to a pasted Layout (new or existing section); returns the modified metadata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                layout_xml: { type: string }
+                fields: { type: array, items: { type: string } }
+                behavior: { type: string, enum: [Edit, Readonly, Required] }
+                section: { type: string, description: Existing section label (mutually exclusive with new_section). }
+                new_section: { type: string, description: New section name. }
+      responses:
+        "200": { description: "{xml, added, skipped}", content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Invalid input / not a Layout / all fields already present, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /generate:
     post:
       summary: Generate all sf-CLI command snippets for a plan (pure; no SF write).

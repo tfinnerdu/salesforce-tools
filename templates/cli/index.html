@@ -251,6 +251,83 @@
     </div>
   </div>
 
+  <!-- ── Page layout: add fields to a pasted layout (org-to-org) ─────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Page layout <span class="text-muted fw-normal">(optional &mdash; place the fields on a layout by cloning its real metadata)</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Layouts can't be read live, so: retrieve the layout with the CLI, paste it below, and this adds
+        your fields (a new section, or an existing one) &mdash; everything else stays byte-for-byte. Then deploy it back.
+        Not a layout editor; it edits the real metadata.
+      </p>
+
+      <div class="row g-3 mb-2">
+        <div class="col-md-6">
+          <label for="cliLayoutName" class="form-label fw-semibold small mb-1">Layout full name</label>
+          <input id="cliLayoutName" class="form-control form-control-sm" placeholder="e.g. Case-Case Layout" autocomplete="off">
+          <div class="form-text">From <code>sf org list metadata -m Layout</code> (the <code>fullName</code>).</div>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step A &mdash; retrieve the layout</label>
+        <div class="mc-code" data-copy="snpLayoutRetrieve"><pre id="snpLayoutRetrieve" class="mb-0"></pre></div>
+      </div>
+
+      <div class="mb-2">
+        <label for="cliLayoutXml" class="form-label fw-semibold small mb-1">Step B &mdash; paste the retrieved <code>.layout-meta.xml</code></label>
+        <textarea id="cliLayoutXml" class="form-control form-control-sm" rows="5"
+                  style="font-family:var(--bs-font-monospace,monospace);font-size:.78rem"
+                  placeholder="&lt;?xml version=&quot;1.0&quot;...&gt;&#10;&lt;Layout ...&gt; ... &lt;/Layout&gt;"></textarea>
+      </div>
+
+      <div class="row g-3 mb-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small mb-1">Placement</label>
+          <div class="form-check"><input class="form-check-input" type="radio" name="layoutMode" id="layoutModeNew" value="new" checked>
+            <label class="form-check-label small" for="layoutModeNew">New section</label></div>
+          <div class="form-check"><input class="form-check-input" type="radio" name="layoutMode" id="layoutModeExisting" value="existing">
+            <label class="form-check-label small" for="layoutModeExisting">Existing section</label></div>
+        </div>
+        <div class="col-md-4" id="layoutNewWrap">
+          <label for="cliLayoutNewSection" class="form-label fw-semibold small mb-1">New section name</label>
+          <input id="cliLayoutNewSection" class="form-control form-control-sm" placeholder="e.g. Case Assistance" autocomplete="off">
+        </div>
+        <div class="col-md-4" id="layoutExistingWrap" style="display:none">
+          <label for="cliLayoutSection" class="form-label fw-semibold small mb-1">Existing section
+            <button id="btnLayoutSections" type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75rem">load from pasted layout</button></label>
+          <select id="cliLayoutSection" class="form-select form-select-sm"><option value="">Load sections…</option></select>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-2">
+        <div class="col-md-3">
+          <label for="cliLayoutBehavior" class="form-label fw-semibold small mb-1">Field behavior</label>
+          <select id="cliLayoutBehavior" class="form-select form-select-sm">
+            <option value="Edit">Edit</option>
+            <option value="Readonly">Read-only</option>
+          </select>
+        </div>
+        <div class="col-md-9">
+          <label for="cliLayoutFields" class="form-label fw-semibold small mb-1">Fields to place
+            <button id="btnLayoutFillFields" type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75rem">fill from my fields</button></label>
+          <textarea id="cliLayoutFields" class="form-control form-control-sm" rows="2"
+                    placeholder="Group_Information__c&#10;Occurrence_Date__c"></textarea>
+          <div class="form-text">One field API name per line (Object prefix optional). Fields already on the layout are skipped.</div>
+        </div>
+      </div>
+
+      <button id="btnBuildLayout" class="btn btn-doane btn-sm">Build modified layout</button>
+      <div id="layoutResult" class="small mt-2 d-none"></div>
+      <div id="layoutDownloadWrap" class="mt-3 d-none">
+        <button id="btnDownloadLayout" class="btn btn-slate btn-sm">Download modified layout</button>
+        <span class="text-muted small ms-2">Save into <code>force-app\main\default\layouts\</code>, then deploy (add <code>--dry-run</code> first to validate):</span>
+        <div class="mc-code mt-2" data-copy="snpLayoutDeploy"><pre id="snpLayoutDeploy" class="mb-0"></pre></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Steps 7-10: Generate & download ─────────────────────────────────── -->
   <div class="card shadow-sm mb-4">
     <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">

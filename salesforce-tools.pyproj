@@ -176,10 +176,12 @@
     <Compile Include="services\cli_metadata.py" />
     <Compile Include="services\cli_script.py" />
     <Compile Include="services\cli_fls.py" />
+    <Compile Include="services\cli_layout.py" />
     <Compile Include="tests\test_cli_metadata.py" />
     <Compile Include="tests\test_cli_script.py" />
     <Compile Include="tests\test_cli_routes.py" />
     <Compile Include="tests\test_cli_fls.py" />
+    <Compile Include="tests\test_cli_layout.py" />
     <Compile Include="tests\characterization\test_cli_artifacts_characterization.py" />
   </ItemGroup>
   <ItemGroup>
@@ -259,6 +261,10 @@
     <Content Include="static\js\mc-cli-snippet.js" />
     <Content Include="templates\cli\index.html" />
     <Content Include="static\openapi-cli.yaml" />
+    <Content Include="tests\fixtures\Case-Case_Layout.layout-meta.xml" />
+    <Content Include="tests\fixtures\Case-Advisee_Case_Layout.layout-meta.xml" />
+    <Content Include="tests\fixtures\Case-CARE_Referral.layout-meta.xml" />
+    <Content Include="tests\fixtures\Case-Close-Close_Case_Layout.layout-meta.xml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="docs\" />
@@ -287,5 +293,6 @@
     <Folder Include="templates\validation\" />
     <Folder Include="tests\" />
     <Folder Include="tests\characterization\" />
+    <Folder Include="tests\fixtures\" />
   </ItemGroup>
 </Project>

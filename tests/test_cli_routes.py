@@ -144,6 +144,57 @@ class TestGenerate:
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
 
+class TestLayout:
+    _LAYOUT = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+              '<Layout xmlns="http://soap.sforce.com/2006/04/metadata">\n'
+              '    <layoutSections>\n'
+              '        <label>Case Information</label>\n'
+              '        <layoutColumns>\n'
+              '            <layoutItems>\n'
+              '                <behavior>Edit</behavior>\n'
+              '                <field>OwnerId</field>\n'
+              '            </layoutItems>\n'
+              '        </layoutColumns>\n'
+              '        <style>OneColumn</style>\n'
+              '    </layoutSections>\n'
+              '    <showEmailCheckbox>true</showEmailCheckbox>\n'
+              '</Layout>\n')
+
+    def test_layout_sections(self, client):
+        resp = client.post('/cli/layout/sections', json={'layout_xml': self._LAYOUT})
+        assert resp.status_code == 200
+        secs = resp.get_json()['data']['sections']
+        assert secs[0]['label'] == 'Case Information' and secs[0]['has_editable_column'] is True
+
+    def test_layout_new_section(self, client):
+        resp = client.post('/cli/layout', json={
+            'layout_xml': self._LAYOUT, 'new_section': 'Case Assistance',
+            'fields': ['Case.Group_Information__c'], 'behavior': 'Edit'})
+        assert resp.status_code == 200
+        d = resp.get_json()['data']
+        assert '<label>Case Assistance</label>' in d['xml']
+        assert '<field>Group_Information__c</field>' in d['xml']
+        assert d['added'] == ['Group_Information__c']
+
+    def test_layout_requires_layout_xml(self, client):
+        resp = client.post('/cli/layout', json={'layout_xml': 'not a layout', 'new_section': 'X',
+                                                'fields': ['A__c']})
+        assert resp.status_code == 400
+        assert resp.get_json()['code'] == 'INVALID_INPUT'
+
+    def test_layout_all_present_is_400(self, client):
+        resp = client.post('/cli/layout', json={
+            'layout_xml': self._LAYOUT, 'new_section': 'X', 'fields': ['OwnerId']})
+        assert resp.status_code == 400  # OwnerId already on the layout
+
+    def test_generate_includes_layout_snippets(self, client):
+        d = client.post('/cli/generate', json={
+            'alias': 'DoaneUAT', 'fields': [], 'permset': {}, 'layout_name': 'Case-Case Layout'
+        }).get_json()['data']
+        assert 'Layout:Case-Case Layout' in d['layout_retrieve']
+        assert 'Layout:Case-Case Layout' in d['layout_deploy']
+
+
 class TestPackage:
     def test_package_streams_zip(self, client):
         plan = {

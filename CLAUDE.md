@@ -83,6 +83,8 @@ services/            Business logic, one module per feature
   cli_script.py            CLI tab: sf-command + field/permset XML + zip generator
   cli_fls.py               CLI tab: read a field's FLS from a source org (clone
                            visibility) + synthesize a human permission set
+  cli_layout.py            CLI tab: add fields to a pasted page-layout XML (new
+                           or existing section) — pure string surgery, org-to-org
 utils/responses.py   Shared API helpers: error_response() envelope + request_id
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
@@ -163,6 +165,17 @@ object (`GET /cli/fls`, read-only, modeled on `perm_auditor`) and generates a
 second, human-facing permission set that grants the built fields the same access
 — carried alongside the integration permset through the deploy, dual assign, and
 package zip. FLS only (page layouts / record types are out of scope for now).
+
+**Page layout (`cli_layout.py`).** A field isn't on the record page until it's
+on the layout — a third metadata type. Layouts can't be read synchronously here
+(simple_salesforce's Metadata API is async-retrieve-only), so the flow is:
+generate the retrieve command, the admin pastes the retrieved `.layout-meta.xml`,
+and `cli_layout` adds the fields (a new `<layoutSections>`, or into an existing
+section's first column) via **pure string surgery that leaves every other byte
+untouched** — never a rebuilt layout designer. Fields already on the layout are
+skipped. Pinned against the real Case layouts in `tests/fixtures/` +
+`tests/test_cli_layout.py`. FLS + layout together complete the create → visible →
+on-the-page lifecycle; record-type availability is still out of scope.
 
 **API-shape note (standards follow-up).** The CLI tab keeps this app's
 blueprint-prefix routing (`/cli/...`) for consistency with the other tabs, and

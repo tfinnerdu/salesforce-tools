@@ -627,6 +627,14 @@ picker.
    yields a zip containing only the permission set (no `/fields/` files) with a
    `<fieldPermissions>` entry per pasted field. A malformed name (no
    `Object.Field` dot) returns `{code: "INVALID_INPUT"}`.
+6d. **Page layout:** enter a **Layout full name** (`Case-Case Layout`) —
+   Step A shows the retrieve command. Paste a retrieved `.layout-meta.xml` into
+   Step B, choose **New section** (`Case Assistance`), click *fill from my
+   fields*, and **Build modified layout**. **Expected:** a summary of fields
+   added/skipped, a **Download** button (yields `Case-Case Layout.layout-meta.xml`
+   with a new `<layoutSections>` and everything else unchanged), and a layout
+   deploy snippet. Switching to **Existing section** + *load* lists the layout's
+   editable sections (Custom Links excluded). Pasting non-layout text 400s.
 7. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
    downloads. Unzipped, it contains
    `force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml` for

@@ -268,6 +268,19 @@ def assign_snippets(entries: list, alias: str) -> str:
     return '\n'.join(lines)
 
 
+def layout_retrieve_snippet(layout_name: str, alias: str) -> str:
+    """Retrieve a page layout so it can be pasted into the Layout tool."""
+    return (f'sf project retrieve start -m "Layout:{layout_name or "<Object>-<Layout Name>"}" '
+            f'-o {alias or "<alias>"}')
+
+
+def layout_deploy_snippet(layout_name: str, alias: str, dry_run: bool = False) -> str:
+    """Deploy the modified page layout."""
+    tail = ' --dry-run' if dry_run else ''
+    return (f'sf project deploy start -m "Layout:{layout_name or "<Object>-<Layout Name>"}" '
+            f'-o {alias or "<alias>"}{tail}')
+
+
 def backup_snippet(flip_fields: list, alias: str) -> str:
     """Step 0 (flips only) — retrieve current state of fields being MODIFIED to
     ./_backup so a flip can be diffed or rolled back. Returns '' if no flips."""

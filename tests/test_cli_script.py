@@ -173,6 +173,16 @@ def test_backup_and_verify_only_for_flips():
     assert 'Select-Object name, externalId, idLookup, unique, length' in verify
 
 
+def test_layout_snippets():
+    assert cs.layout_retrieve_snippet('Case-Case Layout', 'DoaneUAT') == \
+        'sf project retrieve start -m "Layout:Case-Case Layout" -o DoaneUAT'
+    assert cs.layout_deploy_snippet('Case-Case Layout', 'DoaneUAT', dry_run=True) == \
+        'sf project deploy start -m "Layout:Case-Case Layout" -o DoaneUAT --dry-run'
+    assert cs.layout_deploy_snippet('Case-Case Layout', 'DoaneUAT', dry_run=False) == \
+        'sf project deploy start -m "Layout:Case-Case Layout" -o DoaneUAT'
+    assert '<Object>-<Layout Name>' in cs.layout_retrieve_snippet('', 'DoaneUAT')
+
+
 def test_login_and_project_snippets():
     login = cs.login_snippet('DoaneUAT', 'https://x--full.sandbox.my.salesforce.com')
     assert login == ('sf org login web --instance-url '
