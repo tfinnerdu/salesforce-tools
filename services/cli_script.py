@@ -327,6 +327,19 @@ def layout_deploy_snippet(layout_name: str, alias: str, dry_run: bool = False) -
             f'-o {alias or "<alias>"}{tail}')
 
 
+def recordtype_retrieve_snippet(rt_name: str, alias: str) -> str:
+    """Retrieve a record type so it can be pasted into the Record type tool."""
+    return (f'sf project retrieve start -m "RecordType:{rt_name or "<Object>.<RecordType>"}" '
+            f'-o {alias or "<alias>"}')
+
+
+def recordtype_deploy_snippet(rt_name: str, alias: str, dry_run: bool = False) -> str:
+    """Deploy the modified record type."""
+    tail = ' --dry-run' if dry_run else ''
+    return (f'sf project deploy start -m "RecordType:{rt_name or "<Object>.<RecordType>"}" '
+            f'-o {alias or "<alias>"}{tail}')
+
+
 def backup_snippet(flip_fields: list, alias: str) -> str:
     """Step 0 (flips only) — retrieve current state of fields being MODIFIED to
     ./_backup so a flip can be diffed or rolled back. Returns '' if no flips."""

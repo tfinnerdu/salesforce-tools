@@ -138,6 +138,32 @@ paths:
                 alias: { type: string }
       responses:
         "200": { description: "{describe, query, count, retrieve_object, soql}", content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+  /recordtype/picklists:
+    post:
+      summary: List the picklist fields already governed by a pasted RecordType.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { rt_xml: { type: string } } } } }
+      responses:
+        "200": { description: Picklist field names, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Not a RecordType, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /recordtype:
+    post:
+      summary: Make a picklist field's values available on a pasted RecordType; returns modified metadata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rt_xml: { type: string }
+                field: { type: string }
+                values: { type: array, items: { type: string } }
+                default: { type: string }
+      responses:
+        "200": { description: "{xml, field, added, skipped, mode}", content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Invalid input / not a RecordType / all values present, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /layout/sections:
     post:
       summary: List the sections of a pasted Layout (with editable-column flag) for the picker.

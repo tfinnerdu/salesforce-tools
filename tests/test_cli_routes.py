@@ -158,6 +158,45 @@ class TestGenerate:
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
 
+class TestRecordType:
+    _RT = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<RecordType xmlns="http://soap.sforce.com/2006/04/metadata">\n'
+           '    <fullName>Advisee_Case</fullName>\n'
+           '    <active>true</active>\n'
+           '    <label>Advisee Case</label>\n'
+           '    <picklistValues>\n'
+           '        <picklist>Priority</picklist>\n'
+           '        <values><fullName>High</fullName><default>false</default></values>\n'
+           '    </picklistValues>\n'
+           '</RecordType>\n')
+
+    def test_recordtype_picklists(self, client):
+        resp = client.post('/cli/recordtype/picklists', json={'rt_xml': self._RT})
+        assert resp.status_code == 200
+        assert resp.get_json()['data']['picklists'] == ['Priority']
+
+    def test_recordtype_new_block(self, client):
+        resp = client.post('/cli/recordtype', json={
+            'rt_xml': self._RT, 'field': 'Type_of_Assistance__c',
+            'values': ['Academic', 'Financial'], 'default': 'Academic'})
+        assert resp.status_code == 200
+        d = resp.get_json()['data']
+        assert d['mode'] == 'new-block'
+        assert '<picklist>Type_of_Assistance__c</picklist>' in d['xml']
+
+    def test_recordtype_requires_metadata(self, client):
+        resp = client.post('/cli/recordtype', json={'rt_xml': 'nope', 'field': 'X__c', 'values': ['A']})
+        assert resp.status_code == 400
+        assert resp.get_json()['code'] == 'INVALID_INPUT'
+
+    def test_generate_includes_recordtype_snippets(self, client):
+        d = client.post('/cli/generate', json={
+            'alias': 'DoaneUAT', 'fields': [], 'permset': {}, 'recordtype_name': 'Case.Advisee_Case'
+        }).get_json()['data']
+        assert 'RecordType:Case.Advisee_Case' in d['recordtype_retrieve']
+        assert 'RecordType:Case.Advisee_Case' in d['recordtype_deploy']
+
+
 class TestRecipes:
     def test_recipes_envelope(self, client):
         resp = client.post('/cli/recipes', json={

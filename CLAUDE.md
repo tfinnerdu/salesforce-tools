@@ -85,6 +85,8 @@ services/            Business logic, one module per feature
                            visibility) + synthesize a human permission set
   cli_layout.py            CLI tab: add fields to a pasted page-layout XML (new
                            or existing section) — pure string surgery, org-to-org
+  cli_recordtype.py        CLI tab: make a picklist field's values available on a
+                           pasted record-type XML — pure string surgery, org-to-org
 utils/responses.py   Shared API helpers: error_response() envelope + request_id
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
@@ -164,7 +166,8 @@ reference field's FLS from a *source* org (e.g. EDA) via the `FieldPermissions`
 object (`GET /cli/fls`, read-only, modeled on `perm_auditor`) and generates a
 second, human-facing permission set that grants the built fields the same access
 — carried alongside the integration permset through the deploy, dual assign, and
-package zip. FLS only (page layouts / record types are out of scope for now).
+package zip. FLS only — page-layout and record-type availability are handled
+separately by their own paste-and-inject sections (below).
 
 **Command composer.** A bottom-of-tab utility (`POST /cli/recipes`,
 `cli_script.command_recipes`) that turns an object + field selection into
@@ -182,7 +185,21 @@ section's first column) via **pure string surgery that leaves every other byte
 untouched** — never a rebuilt layout designer. Fields already on the layout are
 skipped. Pinned against the real Case layouts in `tests/fixtures/` +
 `tests/test_cli_layout.py`. FLS + layout together complete the create → visible →
-on-the-page lifecycle; record-type availability is still out of scope.
+on-the-page lifecycle.
+
+**Record type (`cli_recordtype.py`).** A picklist field's values aren't
+selectable under a record type until they're listed in its `<picklistValues>` —
+a fourth metadata type. Same async-retrieve constraint as layouts, so the flow
+mirrors the layout one: generate the retrieve command, the admin pastes the
+retrieved `.recordType-meta.xml`, and `cli_recordtype` appends the missing
+values to the field's existing `<picklistValues>` block (or adds a new block for
+a field the record type doesn't yet govern) via the same **byte-preserving
+string surgery** — values already present are skipped, an optional `default` is
+honored. Value names are written verbatim; SF percent-encodes some value names
+(e.g. `/`) so the generator is provisional until pinned against a real
+`.recordType-meta.xml` sample (the fixture in `tests/fixtures/` is
+representative, not org-exact — see `tests/test_cli_recordtype.py`). This closes
+the create → visible → on-the-page → selectable-per-record-type lifecycle.
 
 **API-shape note (standards follow-up).** The CLI tab keeps this app's
 blueprint-prefix routing (`/cli/...`) for consistency with the other tabs, and

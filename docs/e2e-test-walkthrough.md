@@ -635,6 +635,13 @@ picker.
    with a new `<layoutSections>` and everything else unchanged), and a layout
    deploy snippet. Switching to **Existing section** + *load* lists the layout's
    editable sections (Custom Links excluded). Pasting non-layout text 400s.
+6e. **Record type:** enter a **Record type full name** (`Case.Advisee_Case`) —
+   Step A shows the retrieve command. Paste a retrieved `.recordType-meta.xml`,
+   set a **Picklist field** (`Type_of_Assistance__c`), **values** (one per line),
+   an optional **default**, and **Build**. **Expected:** an added/skipped
+   summary, a **Download** (`Advisee_Case.recordType-meta.xml` with a new
+   `<picklistValues>` block, everything else unchanged), and a record-type
+   deploy snippet. Values already present are skipped; non-RecordType text 400s.
 7. **Command composer** (bottom of tab): pick an **Object**. **Expected:** the
    describe / count / retrieve recipes fill in (with the header alias). Select a
    couple of **Fields** — the query recipe updates its `SELECT`. The **Run this

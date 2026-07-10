@@ -15,7 +15,7 @@ import logging
 from flask import Blueprint, Response, render_template, request, session
 
 from config import Config, get_org_config
-from services import cli_fls, cli_layout, cli_metadata, cli_script
+from services import cli_fls, cli_layout, cli_metadata, cli_recordtype, cli_script
 from sf_provider import available_orgs
 from utils.responses import error_response, new_request_id, ok
 
@@ -186,6 +186,34 @@ def api_fls():
         return error_response(str(exc), 'SF_FLS_READ_FAILED', 502)
 
 
+# ── Record type: picklist availability (paste + inject a picklistValues block) ─
+
+@cli_bp.route('/recordtype/picklists', methods=['POST'])
+def api_recordtype_picklists():
+    rt_xml = (request.get_json(silent=True) or {}).get('rt_xml') or ''
+    if '<RecordType' not in rt_xml:
+        return error_response('Paste a retrieved RecordType (.recordType-meta.xml) first.', 'INVALID_INPUT', 400)
+    return ok({'picklists': cli_recordtype.list_picklists(rt_xml)})
+
+
+@cli_bp.route('/recordtype', methods=['POST'])
+def api_recordtype():
+    payload = request.get_json(silent=True) or {}
+    rt_xml = payload.get('rt_xml') or ''
+    if '<RecordType' not in rt_xml:
+        return error_response('Paste a retrieved RecordType (.recordType-meta.xml) first.', 'INVALID_INPUT', 400)
+    try:
+        result = cli_recordtype.add_picklist_values(
+            rt_xml,
+            (payload.get('field') or '').strip(),
+            payload.get('values') or [],
+            default=(payload.get('default') or '').strip() or None,
+        )
+    except ValueError as exc:
+        return error_response(str(exc), 'INVALID_INPUT', 400)
+    return ok(result)
+
+
 # ── Command composer: describe-driven sf command recipes ─────────────────────
 
 @cli_bp.route('/recipes', methods=['POST'])
@@ -248,6 +276,7 @@ def api_generate():
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
     layout_name = (payload.get('layout_name') or '').strip()
+    rt_name = (payload.get('recordtype_name') or '').strip()
 
     assign_entries = [{'name': permset_name, 'username': username}]
     for h in humans:
@@ -271,6 +300,8 @@ def api_generate():
         'has_human_permset': bool(humans),
         'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, alias),
         'layout_deploy': cli_script.layout_deploy_snippet(layout_name, alias, dry_run=False),
+        'recordtype_retrieve': cli_script.recordtype_retrieve_snippet(rt_name, alias),
+        'recordtype_deploy': cli_script.recordtype_deploy_snippet(rt_name, alias, dry_run=False),
     })
 
 

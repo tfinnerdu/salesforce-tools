@@ -336,6 +336,59 @@
     </div>
   </div>
 
+  <!-- ── Record type: picklist availability (paste + inject) ─────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Record type <span class="text-muted fw-normal">(optional &mdash; make a picklist's values available on a record type)</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        On a record-type object, a picklist's values aren't available until the record type lists them.
+        Same flow as layouts: retrieve the record type, paste it, and this adds a <code>&lt;picklistValues&gt;</code>
+        block for the field &mdash; everything else stays byte-for-byte.
+      </p>
+      <div class="row g-3 mb-2">
+        <div class="col-md-6">
+          <label for="cliRtName" class="form-label fw-semibold small mb-1">Record type full name</label>
+          <input id="cliRtName" class="form-control form-control-sm" placeholder="e.g. Case.Advisee_Case" autocomplete="off">
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step A &mdash; retrieve the record type</label>
+        <div class="mc-code" data-copy="snpRtRetrieve"><pre id="snpRtRetrieve" class="mb-0"></pre></div>
+      </div>
+      <div class="mb-2">
+        <label for="cliRtXml" class="form-label fw-semibold small mb-1">Step B &mdash; paste the retrieved <code>.recordType-meta.xml</code></label>
+        <textarea id="cliRtXml" class="form-control form-control-sm" rows="4"
+                  style="font-family:var(--bs-font-monospace,monospace);font-size:.78rem"
+                  placeholder="&lt;?xml ...&gt;&#10;&lt;RecordType ...&gt; ... &lt;/RecordType&gt;"></textarea>
+      </div>
+      <div class="row g-3 mb-2">
+        <div class="col-md-4">
+          <label for="cliRtField" class="form-label fw-semibold small mb-1">Picklist field</label>
+          <input id="cliRtField" class="form-control form-control-sm" placeholder="e.g. Type_of_Assistance__c" autocomplete="off">
+        </div>
+        <div class="col-md-5">
+          <label for="cliRtValues" class="form-label fw-semibold small mb-1">Values to make available</label>
+          <textarea id="cliRtValues" class="form-control form-control-sm" rows="2" placeholder="Academic&#10;Financial"></textarea>
+          <div class="form-text">One value API name per line. Values already on the record type are skipped.</div>
+        </div>
+        <div class="col-md-3">
+          <label for="cliRtDefault" class="form-label fw-semibold small mb-1">Default value <span class="text-muted fw-normal">(optional)</span></label>
+          <input id="cliRtDefault" class="form-control form-control-sm" placeholder="one of the values" autocomplete="off">
+        </div>
+      </div>
+      <button id="btnBuildRt" class="btn btn-doane btn-sm">Build modified record type</button>
+      <div id="rtResult" class="small mt-2 d-none"></div>
+      <div id="rtDownloadWrap" class="mt-3 d-none">
+        <button id="btnDownloadRt" class="btn btn-slate btn-sm">Download modified record type</button>
+        <span class="text-muted small ms-2">Save into <code>force-app\main\default\objects\&lt;Object&gt;\recordTypes\</code>, then deploy (dry-run first):</span>
+        <div class="mc-code mt-2" data-copy="snpRtDeploy"><pre id="snpRtDeploy" class="mb-0"></pre></div>
+      </div>
+      <div class="form-text mt-2">Heads-up: Salesforce percent-encodes some value names in record types (e.g. <code>/</code>). Plain code values are fine; for special characters, paste the exact form from a retrieved record type and dry-run.</div>
+    </div>
+  </div>
+
   <!-- ── Steps 7-10: Generate & download ─────────────────────────────────── -->
   <div class="card shadow-sm mb-4">
     <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">

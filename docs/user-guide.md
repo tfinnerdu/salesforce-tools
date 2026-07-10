@@ -1458,6 +1458,17 @@ Creating a field and granting visibility still doesn't put it **on the page** �
 
 > Everything else in the layout — sections, related lists, buttons — is preserved byte-for-byte; only your fields are added. Do one layout at a time (Case has several: Case Layout, Advisee Case, CARE Referral, Close Case).
 
+### Record type — make a picklist's values available (optional)
+
+On an object that uses record types, a picklist's values aren't available on a record type until that record type lists them. Same clone flow as the layout:
+
+1. **Record type full name** (e.g. `Case.Advisee_Case`) — Step A generates the retrieve command.
+2. Paste the retrieved `.recordType-meta.xml`.
+3. **Picklist field** (e.g. `Type_of_Assistance__c`), the **values** to make available (one per line), and an optional **default**. Values already available are skipped; if the field already has a block, the new values are appended to it.
+4. **Build → Download** → save into `force-app\main\default\objects\<Object>\recordTypes\` → deploy (dry-run first).
+
+> Only picklist fields on record-type objects need this. **Heads-up:** Salesforce percent-encodes some value names in record types (e.g. `/`) — plain code values are fine; for special characters, paste the exact form from a retrieved record type and dry-run.
+
 > This reads from the source org only — it never writes. It covers **visibility**; page-layout placement and record types are still done in Setup (or a later pass).
 
 ### 4. Generate & deploy

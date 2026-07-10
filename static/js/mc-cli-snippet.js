@@ -15,6 +15,7 @@ MC.cli = {
   _apiNameEdited: false, // once the user hand-edits the API name, stop auto-deriving
   _editIndex: null,      // index of the field being edited in place (null = adding new)
   _layoutXml: null,      // last-built modified layout XML (for download)
+  _rtXml: null,          // last-built modified record-type XML (for download)
 
   // SF describe type (lowercase) -> our builder type.
   _TYPE_MAP: {
@@ -86,6 +87,11 @@ MC.cli = {
     document.getElementById('btnBuildLayout').addEventListener('click', () => this._buildLayout());
     document.getElementById('btnDownloadLayout').addEventListener('click', () => this._downloadLayout());
 
+    // Record type card.
+    document.getElementById('cliRtName').addEventListener('input', () => this._refresh());
+    document.getElementById('btnBuildRt').addEventListener('click', () => this._buildRt());
+    document.getElementById('btnDownloadRt').addEventListener('click', () => this._downloadRt());
+
     // Command composer.
     document.getElementById('cliRecipeObject').addEventListener('change', () => this._onRecipeObjectChange());
     document.getElementById('cliRecipeFields').addEventListener('change', () => this._refreshRecipes());
@@ -120,6 +126,7 @@ MC.cli = {
       human_permset: this._humanPermset(),
       existing_fields: this._existingFields(),
       layout_name: document.getElementById('cliLayoutName').value.trim(),
+      recordtype_name: document.getElementById('cliRtName').value.trim(),
     };
   },
 
@@ -257,6 +264,46 @@ MC.cli = {
     URL.revokeObjectURL(url);
   },
 
+  // ── Record type: picklist availability ─────────────────────────────────────
+
+  async _buildRt() {
+    const xml = document.getElementById('cliRtXml').value;
+    if (!xml.trim()) { MC.showToast('Paste the record-type XML first', 'warning'); return; }
+    const field = document.getElementById('cliRtField').value.trim();
+    if (!field) { MC.showToast('Enter the picklist field', 'warning'); return; }
+    const values = document.getElementById('cliRtValues').value
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    if (!values.length) { MC.showToast('Add at least one value', 'warning'); return; }
+    MC.showSpinner();
+    try {
+      const r = await MC.api('/cli/recordtype', 'POST', {
+        rt_xml: xml, field, values,
+        default: document.getElementById('cliRtDefault').value.trim(),
+      });
+      this._rtXml = r.xml;
+      const res = document.getElementById('rtResult');
+      res.classList.remove('d-none');
+      res.innerHTML = `<span class="badge badge-green">added ${r.added.length}</span> `
+        + (r.skipped.length ? `<span class="badge badge-slate">skipped ${r.skipped.length} already available</span> ` : '')
+        + `<span class="text-muted">${MC._escHtml(r.field)}: ${MC._escHtml(r.added.join(', '))}</span>`;
+      document.getElementById('rtDownloadWrap').classList.remove('d-none');
+      MC.showToast('Record type built — download it', 'success');
+    } catch (e) {
+      MC.showToast(`Build failed: ${e.message}`, 'danger');
+    } finally { MC.hideSpinner(); }
+  },
+
+  _downloadRt() {
+    if (!this._rtXml) { MC.showToast('Build the record type first', 'info'); return; }
+    const full = document.getElementById('cliRtName').value.trim() || 'Object.RecordType';
+    const name = full.includes('.') ? full.split('.').pop() : full;  // file uses the RT dev name only
+    const blob = new Blob([this._rtXml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${name}.recordType-meta.xml`; a.click();
+    URL.revokeObjectURL(url);
+  },
+
   // ── Command composer ───────────────────────────────────────────────────────
 
   async _onRecipeObjectChange() {
@@ -311,6 +358,8 @@ MC.cli = {
       set('snpDeployDir', s.deploy_dir);
       set('snpLayoutRetrieve', s.layout_retrieve);
       set('snpLayoutDeploy', s.layout_deploy);
+      set('snpRtRetrieve', s.recordtype_retrieve);
+      set('snpRtDeploy', s.recordtype_deploy);
       document.getElementById('flipSection').classList.toggle('d-none', !s.has_flips);
       this._refreshRecipes();  // alias changes flow into the composer recipes too
       const proj = document.getElementById('cliProject').value.trim();

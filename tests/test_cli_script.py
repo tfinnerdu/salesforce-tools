@@ -189,6 +189,14 @@ def test_recipe_soql_dedupes_id_and_handles_empty():
     assert '<Object>' in cs.recipe_soql('', [], 10)
 
 
+def test_recordtype_snippets():
+    assert cs.recordtype_retrieve_snippet('Case.Advisee_Case', 'DoaneUAT') == \
+        'sf project retrieve start -m "RecordType:Case.Advisee_Case" -o DoaneUAT'
+    assert cs.recordtype_deploy_snippet('Case.Advisee_Case', 'DoaneUAT', dry_run=True) == \
+        'sf project deploy start -m "RecordType:Case.Advisee_Case" -o DoaneUAT --dry-run'
+    assert '<Object>.<RecordType>' in cs.recordtype_retrieve_snippet('', 'DoaneUAT')
+
+
 def test_deploy_dir_snippet():
     assert cs.deploy_dir_snippet('DoaneUAT', dry_run=True) == \
         'sf project deploy start --source-dir force-app -o DoaneUAT --dry-run'
