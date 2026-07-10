@@ -1432,7 +1432,17 @@ Every command box has a **Copy** button.
 
 ### 3. Permission set (optional)
 
-The permission set **API name** and **Label** come prefilled (`SF_Tools_Importer`) and editable — it's built from the Readable/Editable choices on each field you added. **Clear the API name to skip the permission set** entirely.
+The permission set **API name** and **Label** come prefilled (`SF_Tools_Importer`) and editable — it's built from the Readable/Editable choices on each field you added. **Clear the API name to skip the permission set** entirely. (This is the *integration* user's access — for staff visibility, see Visibility below.)
+
+### Visibility — clone field-level security from another org (optional)
+
+Creating a field doesn't make it visible to anyone — in Salesforce, visibility (field-level security) is separate metadata. Use this section to give your new fields the **same visibility a field has in another org** (e.g. EDA), as a second, human-facing permission set:
+
+- **Source org / Reference object / Reference field:** pick an org and a field to read. Click **Read visibility** — the tool shows which profiles and permission sets can see and edit that field in that org, and (in the muted note) which profiles to assign the new set to.
+- **Human permission set — API name / Label:** fill these to generate a *second* permission set (alongside the integration one) that grants your built fields the same access. **Access granted** (edit vs read-only) is set to match the reference field when you read it; adjust as needed.
+- The generated deploy and assign snippets (and the package zip) then include **both** permission sets. Assignment is per user — for bulk, Setup → *Permission Sets → Manage Assignments* is easier.
+
+> This reads from the source org only — it never writes. It covers **visibility**; page-layout placement and record types are still done in Setup (or a later pass).
 
 ### 4. Generate & deploy
 

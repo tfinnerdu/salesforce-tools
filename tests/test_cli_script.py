@@ -134,6 +134,31 @@ def test_assign_snippet_placeholder_when_no_username():
     assert '<integration-username>' in cs.assign_snippet('PS', 'DoaneUAT', '')
 
 
+def test_assign_snippets_one_line_per_permset():
+    out = cs.assign_snippets([
+        {'name': 'SF_Tools_Importer', 'username': 'svc@doane.edu'},
+        {'name': 'Case_Assistance_Fields', 'username': '<staff-username>'},
+    ], 'DoaneUAT')
+    lines = out.split('\n')
+    assert len(lines) == 2
+    assert lines[0] == 'sf org assign permset --name SF_Tools_Importer --on-behalf-of svc@doane.edu -o DoaneUAT'
+    assert 'Case_Assistance_Fields' in lines[1] and '<staff-username>' in lines[1]
+    # entries with no name are skipped
+    assert cs.assign_snippets([{'name': '', 'username': 'x'}], 'DoaneUAT') == ''
+
+
+def test_deploy_snippet_includes_extra_permsets():
+    fields = [{'object': 'Case', 'api_name': 'X__c'}]
+    out = cs.deploy_snippet(fields, 'SF_Tools_Importer', 'DoaneUAT',
+                            extra_permset_names=['Case_Assistance_Fields'])
+    assert '-m "PermissionSet:SF_Tools_Importer" `' in out
+    assert '-m "PermissionSet:Case_Assistance_Fields" `' in out
+    # a duplicate name isn't emitted twice
+    out2 = cs.deploy_snippet(fields, 'SF_Tools_Importer', 'DoaneUAT',
+                             extra_permset_names=['SF_Tools_Importer'])
+    assert out2.count('PermissionSet:SF_Tools_Importer') == 1
+
+
 def test_backup_and_verify_only_for_flips():
     assert cs.backup_snippet([], 'DoaneUAT') == ''
     assert cs.verify_snippet([], 'DoaneUAT') == ''

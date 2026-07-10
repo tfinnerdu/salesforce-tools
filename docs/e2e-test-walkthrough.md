@@ -612,6 +612,13 @@ picker.
 6. Enter a **Permission set** API name (e.g. `SF_Tools_Importer`). **Expected:**
    the deploy snippets gain `-m "PermissionSet:SF_Tools_Importer"` and the
    Step 10 assign snippet names it.
+6b. In **Visibility**, pick a **Source org**, a reference **object** and
+   **field**, and click **Read visibility**. **Expected:** a table of the
+   profiles/permission sets that can read/edit that field in that org, plus a
+   summary. Then fill a **Human permission set** API name (e.g.
+   `Case_Assistance_Fields`). **Expected:** the deploy snippets now include a
+   second `-m "PermissionSet:..."`, the assign box shows a second `sf org
+   assign permset` line, and the package zip contains both permission sets.
 7. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
    downloads. Unzipped, it contains
    `force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml` for

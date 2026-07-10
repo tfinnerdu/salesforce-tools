@@ -179,6 +179,70 @@
     </div>
   </div>
 
+  <!-- ── Visibility: clone FLS from a source org ─────────────────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Visibility <span class="text-muted fw-normal">(optional &mdash; clone field-level security from another org, e.g. EDA)</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Read how a reference field is exposed in a source org (which profiles / permission sets can see &amp; edit it),
+        then generate a <strong>human-visibility permission set</strong> that grants the built fields the same access.
+        Read-only against the source org.
+      </p>
+      <div class="row g-3 align-items-end mb-2">
+        <div class="col-md-3">
+          <label for="cliFlsOrg" class="form-label fw-semibold small mb-1">Source org</label>
+          <select id="cliFlsOrg" class="form-select form-select-sm">
+            {% for org in nav_orgs %}<option value="{{ org }}">{{ org }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="cliFlsObject" class="form-label fw-semibold small mb-1">Reference object</label>
+          <input type="text" id="cliFlsObject" class="form-control form-control-sm" placeholder="e.g. Case" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label for="cliFlsField" class="form-label fw-semibold small mb-1">Reference field</label>
+          <input type="text" id="cliFlsField" class="form-control form-control-sm" placeholder="e.g. hed__Occurrence_Date__c" autocomplete="off">
+        </div>
+        <div class="col-md-2">
+          <button id="btnReadFls" class="btn btn-slate btn-sm w-100">Read visibility</button>
+        </div>
+      </div>
+
+      <div id="flsLoading" class="text-center py-3 d-none"><div class="spinner-border text-warning" role="status"></div></div>
+      <div id="flsContent" class="d-none">
+        <div id="flsSummary" class="small mb-2"></div>
+        <div class="table-responsive" style="max-height:220px;overflow:auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light"><tr><th>Profile / Permission set</th><th>Type</th><th>Read</th><th>Edit</th></tr></thead>
+            <tbody id="flsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <hr class="my-3">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label for="hpsName" class="form-label fw-semibold small mb-1">Human permission set &mdash; API name</label>
+          <input type="text" id="hpsName" class="form-control form-control-sm" placeholder="e.g. Case_Assistance_Fields" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label for="hpsLabel" class="form-label fw-semibold small mb-1">Label</label>
+          <input type="text" id="hpsLabel" class="form-control form-control-sm" placeholder="e.g. Case Assistance Fields" autocomplete="off">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold small mb-1">Access granted</label>
+          <div class="form-check form-switch pt-1">
+            <input class="form-check-input" type="checkbox" id="hpsEditable" checked>
+            <label class="form-check-label small" for="hpsEditable">Grant edit (off = read-only)</label>
+          </div>
+        </div>
+      </div>
+      <div class="form-text">Fill the API name to generate a second permission set (alongside the integration one) that exposes the built fields to your staff. Reading a reference field sets the edit toggle to match it.</div>
+    </div>
+  </div>
+
   <!-- ── Steps 7-10: Generate & download ─────────────────────────────────── -->
   <div class="card shadow-sm mb-4">
     <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">

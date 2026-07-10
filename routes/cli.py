@@ -15,7 +15,7 @@ import logging
 from flask import Blueprint, Response, render_template, request, session
 
 from config import Config, get_org_config
-from services import cli_metadata, cli_script
+from services import cli_fls, cli_metadata, cli_script
 from sf_provider import available_orgs
 from utils.responses import error_response, new_request_id, ok
 
@@ -113,6 +113,43 @@ def _permset_from(payload) -> dict:
     }
 
 
+def _human_permset_from(payload, fields) -> dict:
+    """Build the cloned human-visibility permission set from the plan, or {}.
+
+    plan.human_permset = {api_name, label, description, editable}; its field
+    permissions are the built fields at the chosen access level (read always,
+    edit per `editable`, informed by the cloned EDA FLS).
+    """
+    hp = payload.get('human_permset') or {}
+    name = (hp.get('api_name') or '').strip()
+    if not name or not fields:
+        return {}
+    return {
+        'api_name': name,
+        'label': (hp.get('label') or name).strip(),
+        'description': (hp.get('description') or '').strip(),
+        'field_perms': cli_fls.human_field_perms(fields, bool(hp.get('editable'))),
+    }
+
+
+# ── Field-Level Security clone (read a reference field's visibility) ──────────
+
+@cli_bp.route('/fls')
+def api_fls():
+    src = (request.args.get('org') or _org()).strip()
+    obj = (request.args.get('object') or '').strip()
+    field = (request.args.get('field') or '').strip()
+    if not obj or not field:
+        return error_response('object and field are required', 'INVALID_INPUT', 400)
+    if src not in Config.AVAILABLE_ORGS:
+        return error_response(f'Unknown org: {src}', 'INVALID_INPUT', 400)
+    try:
+        return ok(cli_fls.read_field_fls(src, obj, field))
+    except Exception as exc:
+        logger.exception('cli fls read failed for %s.%s in %s', obj, field, src)
+        return error_response(str(exc), 'SF_FLS_READ_FAILED', 502)
+
+
 # ── Snippet generation ───────────────────────────────────────────────────────
 
 @cli_bp.route('/generate', methods=['POST'])
@@ -129,8 +166,14 @@ def api_generate():
 
     permset = _permset_from(payload)
     permset_name = permset.get('api_name', '')
+    human = _human_permset_from(payload, fields)
+    extra_names = [human['api_name']] if human else []
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
+
+    assign_entries = [{'name': permset_name, 'username': username}]
+    if human:
+        assign_entries.append({'name': human['api_name'], 'username': '<staff-username>'})
 
     return ok({
         'install': cli_script.install_snippet(),
@@ -139,11 +182,14 @@ def api_generate():
         'retrieve': cli_script.retrieve_snippet(alias),
         'backup': cli_script.backup_snippet(flip_fields, alias),
         'verify': cli_script.verify_snippet(flip_fields, alias),
-        'deploy_dry_run': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=True),
-        'deploy_full': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=False),
-        'assign': cli_script.assign_snippet(permset_name, alias, username),
-        'members': cli_script._members(fields, permset_name),
+        'deploy_dry_run': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=True,
+                                                    extra_permset_names=extra_names),
+        'deploy_full': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=False,
+                                                 extra_permset_names=extra_names),
+        'assign': cli_script.assign_snippets(assign_entries, alias),
+        'members': cli_script._members(fields, permset_name, extra_names),
         'has_flips': bool(flip_fields),
+        'has_human_permset': bool(human),
     })
 
 
@@ -157,8 +203,10 @@ def api_package():
     try:
         fields = _validate_fields(payload.get('fields') or [])
         permset = _permset_from(payload)
+        human = _human_permset_from(payload, fields)
         zip_bytes, filename = cli_script.build_package_zip(
-            project, fields, permset or None, alias)
+            project, fields, permset or None, alias,
+            extra_permsets=[human] if human else None)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:

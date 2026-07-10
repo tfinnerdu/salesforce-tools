@@ -112,6 +112,17 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
         "502": { description: Salesforce describe failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /fls:
+    get:
+      summary: Read a reference field's field-level security (visibility) from a source org.
+      parameters:
+        - { in: query, name: org, required: true, schema: { type: string }, description: Source org (must be in AVAILABLE_ORGS). }
+        - { in: query, name: object, required: true, schema: { type: string } }
+        - { in: query, name: field, required: true, schema: { type: string } }
+      responses:
+        "200": { description: FLS map (parents + summary), content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Missing/invalid params or unknown org, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "502": { description: Salesforce FLS read failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /generate:
     post:
       summary: Generate all sf-CLI command snippets for a plan (pure; no SF write).

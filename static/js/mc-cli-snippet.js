@@ -64,6 +64,16 @@ MC.cli = {
     ['psName', 'psLabel', 'psDescription'].forEach(id =>
       document.getElementById(id).addEventListener('input', () => this._refresh()));
 
+    // Visibility clone: read FLS from a source org; human-permset inputs.
+    document.getElementById('btnReadFls').addEventListener('click', () => this._readFls());
+    ['hpsName', 'hpsLabel'].forEach(id =>
+      document.getElementById(id).addEventListener('input', () => this._refresh()));
+    document.getElementById('hpsEditable').addEventListener('change', () => this._refresh());
+    // Default the FLS source org to a non-active org (e.g. EDA).
+    const flsOrg = document.getElementById('cliFlsOrg');
+    const other = Array.from(flsOrg.options).map(o => o.value).find(v => v !== MC.activeOrg());
+    if (other) flsOrg.value = other;
+
     document.getElementById('btnPackage').addEventListener('click', () => this._package());
 
     this._renderProps();
@@ -91,7 +101,57 @@ MC.cli = {
         description: document.getElementById('psDescription').value.trim(),
         field_perms: fieldPerms,
       } : {},
+      human_permset: this._humanPermset(),
     };
+  },
+
+  _humanPermset() {
+    const name = document.getElementById('hpsName').value.trim();
+    if (!name) return {};
+    return {
+      api_name: name,
+      label: document.getElementById('hpsLabel').value.trim(),
+      editable: document.getElementById('hpsEditable').checked,
+    };
+  },
+
+  // ── Visibility: clone FLS from a source org ────────────────────────────────
+
+  async _readFls() {
+    const org = document.getElementById('cliFlsOrg').value;
+    const object = document.getElementById('cliFlsObject').value.trim();
+    const field = document.getElementById('cliFlsField').value.trim();
+    if (!object || !field) { MC.showToast('Enter a reference object and field', 'warning'); return; }
+    const loading = document.getElementById('flsLoading');
+    loading.classList.remove('d-none');
+    document.getElementById('flsContent').classList.add('d-none');
+    try {
+      const r = await MC.api(`/cli/fls?org=${encodeURIComponent(org)}`
+        + `&object=${encodeURIComponent(object)}&field=${encodeURIComponent(field)}`);
+      this._renderFls(r, org);
+    } catch (e) {
+      MC.showToast(`FLS read failed: ${e.message}`, 'danger');
+    } finally { loading.classList.add('d-none'); }
+  },
+
+  _renderFls(r, org) {
+    const s = r.summary || {};
+    document.getElementById('flsContent').classList.remove('d-none');
+    const profs = (s.read_profiles || []).join(', ') || '—';
+    document.getElementById('flsSummary').innerHTML =
+      `<code>${MC._escHtml(r.field)}</code> in <strong>${MC._escHtml(org)}</strong>: `
+      + `visible to <strong>${s.read_count || 0}</strong> profile(s)/perm set(s), `
+      + `<strong>${s.edit_count || 0}</strong> with edit. `
+      + `<span class="text-muted">Assign the new set to users on: ${MC._escHtml(profs)}.</span>`;
+    const parents = r.parents || [];
+    document.getElementById('flsTbody').innerHTML = parents.length ? parents.map(p => `
+      <tr><td>${MC._escHtml(p.name)}</td><td>${MC._escHtml(p.type)}</td>
+      <td>${p.read ? '<span class="badge badge-green">read</span>' : ''}</td>
+      <td>${p.edit ? '<span class="badge badge-amber">edit</span>' : ''}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="text-muted">No FLS found — the field may be hidden for everyone in that org.</td></tr>';
+    // Match the human permset's edit level to the source field.
+    document.getElementById('hpsEditable').checked = !!s.suggested_editable;
+    this._refresh();
   },
 
   _refresh() {
@@ -318,6 +378,9 @@ MC.cli = {
       this.fields.push(spec);
     }
     this._renderFields();
+    // Default the FLS reference object to the field's object (first add only).
+    const flsObj = document.getElementById('cliFlsObject');
+    if (flsObj && !flsObj.value.trim()) flsObj.value = spec.object;
     // Reset the field-identity inputs for the next add; keep object selected.
     ['cliApiName', 'cliLabel', 'cliDescription'].forEach(id => document.getElementById(id).value = '');
     this._apiNameEdited = false;  // next field re-links label → API name

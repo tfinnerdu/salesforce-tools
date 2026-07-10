@@ -81,6 +81,8 @@ services/            Business logic, one module per feature
                            MS ODBC driver — no Devart in the app)
   cli_metadata.py          CLI tab: describe-driven object/field lists (read-only)
   cli_script.py            CLI tab: sf-command + field/permset XML + zip generator
+  cli_fls.py               CLI tab: read a field's FLS from a source org (clone
+                           visibility) + synthesize a human permission set
 utils/responses.py   Shared API helpers: error_response() envelope + request_id
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
@@ -153,6 +155,14 @@ artifacts byte-for-byte (pinned in `tests/characterization/test_cli_artifacts_ch
 Supports create + flip (with auto backup/verify snippets) for Text, Picklist,
 Checkbox, Number, Date/DateTime, Email, Phone, Url, and (Long)TextArea. Stateless
 — nothing is persisted. Describe-driven pickers demo under `SHOW_MOCK`.
+
+**Visibility clone (`cli_fls.py`).** Field-level security is separate metadata,
+so a created field isn't visible to anyone. The Visibility section reads a
+reference field's FLS from a *source* org (e.g. EDA) via the `FieldPermissions`
+object (`GET /cli/fls`, read-only, modeled on `perm_auditor`) and generates a
+second, human-facing permission set that grants the built fields the same access
+— carried alongside the integration permset through the deploy, dual assign, and
+package zip. FLS only (page layouts / record types are out of scope for now).
 
 **API-shape note (standards follow-up).** The CLI tab keeps this app's
 blueprint-prefix routing (`/cli/...`) for consistency with the other tabs, and

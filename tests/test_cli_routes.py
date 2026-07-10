@@ -49,6 +49,26 @@ class TestMetadata:
         assert 'request_id' in body and body['request_id'] != 'unknown'
 
 
+class TestFls:
+    def test_fls_read_envelope(self, client, monkeypatch):
+        monkeypatch.setattr(route.cli_fls, 'read_field_fls',
+                            lambda org, obj, field: {'object': obj, 'field': f'{obj}.{field}',
+                                                     'parents': [], 'summary': {'suggested_editable': False}})
+        resp = client.get('/cli/fls?org=dev&object=Case&field=X__c')
+        assert resp.status_code == 200
+        assert resp.get_json()['data']['field'] == 'Case.X__c'
+
+    def test_fls_requires_object_and_field(self, client):
+        resp = client.get('/cli/fls?org=dev&object=Case')
+        assert resp.status_code == 400
+        assert resp.get_json()['code'] == 'INVALID_INPUT'
+
+    def test_fls_rejects_unknown_org(self, client):
+        resp = client.get('/cli/fls?org=nope&object=Case&field=X__c')
+        assert resp.status_code == 400
+        assert resp.get_json()['code'] == 'INVALID_INPUT'
+
+
 class TestGenerate:
     def _plan(self, **over):
         plan = {
@@ -91,6 +111,18 @@ class TestGenerate:
         body = resp.get_json()
         assert body['success'] is False and body['code'] == 'INVALID_INPUT'
         assert '__c' in body['error']
+
+    def test_generate_with_human_permset(self, client):
+        plan = self._plan()
+        plan['human_permset'] = {'api_name': 'Case_Assistance_Fields',
+                                 'label': 'Case Assistance Fields', 'editable': True}
+        d = client.post('/cli/generate', json=plan).get_json()['data']
+        assert d['has_human_permset'] is True
+        assert 'PermissionSet:Case_Assistance_Fields' in d['members']
+        assert 'PermissionSet:Case_Assistance_Fields' in d['deploy_full']
+        # two assign lines: integration + human
+        assert d['assign'].count('sf org assign permset') == 2
+        assert 'Case_Assistance_Fields' in d['assign']
 
 
 class TestPackage:

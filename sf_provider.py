@@ -279,12 +279,18 @@ def _make_perm_set_assignment(idx: int) -> dict:
 
 
 def _make_field_permission(idx: int) -> dict:
+    is_profile = idx % 2 == 0
     return {
         'Id': f'0PS{idx:015d}',
         'SobjectType': 'Account',
         'Field': 'Account.SIS_ID__c' if idx % 3 == 0 else 'Account.Ethos_Guid__c',
         'PermissionsRead': True,
         'PermissionsEdit': idx % 2 == 0,
+        'Parent': {
+            'Label': 'System Administrator' if is_profile else f'Custom Access {idx}',
+            'IsOwnedByProfile': is_profile,
+            'Profile': {'Name': 'System Administrator'} if is_profile else None,
+        },
         'attributes': {'type': 'FieldPermissions'},
     }
 
