@@ -123,6 +123,21 @@ paths:
         "200": { description: FLS map (parents + summary), content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
         "400": { description: Missing/invalid params or unknown org, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         "502": { description: Salesforce FLS read failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /recipes:
+    post:
+      summary: Describe-driven sf command recipes for an object (describe/query/count/retrieve).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                object: { type: string }
+                fields: { type: array, items: { type: string } }
+                alias: { type: string }
+      responses:
+        "200": { description: "{describe, query, count, retrieve_object, soql}", content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
   /layout/sections:
     post:
       summary: List the sections of a pasted Layout (with editable-column flag) for the picker.

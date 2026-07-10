@@ -173,6 +173,22 @@ def test_backup_and_verify_only_for_flips():
     assert 'Select-Object name, externalId, idLookup, unique, length' in verify
 
 
+def test_command_recipes():
+    r = cs.command_recipes('CourseOfferingParticipant', ['Name', 'SIS_ID__c'], 'DoaneUAT')
+    assert r['describe'] == 'sf sobject describe --sobject CourseOfferingParticipant -o DoaneUAT'
+    assert r['count'] == 'sf data query -o DoaneUAT -q "SELECT COUNT() FROM CourseOfferingParticipant"'
+    assert r['query'] == ('sf data query -o DoaneUAT -q "SELECT Id, Name, SIS_ID__c '
+                          'FROM CourseOfferingParticipant LIMIT 10"')
+    assert r['retrieve_object'] == 'sf project retrieve start -m "CustomObject:CourseOfferingParticipant" -o DoaneUAT'
+    assert r['soql'] == 'SELECT Id, Name, SIS_ID__c FROM CourseOfferingParticipant LIMIT 10'
+
+
+def test_recipe_soql_dedupes_id_and_handles_empty():
+    assert cs.recipe_soql('Account', ['Id', 'Name'], 10) == 'SELECT Id, Name FROM Account LIMIT 10'
+    assert cs.recipe_soql('Account', [], 10) == 'SELECT Id FROM Account LIMIT 10'
+    assert '<Object>' in cs.recipe_soql('', [], 10)
+
+
 def test_deploy_dir_snippet():
     assert cs.deploy_dir_snippet('DoaneUAT', dry_run=True) == \
         'sf project deploy start --source-dir force-app -o DoaneUAT --dry-run'

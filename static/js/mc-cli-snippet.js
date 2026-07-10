@@ -86,6 +86,10 @@ MC.cli = {
     document.getElementById('btnBuildLayout').addEventListener('click', () => this._buildLayout());
     document.getElementById('btnDownloadLayout').addEventListener('click', () => this._downloadLayout());
 
+    // Command composer.
+    document.getElementById('cliRecipeObject').addEventListener('change', () => this._onRecipeObjectChange());
+    document.getElementById('cliRecipeFields').addEventListener('change', () => this._refreshRecipes());
+
     document.getElementById('btnPackage').addEventListener('click', () => this._package());
 
     this._renderProps();
@@ -253,6 +257,39 @@ MC.cli = {
     URL.revokeObjectURL(url);
   },
 
+  // ── Command composer ───────────────────────────────────────────────────────
+
+  async _onRecipeObjectChange() {
+    const obj = document.getElementById('cliRecipeObject').value;
+    const sel = document.getElementById('cliRecipeFields');
+    sel.innerHTML = '';
+    if (obj) {
+      if (!this._fieldsCache[obj]) {
+        try {
+          const data = await MC.api(`/cli/objects/${encodeURIComponent(obj)}/fields`);
+          this._fieldsCache[obj] = data.fields || [];
+        } catch (e) { this._fieldsCache[obj] = []; }
+      }
+      sel.innerHTML = (this._fieldsCache[obj] || [])
+        .map(f => `<option value="${MC._escHtml(f.name)}">${MC._escHtml(f.name)}</option>`).join('');
+    }
+    this._refreshRecipes();
+  },
+
+  async _refreshRecipes() {
+    const obj = document.getElementById('cliRecipeObject').value;
+    const fields = Array.from(document.getElementById('cliRecipeFields').selectedOptions).map(o => o.value);
+    try {
+      const r = await MC.api('/cli/recipes', 'POST',
+        { object: obj, fields, alias: document.getElementById('cliAlias').value.trim() });
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || ''; };
+      set('rcpDescribe', r.describe);
+      set('rcpQuery', r.query);
+      set('rcpCount', r.count);
+      set('rcpRetrieve', r.retrieve_object);
+    } catch (e) { /* composer is best-effort; ignore */ }
+  },
+
   _refresh() {
     clearTimeout(this._refreshTimer);
     this._refreshTimer = setTimeout(() => this._doRefresh(), 350);
@@ -275,6 +312,7 @@ MC.cli = {
       set('snpLayoutRetrieve', s.layout_retrieve);
       set('snpLayoutDeploy', s.layout_deploy);
       document.getElementById('flipSection').classList.toggle('d-none', !s.has_flips);
+      this._refreshRecipes();  // alias changes flow into the composer recipes too
       const proj = document.getElementById('cliProject').value.trim();
       const base = document.getElementById('cliBasePath').value.trim().replace(/[\\/]+$/, '');
       document.getElementById('projPathHint').textContent = proj ? `${base}\\${proj}` : 'your project';
@@ -290,8 +328,10 @@ MC.cli = {
     const sel = document.getElementById('cliObject');
     try {
       const objs = await MC.api('/cli/objects');
-      sel.innerHTML = '<option value="">Select an object…</option>' +
+      const opts = '<option value="">Select an object…</option>' +
         objs.map(o => `<option value="${MC._escHtml(o.name)}">${MC._escHtml(o.name)}${o.label && o.label !== o.name ? ` — ${MC._escHtml(o.label)}` : ''}</option>`).join('');
+      sel.innerHTML = opts;
+      document.getElementById('cliRecipeObject').innerHTML = opts;  // composer shares the object list
     } catch (err) {
       sel.innerHTML = '<option value="">Failed to load objects</option>';
       MC.showToast(`Could not load objects: ${err.message}`, 'danger');

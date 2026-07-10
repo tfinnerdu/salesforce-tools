@@ -248,6 +248,44 @@ def deploy_snippet(fields: list, permset_name: str, alias: str,
     return '\n'.join(lines)
 
 
+# ── Command composer recipes (explore-from-the-terminal snippets) ────────────
+
+def recipe_soql(object_name: str, fields: list, limit: int = 10) -> str:
+    """The SELECT that both the CLI query recipe and the SOQL Workbench link use."""
+    obj = object_name or '<Object>'
+    cols = ['Id'] + [f for f in (fields or []) if f and f != 'Id']
+    return f'SELECT {", ".join(cols)} FROM {obj} LIMIT {int(limit)}'
+
+
+def recipe_query(object_name: str, fields: list, alias: str, limit: int = 10) -> str:
+    return f'sf data query -o {alias or "<alias>"} -q "{recipe_soql(object_name, fields, limit)}"'
+
+
+def recipe_count(object_name: str, alias: str) -> str:
+    return (f'sf data query -o {alias or "<alias>"} '
+            f'-q "SELECT COUNT() FROM {object_name or "<Object>"}"')
+
+
+def recipe_describe(object_name: str, alias: str) -> str:
+    return f'sf sobject describe --sobject {object_name or "<Object>"} -o {alias or "<alias>"}'
+
+
+def recipe_retrieve_object(object_name: str, alias: str) -> str:
+    return (f'sf project retrieve start -m "CustomObject:{object_name or "<Object>"}" '
+            f'-o {alias or "<alias>"}')
+
+
+def command_recipes(object_name: str, fields: list, alias: str) -> dict:
+    """All composer recipes for one object (+ optional field selection)."""
+    return {
+        'describe': recipe_describe(object_name, alias),
+        'count': recipe_count(object_name, alias),
+        'query': recipe_query(object_name, fields, alias),
+        'retrieve_object': recipe_retrieve_object(object_name, alias),
+        'soql': recipe_soql(object_name, fields),
+    }
+
+
 def deploy_dir_snippet(alias: str, dry_run: bool = False) -> str:
     """Alternative deploy: push the whole force-app folder (no -m). Avoids the
     'No source-backed components present' gotcha when the -m components aren't

@@ -186,6 +186,17 @@ def api_fls():
         return error_response(str(exc), 'SF_FLS_READ_FAILED', 502)
 
 
+# ── Command composer: describe-driven sf command recipes ─────────────────────
+
+@cli_bp.route('/recipes', methods=['POST'])
+def api_recipes():
+    payload = request.get_json(silent=True) or {}
+    obj = (payload.get('object') or '').strip()
+    fields = [f for f in (payload.get('fields') or []) if f]
+    alias = (payload.get('alias') or '').strip()
+    return ok(cli_script.command_recipes(obj, fields, alias))
+
+
 # ── Page layout: add fields to a pasted layout (org-to-org clone-assist) ─────
 
 @cli_bp.route('/layout/sections', methods=['POST'])

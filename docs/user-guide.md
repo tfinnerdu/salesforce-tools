@@ -1468,6 +1468,10 @@ Creating a field and granting visibility still doesn't put it **on the page** �
 - **Step 9 — Deploy for real:** the same command without `--dry-run`. These use `-m`, which deploys from your project — run **Download package** and unzip first, or you'll hit *"No source-backed components present."* The **"deploy the whole folder"** box (`--source-dir force-app`) is a no-`-m` alternative that pushes everything in the project.
 - **Step 10 — Assign the permission set** to the integration user.
 
+### Command composer (explore an object from the terminal)
+
+At the bottom of the tab, a small utility for the field-guide "explore from the terminal" recipes: pick an **object** (and, for the query, some **fields**), and copy ready-to-run `sf` commands — **describe**, **query rows**, **count records**, and **retrieve the object's metadata**. Rather than re-implement things the app already does in-browser, each recipe links to the matching tab for live results: **Run this live in SOQL Workbench →** under the query, and **Explore fields live in Data Dictionary →** under describe. Use the CLI recipe when you want to run it on your own machine; use the link when you just want to see the answer now.
+
 **Why use it:** the SF CLI is powerful but easy to get wrong (a backslash instead of a backtick, a sandbox login without its instance URL, a redeploy that clobbers a field's attributes). This tab bakes those lessons in, so a field authored here deploys identically to one written by hand — verified against our real Conductor migration package.
 
 ---

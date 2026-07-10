@@ -389,6 +389,49 @@
     </div>
   </div>
 
+  <!-- ── Command composer: explore an object from the terminal ───────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Command composer <span class="text-muted fw-normal">(explore an object from the terminal &mdash; describe-driven <code>sf</code> recipes)</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Pick an object (and fields) and copy ready-to-run <code>sf</code> commands. For live results in the browser,
+        jump to the matching tab &mdash; no need to leave the terminal workflow.
+      </p>
+      <div class="row g-3 mb-2">
+        <div class="col-md-5">
+          <label for="cliRecipeObject" class="form-label fw-semibold small mb-1">Object</label>
+          <select id="cliRecipeObject" class="form-select form-select-sm"><option value="">Select an object…</option></select>
+        </div>
+        <div class="col-md-7">
+          <label for="cliRecipeFields" class="form-label fw-semibold small mb-1">Fields for the query
+            <span class="text-muted fw-normal">(ctrl/⌘-click to pick several)</span></label>
+          <select id="cliRecipeFields" class="form-select form-select-sm" multiple size="4"></select>
+        </div>
+      </div>
+
+      <div class="mb-2">
+        <label class="form-label fw-semibold small mb-1">Describe the object</label>
+        <div class="mc-code" data-copy="rcpDescribe"><pre id="rcpDescribe" class="mb-0"></pre></div>
+        <div class="form-text"><a href="/schema/data-dictionary" target="_blank" rel="noopener">Explore fields live in Data Dictionary →</a></div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label fw-semibold small mb-1">Query rows</label>
+        <div class="mc-code" data-copy="rcpQuery"><pre id="rcpQuery" class="mb-0"></pre></div>
+        <div class="form-text"><a href="/soql" target="_blank" rel="noopener">Run this live in SOQL Workbench →</a></div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label fw-semibold small mb-1">Count records</label>
+        <div class="mc-code" data-copy="rcpCount"><pre id="rcpCount" class="mb-0"></pre></div>
+      </div>
+      <div class="mb-1">
+        <label class="form-label fw-semibold small mb-1">Retrieve the object's metadata</label>
+        <div class="mc-code" data-copy="rcpRetrieve"><pre id="rcpRetrieve" class="mb-0"></pre></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 

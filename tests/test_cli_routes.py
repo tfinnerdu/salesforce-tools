@@ -158,6 +158,22 @@ class TestGenerate:
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
 
+class TestRecipes:
+    def test_recipes_envelope(self, client):
+        resp = client.post('/cli/recipes', json={
+            'object': 'Account', 'fields': ['Name', 'SIS_ID__c'], 'alias': 'DoaneUAT'})
+        assert resp.status_code == 200
+        d = resp.get_json()['data']
+        assert d['describe'] == 'sf sobject describe --sobject Account -o DoaneUAT'
+        assert 'SELECT Id, Name, SIS_ID__c FROM Account' in d['query']
+        assert d['count'] == 'sf data query -o DoaneUAT -q "SELECT COUNT() FROM Account"'
+        assert 'CustomObject:Account' in d['retrieve_object']
+
+    def test_recipes_placeholders_when_empty(self, client):
+        d = client.post('/cli/recipes', json={}).get_json()['data']
+        assert '<Object>' in d['describe'] and '<alias>' in d['describe']
+
+
 class TestLayout:
     _LAYOUT = ('<?xml version="1.0" encoding="UTF-8"?>\n'
               '<Layout xmlns="http://soap.sforce.com/2006/04/metadata">\n'

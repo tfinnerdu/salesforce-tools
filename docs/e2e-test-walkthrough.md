@@ -635,6 +635,11 @@ picker.
    with a new `<layoutSections>` and everything else unchanged), and a layout
    deploy snippet. Switching to **Existing section** + *load* lists the layout's
    editable sections (Custom Links excluded). Pasting non-layout text 400s.
+7. **Command composer** (bottom of tab): pick an **Object**. **Expected:** the
+   describe / count / retrieve recipes fill in (with the header alias). Select a
+   couple of **Fields** — the query recipe updates its `SELECT`. The **Run this
+   live in SOQL Workbench →** and **Explore fields live in Data Dictionary →**
+   links point at `/soql` and `/schema/data-dictionary`.
 7. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
    downloads. Unzipped, it contains
    `force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml` for

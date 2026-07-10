@@ -166,6 +166,13 @@ second, human-facing permission set that grants the built fields the same access
 — carried alongside the integration permset through the deploy, dual assign, and
 package zip. FLS only (page layouts / record types are out of scope for now).
 
+**Command composer.** A bottom-of-tab utility (`POST /cli/recipes`,
+`cli_script.command_recipes`) that turns an object + field selection into
+copyable `sf` recipes (describe / query / count / retrieve). Rather than
+re-implement live query/describe (the SOQL Workbench and Data Dictionary tabs
+already do that), each recipe links out to the matching tab for live results —
+the composer's lane is generating the CLI command, not running it in-browser.
+
 **Page layout (`cli_layout.py`).** A field isn't on the record page until it's
 on the layout — a third metadata type. Layouts can't be read synchronously here
 (simple_salesforce's Metadata API is async-retrieve-only), so the flow is:
