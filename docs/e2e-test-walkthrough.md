@@ -595,10 +595,12 @@ picker.
 3. Click **Copy** on any command box. **Expected:** a "Copied to clipboard"
    toast; the copied text matches the box.
 4. In *Step 6 — Build fields*, pick an object, keep **Operation = Create new
-   field**, set **Type = Text**, enter an API name ending in `__c` (e.g.
-   `Test_Ext__c`), a label, tick **External ID** + **Unique**, then click
-   **+ Add field**. **Expected:** a row appears in the field table; the Step 8/9
-   deploy snippets now include `-m "CustomField:<Object>.Test_Ext__c"`.
+   field**, set **Type = Text**, and type a **Field label** (e.g. `Group
+   Information`). **Expected:** the **Field API name** auto-fills to
+   `Group_Information__c` (SF-style) and remains editable — hand-editing it
+   stops the auto-fill for that field. Tick **External ID** + **Unique**, then
+   click **+ Add field**. **Expected:** a row appears in the field table; the
+   Step 8/9 deploy snippets now include `-m "CustomField:<Object>.Group_Information__c"`.
 5. Switch **Operation** to *Edit existing field (flip to External ID)* and pick
    a field from **Existing field**. **Expected:** the form prefills from the
    live describe (type, length), External ID is forced on, and after adding it

@@ -12,6 +12,7 @@ MC.cli = {
   fields: [],            // list of field specs the user has added
   _fieldsCache: {},      // object name -> describe fields (for flip prefill)
   _refreshTimer: null,
+  _apiNameEdited: false, // once the user hand-edits the API name, stop auto-deriving
 
   // SF describe type (lowercase) -> our builder type.
   _TYPE_MAP: {
@@ -47,6 +48,11 @@ MC.cli = {
       document.getElementById(id).addEventListener('input', () => this._refresh()));
 
     // Field builder wiring.
+    // Label drives the API name (Setup-style) until the user hand-edits the API name.
+    document.getElementById('cliLabel').addEventListener('input', () => this._syncApiName());
+    document.getElementById('cliApiName').addEventListener('input', (e) => {
+      this._apiNameEdited = e.target.value.trim() !== '';
+    });
     document.getElementById('cliType').addEventListener('change', () => this._renderProps());
     document.getElementById('cliFieldMode').addEventListener('change', () => this._onModeChange());
     document.getElementById('cliObject').addEventListener('change', () => this._onObjectChange());
@@ -155,6 +161,23 @@ MC.cli = {
     const flip = document.getElementById('cliFieldMode').value === 'flip';
     document.getElementById('existingFieldWrap').style.display = flip ? '' : 'none';
     if (flip) this._populateExistingFields();
+    else this._apiNameEdited = false;  // back to create → re-enable label→API auto-derive
+  },
+
+  // Derive an SF-style API name from a label: "Group Information" -> "Group_Information__c".
+  // Collapses runs of non-alphanumerics to one underscore, trims edge underscores,
+  // prefixes a leading digit with X, and appends the custom-field __c suffix.
+  _deriveApiName(label) {
+    let s = (label || '').trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    if (!s) return '';
+    if (/^[0-9]/.test(s)) s = 'X' + s;
+    return s + '__c';
+  },
+
+  _syncApiName() {
+    if (this._apiNameEdited) return;
+    document.getElementById('cliApiName').value =
+      this._deriveApiName(document.getElementById('cliLabel').value);
   },
 
   _prefillFlip() {
@@ -169,6 +192,7 @@ MC.cli = {
     }
     document.getElementById('cliApiName').value = field.name;
     document.getElementById('cliLabel').value = field.label || field.name;
+    this._apiNameEdited = true;  // flip uses the real existing API name — don't auto-derive over it
     document.getElementById('cliType').value = type;
     this._renderProps();
     // Prefill from the existing spec so a redeploy preserves attributes; force External ID on.
@@ -288,6 +312,7 @@ MC.cli = {
     this._renderFields();
     // Reset the field-identity inputs for the next add; keep object selected.
     ['cliApiName', 'cliLabel', 'cliDescription'].forEach(id => document.getElementById(id).value = '');
+    this._apiNameEdited = false;  // next field re-links label → API name
     this._refresh();
   },
 
