@@ -1412,8 +1412,8 @@ The page reads top-to-bottom in four parts:
 ### 1. Environment setup (run once per project)
 
 - **Step 2 — Install the CLI:** copy the snippet and run it once per machine to install `sf` and confirm it can see your orgs.
-- **Step 3 — Authorize the org:** enter an **Alias** (a short local name like `DoaneUAT`) and, if needed, adjust the **Sandbox instance URL**. Copy the generated `sf org login web …` command — it opens a browser to log you in. Sandboxes require the instance URL, which is why it's prefilled.
-- **Step 4 — Generate the project:** enter a **Project name** and confirm the **base path**. The snippet creates the local project folder and checks the connection.
+- **Step 3 — Authorize the org:** the **Alias** comes prefilled (`DoaneUAT`) — keep it, change it, or clear it — and, if needed, adjust the **Sandbox instance URL**. Copy the generated `sf org login web …` command — it opens a browser to log you in. Sandboxes require the instance URL, which is why it's prefilled.
+- **Step 4 — Generate the project:** the **Project name** (`doane-sf`) and **base path** come prefilled and editable. The snippet creates the local project folder and checks the connection.
 - **Step 5 — Retrieve metadata:** copy the retrieve command to pull down the objects, fields, and permission sets you'll be editing.
 
 Every command box has a **Copy** button.
@@ -1426,13 +1426,13 @@ Every command box has a **Copy** button.
   - **Edit existing field (flip to External ID)** — you're turning an existing field into an External ID. Pick the field from the **Existing field** dropdown; its current settings prefill so the redeploy doesn't wipe them.
 - Enter the **Field API name** (must end in `__c`), a **Label**, and the **Type**. Type-specific options appear below (length, External ID, Unique, picklist values, etc.).
 - Set **Field-level security** (Readable / Editable) — these feed the permission set.
-- Click **+ Add field**. Repeat for as many fields as you need; they collect in a table you can remove rows from.
+- Click **+ Add field**. Repeat for as many fields as you need; they collect in a table where each row has **Edit** (loads it back into the form to change — the button becomes **Update field**) and remove (**×**).
 
 > **Picklist values:** one value per line. Just type the value — the API value (code) and the label are both set to that text (e.g. `Freshman`). Use `CODE=Label` only when you want them to differ (e.g. `MAJ=Major, Faculty`). Prefix a line with `-` to retire (deactivate) a value instead of deleting it — existing records keep their value.
 
 ### 3. Permission set (optional)
 
-Give the permission set an **API name** and **Label**. It's built from the Readable/Editable choices on each field you added. Leave the API name blank to skip it.
+The permission set **API name** and **Label** come prefilled (`SF_Tools_Importer`) and editable — it's built from the Readable/Editable choices on each field you added. **Clear the API name to skip the permission set** entirely.
 
 ### 4. Generate & deploy
 

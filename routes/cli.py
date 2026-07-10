@@ -45,6 +45,10 @@ def index():
         active_org=_org(),
         default_instance_url=Config.CLI_DEFAULT_INSTANCE_URL,
         default_base_path=Config.CLI_PROJECT_BASE_PATH,
+        default_alias=Config.CLI_DEFAULT_ALIAS,
+        default_project=Config.CLI_DEFAULT_PROJECT,
+        default_permset=Config.CLI_DEFAULT_PERMSET,
+        default_permset_label=Config.CLI_DEFAULT_PERMSET.replace('_', ' '),
         supported_types=list(cli_script.SUPPORTED_TYPES),
     )
 

@@ -224,9 +224,38 @@ MC.exportTableCSV = (tableId, filename = 'export.csv') => {
 };
 
 MC.copyToClipboard = (text) => {
-  navigator.clipboard.writeText(text)
-    .then(() => MC.showToast('Copied to clipboard', 'success'))
-    .catch(() => MC.showToast('Copy failed', 'danger'));
+  const ok = () => MC.showToast('Copied to clipboard', 'success');
+  const fail = () => MC.showToast('Copy failed', 'danger');
+  // Preferred: async Clipboard API — but it only exists in a secure context
+  // (https, or http on localhost/127.0.0.1). Accessed over http by hostname/IP
+  // navigator.clipboard is undefined, so guard before touching it.
+  if (window.isSecureContext && navigator.clipboard) {
+    navigator.clipboard.writeText(text)
+      .then(ok)
+      .catch(() => { MC._legacyCopy(text) ? ok() : fail(); });
+    return;
+  }
+  MC._legacyCopy(text) ? ok() : fail();
+};
+
+/** Fallback copy for non-secure contexts: hidden textarea + execCommand. */
+MC._legacyCopy = (text) => {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_) {
+    return false;
+  }
 };
 
 /** Returns a <span class="badge …"> string. */

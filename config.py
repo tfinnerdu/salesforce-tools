@@ -63,3 +63,8 @@ class Config:
         'https://doaneu--doanefull.sandbox.my.salesforce.com')
     CLI_PROJECT_BASE_PATH = os.environ.get(
         'CLI_PROJECT_BASE_PATH', 'C:\\Doane\\Code\\Salesforce-Projects')
+    # Reusable starting values the CLI builder pre-fills as editable field
+    # values (not just grey placeholders) — clear or change them as needed.
+    CLI_DEFAULT_ALIAS = os.environ.get('CLI_DEFAULT_ALIAS', 'DoaneUAT')
+    CLI_DEFAULT_PROJECT = os.environ.get('CLI_DEFAULT_PROJECT', 'doane-sf')
+    CLI_DEFAULT_PERMSET = os.environ.get('CLI_DEFAULT_PERMSET', 'SF_Tools_Importer')

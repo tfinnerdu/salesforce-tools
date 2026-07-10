@@ -601,6 +601,9 @@ picker.
    stops the auto-fill for that field. Tick **External ID** + **Unique**, then
    click **+ Add field**. **Expected:** a row appears in the field table; the
    Step 8/9 deploy snippets now include `-m "CustomField:<Object>.Group_Information__c"`.
+   Click **Edit** on the row. **Expected:** the builder repopulates with that
+   field and the button reads **Update field**; change something and click it to
+   update the row in place (the row count stays the same).
 5. Switch **Operation** to *Edit existing field (flip to External ID)* and pick
    a field from **Existing field**. **Expected:** the form prefills from the
    live describe (type, length), External ID is forced on, and after adding it

@@ -13,6 +13,7 @@ MC.cli = {
   _fieldsCache: {},      // object name -> describe fields (for flip prefill)
   _refreshTimer: null,
   _apiNameEdited: false, // once the user hand-edits the API name, stop auto-deriving
+  _editIndex: null,      // index of the field being edited in place (null = adding new)
 
   // SF describe type (lowercase) -> our builder type.
   _TYPE_MAP: {
@@ -305,15 +306,77 @@ MC.cli = {
     if (spec.type === 'Picklist' && !(spec.picklist.values || []).length) {
       MC.showToast('Add at least one picklist value', 'warning'); return;
     }
-    if (this.fields.some(f => f.object === spec.object && f.api_name === spec.api_name)) {
+    // Duplicate check — ignore the row currently being edited.
+    const dup = this.fields.findIndex(f => f.object === spec.object && f.api_name === spec.api_name);
+    if (dup !== -1 && dup !== this._editIndex) {
       MC.showToast(`${spec.object}.${spec.api_name} is already in the list`, 'warning'); return;
     }
-    this.fields.push(spec);
+    if (this._editIndex !== null) {
+      this.fields[this._editIndex] = spec;   // update in place, keep position
+      this._cancelEdit();
+    } else {
+      this.fields.push(spec);
+    }
     this._renderFields();
     // Reset the field-identity inputs for the next add; keep object selected.
     ['cliApiName', 'cliLabel', 'cliDescription'].forEach(id => document.getElementById(id).value = '');
     this._apiNameEdited = false;  // next field re-links label → API name
     this._refresh();
+  },
+
+  // ── Edit an existing row ────────────────────────────────────────────────────
+
+  _editField(i) {
+    const f = this.fields[i];
+    if (!f) return;
+    this._editIndex = i;
+    this._loadForm(f);
+    const btn = document.getElementById('btnAddField');
+    btn.textContent = 'Update field';
+    btn.classList.remove('btn-doane');
+    btn.classList.add('btn-slate');
+    document.getElementById('cliObject').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  },
+
+  _cancelEdit() {
+    this._editIndex = null;
+    const btn = document.getElementById('btnAddField');
+    btn.textContent = '+ Add field';
+    btn.classList.add('btn-doane');
+    btn.classList.remove('btn-slate');
+  },
+
+  // Populate the whole builder form from a saved field spec.
+  _loadForm(f) {
+    const g = id => document.getElementById(id);
+    const set = (id, v) => { const el = g(id); if (el) { if (el.type === 'checkbox') el.checked = !!v; else el.value = (v == null ? '' : v); } };
+    g('cliObject').value = f.object;
+    g('cliFieldMode').value = f.mode || 'create';
+    this._onModeChange();
+    set('cliApiName', f.api_name);
+    set('cliLabel', f.label);
+    g('cliType').value = f.type;
+    this._apiNameEdited = true;   // keep the loaded API name; don't auto-derive over it
+    this._renderProps();
+    set('propLength', f.length);
+    set('propVisibleLines', f.visibleLines);
+    set('propPrecision', f.precision);
+    set('propScale', f.scale);
+    set('propExternalId', f.externalId);
+    set('propUnique', f.unique);
+    set('propCaseSensitive', f.caseSensitive);
+    set('propDefaultValue', f.defaultValue);
+    if (f.picklist) {
+      set('propRestricted', f.picklist.restricted);
+      if (g('propPicklist')) {
+        g('propPicklist').value = (f.picklist.values || []).map(v =>
+          (v.active === false ? '-' : '') + (v.value === v.label ? v.value : `${v.value}=${v.label}`)
+        ).join('\n');
+      }
+    }
+    set('cliDescription', f.description);
+    set('cliReadable', f.readable);
+    set('cliEditable', f.editable);
   },
 
   _attrsSummary(f) {
@@ -341,11 +404,22 @@ MC.cli = {
         <td>${f.mode === 'flip' ? '<span class="badge badge-amber">flip</span>' : '<span class="badge badge-slate">create</span>'}</td>
         <td class="small text-muted">${MC._escHtml(this._attrsSummary(f))}</td>
         <td class="small">${f.readable ? 'R' : ''}${f.editable ? 'W' : ''}${!f.readable && !f.editable ? '—' : ''}</td>
-        <td class="text-end"><button class="btn btn-outline-danger btn-sm" data-del="${i}">&times;</button></td>
+        <td class="text-end text-nowrap">
+          <button class="btn btn-outline-secondary btn-sm" data-edit="${i}">Edit</button>
+          <button class="btn btn-outline-danger btn-sm" data-del="${i}">&times;</button>
+        </td>
       </tr>`).join('');
+    tbody.querySelectorAll('[data-edit]').forEach(b =>
+      b.addEventListener('click', () => this._editField(parseInt(b.dataset.edit, 10))));
     tbody.querySelectorAll('[data-del]').forEach(b =>
       b.addEventListener('click', () => {
-        this.fields.splice(parseInt(b.dataset.del, 10), 1);
+        const i = parseInt(b.dataset.del, 10);
+        // If we're editing a row, cancel/adjust so the pending edit index stays valid.
+        if (this._editIndex !== null) {
+          if (this._editIndex === i) this._cancelEdit();
+          else if (i < this._editIndex) this._editIndex -= 1;
+        }
+        this.fields.splice(i, 1);
         this._renderFields();
         this._refresh();
       }));
