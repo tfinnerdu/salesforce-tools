@@ -347,6 +347,7 @@ MC.objectPicker = {
   _menu: null,
   _onChoose: null,
   _activeIdx: -1,
+  _activeInput: null,  // the input the open menu is anchored to (for reflow on scroll)
 
   _list(org) {
     if (!this._cache[org]) {
@@ -379,15 +380,34 @@ MC.objectPicker = {
       const item = e.target.closest('.mc-typeahead-item');
       if (item) { e.preventDefault(); this._choose(item.dataset.val); }
     });
-    // any scroll (capture) or resize dismisses — the fixed menu would otherwise drift
-    window.addEventListener('scroll', () => this._hide(), true);
-    window.addEventListener('resize', () => this._hide());
+    // The menu is position:fixed, so on scroll/resize keep it pinned to the input
+    // instead of dismissing it. Two rules matter: a scroll INSIDE the menu (its
+    // own overflow list) must never close it, and typing near the bottom of the
+    // viewport (which scrolls the input into view) must not make it vanish —
+    // hence reflow, hiding only once the input itself leaves the viewport.
+    window.addEventListener('scroll', (e) => {
+      if (!this._menu || this._menu.classList.contains('d-none')) return;
+      // A scroll inside the menu's own list must not move/close it. e.target is
+      // the scrolled node, but a page scroll can report window (not a Node), so
+      // guard contains().
+      if (e.target instanceof Node && this._menu.contains(e.target)) return;
+      this._reflow();
+    }, true);
+    window.addEventListener('resize', () => this._reflow());
     this._menu = menu;
     return menu;
   },
 
   _choose(val) { if (this._onChoose) this._onChoose(val); },
-  _hide() { if (this._menu) this._menu.classList.add('d-none'); },
+  _hide() { if (this._menu) this._menu.classList.add('d-none'); this._activeInput = null; },
+
+  _reflow() {
+    const input = this._activeInput;
+    if (!input || !document.contains(input)) { this._hide(); return; }
+    const r = input.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) { this._hide(); return; }  // input off-screen
+    this._position(input);
+  },
 
   _position(input) {
     const r = input.getBoundingClientRect();
@@ -430,6 +450,7 @@ MC.objectPicker = {
           ? ` <span class="mc-objpick-label">${MC._escHtml(o.label)}</span>` : '') +
         `</div>`
       ).join('');
+      this._activeInput = input;
       this._position(input);
       menu.classList.remove('d-none');
     };
@@ -2606,7 +2627,12 @@ MC.isMock = () => document.querySelector('meta[name="show-mock"]')?.content === 
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof bootstrap === 'undefined') return;
   document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
-    new bootstrap.Popover(el, { trigger: el.dataset.bsTrigger || 'focus', html: false });
+    // Show info popovers on hover; keep 'focus' too so keyboard and touch users
+    // (no hover) can still open them by tabbing/tapping. A bare 'focus' trigger
+    // (the app-wide default for the ⓘ icons) is upgraded to 'hover focus'.
+    const declared = el.dataset.bsTrigger || 'focus';
+    const trigger = declared === 'focus' ? 'hover focus' : declared;
+    new bootstrap.Popover(el, { trigger, html: false });
   });
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
     new bootstrap.Tooltip(el);
