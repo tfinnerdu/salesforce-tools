@@ -219,6 +219,13 @@
     <div class="card-body">
       <div class="row g-2 align-items-end">
         <div class="col-sm-6 col-md-2">
+          <label for="fmMode" class="form-label small fw-semibold mb-1">What to migrate</label>
+          <select id="fmMode" class="form-select form-select-sm">
+            <option value="files">Files (ContentVersion)</option>
+            <option value="attachments">Attachments (legacy)</option>
+          </select>
+        </div>
+        <div class="col-sm-6 col-md-2">
           <label for="fmSource" class="form-label small fw-semibold mb-1">Source org</label>
           <select id="fmSource" class="form-select form-select-sm">
             {% for o in nav_orgs %}<option value="{{ o }}">{{ o }}</option>{% endfor %}

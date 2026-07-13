@@ -27,6 +27,19 @@ def _source_sf(cdl, cv):
     return sf
 
 
+def _attach_sf(attachments):
+    """SF double whose query_all answers the Attachment query."""
+    sf = MagicMock()
+
+    def q(soql):
+        if 'FROM Attachment' in soql:
+            return {'records': attachments}
+        return {'records': []}
+
+    sf.query_all.side_effect = q
+    return sf
+
+
 # ── build_plan (crosswalk mode) ───────────────────────────────────────────────
 
 def test_build_plan_crosswalk_maps_file_to_new_parent(tmp_path):
@@ -121,6 +134,55 @@ def test_build_plan_file_with_unmapped_parent_has_no_target(tmp_path):
     row = next(r for r in plan if r['doc_id'] == '069B')
     assert row['target_parents'] == []
     assert 'zzUNMAP12345678' in row['unresolved_parents']
+
+
+# ── build_plan (attachments mode) ─────────────────────────────────────────────
+
+def test_build_plan_attachments_maps_to_new_parent(tmp_path):
+    csv = tmp_path / 'map.csv'
+    # old→new Accommodation_Attachment__c record Ids (the attachment parents)
+    csv.write_text('old_id,new_id\na2MOLD123456789,a2MNEW123456789\n')
+    src = _attach_sf([
+        {'Id': '00PATT123456789', 'Name': 'scan.jpg', 'ContentType': 'application/jpeg',
+         'BodyLength': 253588, 'ParentId': 'a2MOLD123456789'},
+    ])
+    plan, resolved, unresolved, stats = fm.build_plan(
+        src, MagicMock(), MigrationConfig(id_map=str(csv), mode='attachments'))
+    assert stats['files_found'] == 1
+    assert plan[0]['meta']['title'] == 'scan.jpg'
+    assert plan[0]['meta']['content_type'] == 'application/jpeg'
+    assert plan[0]['target_parents'] == ['a2MNEW123456789']
+    assert plan[0]['oversize'] is False
+
+
+def test_execute_attachments_creates_on_new_parent():
+    plan = [{'doc_id': '00PATT', 'target_parents': ['a2MNEW123456789'],
+             'unresolved_parents': [], 'oversize': False,
+             'meta': {'id': '00PATT', 'title': 'scan.jpg', 'path': 'scan.jpg',
+                      'size': 1000, 'content_type': 'application/jpeg'}}]
+    target = MagicMock()
+    target.query_all.return_value = {'records': []}          # no existing attachment
+    target.Attachment.create.return_value = {'id': '00PNEW'}
+    fake_resp = MagicMock(content=b'bytes')
+    fake_resp.raise_for_status.return_value = None
+    with patch('services.file_migration.requests.get', return_value=fake_resp):
+        counts = fm.execute(MagicMock(), target, plan, mode='attachments')
+    assert counts['created'] == 1 and counts['linked'] == 1
+    target.Attachment.create.assert_called_once()
+    # ParentId of the created attachment is the NEW record
+    assert target.Attachment.create.call_args[0][0]['ParentId'] == 'a2MNEW123456789'
+
+
+def test_execute_attachments_reuses_existing():
+    plan = [{'doc_id': '00PATT', 'target_parents': ['a2MNEW123456789'],
+             'unresolved_parents': [], 'oversize': False,
+             'meta': {'id': '00PATT', 'title': 'scan.jpg', 'path': 'scan.jpg',
+                      'size': 1000, 'content_type': 'application/jpeg'}}]
+    target = MagicMock()
+    target.query_all.return_value = {'records': [{'Id': '00PEXIST'}]}   # already there
+    counts = fm.execute(MagicMock(), target, plan, mode='attachments')
+    assert counts['reused'] == 1 and counts['created'] == 0
+    target.Attachment.create.assert_not_called()
 
 
 # ── summarize / report_rows ───────────────────────────────────────────────────

@@ -46,6 +46,8 @@ class MigrationConfig:
     where: str = ''
     ids_file: str = ''
     max_mb: int = DEFAULT_MAX_MB
+    # 'files' = modern Files (ContentVersion); 'attachments' = legacy Attachment.
+    mode: str = 'files'
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────────────
@@ -217,6 +219,55 @@ def resolve_parents(source_sf, target_sf, cfg, parent_ids):
     return compose_parent_map(src_id_to_ext, ext_to_target_id)
 
 
+def gather_attachments(sf, parent_ids):
+    """Legacy Attachments hanging off the given parents (one row, one parent each)."""
+    out = []
+    for batch in chunked(parent_ids):
+        rows = _query_all(
+            sf, "SELECT Id, Name, ContentType, BodyLength, ParentId FROM Attachment "
+                f"WHERE ParentId IN ({soql_in_list(batch)})")
+        for r in rows:
+            if r.get('Id') and r.get('ParentId'):
+                out.append({
+                    'id': r['Id'],
+                    'name': r.get('Name') or 'attachment',
+                    'content_type': r.get('ContentType') or '',
+                    'size': r.get('BodyLength') or 0,
+                    'parent': r['ParentId'],
+                })
+    return out
+
+
+def download_attachment_body(sf, att_id):
+    """Stream a legacy Attachment's bytes from the source org."""
+    url = f"{sf.base_url}sobjects/Attachment/{att_id}/Body"
+    resp = requests.get(url, headers={'Authorization': f'Bearer {sf.session_id}'},
+                        timeout=120)
+    resp.raise_for_status()
+    return resp.content
+
+
+def existing_target_attachment(target_sf, parent_id, name):
+    """True if the target parent already has an Attachment of this name (idempotency)."""
+    rows = _query_all(
+        target_sf, "SELECT Id FROM Attachment "
+                   f"WHERE ParentId = '{escape_soql(parent_id)}' "
+                   f"AND Name = '{escape_soql(name)}'")
+    return bool(rows)
+
+
+def insert_attachment(target_sf, meta, data, parent_id):
+    """Create a legacy Attachment on the target parent from bytes."""
+    payload = {
+        'Name': meta['title'],
+        'Body': base64.b64encode(data).decode('ascii'),
+        'ParentId': parent_id,
+    }
+    if meta.get('content_type'):
+        payload['ContentType'] = meta['content_type']
+    target_sf.Attachment.create(payload)
+
+
 def download_version_data(sf, cv_id):
     """Stream a file's bytes from the source org (no local staging)."""
     url = f"{sf.base_url}sobjects/ContentVersion/{cv_id}/VersionData"
@@ -308,9 +359,17 @@ def build_plan(source_sf, target_sf, cfg):
     if not parent_ids:
         return [], {}, {}, {'parents_in_scope': 0, 'links_found': 0, 'files_found': 0}
 
-    links, files = gather_files(source_sf, parent_ids)
+    # Resolve parents up front (external-Id mode defers until the scope is known).
     if resolved is None:
         resolved, unresolved = resolve_parents(source_sf, target_sf, cfg, parent_ids)
+
+    max_bytes = cfg.max_mb * 1024 * 1024
+
+    if getattr(cfg, 'mode', 'files') == 'attachments':
+        return _plan_attachments(source_sf, parent_ids, resolved, unresolved, max_bytes)
+
+    # Files (ContentVersion) mode.
+    links, files = gather_files(source_sf, parent_ids)
     logger.info('Files: %d unique across %d link(s). Parents resolved: %d, unresolved: %d.',
                 len(files), len(links), len(resolved), len(unresolved))
     stats = {'parents_in_scope': len(parent_ids), 'links_found': len(links),
@@ -319,8 +378,6 @@ def build_plan(source_sf, target_sf, cfg):
     by_doc = {}
     for lk in links:
         by_doc.setdefault(lk['doc'], []).append(lk['parent'])
-
-    max_bytes = cfg.max_mb * 1024 * 1024
     plan = []
     for doc_id, src_parents in by_doc.items():
         meta = files.get(doc_id)
@@ -335,6 +392,27 @@ def build_plan(source_sf, target_sf, cfg):
             'unresolved_parents': skipped,
             'oversize': meta['size'] > max_bytes,
         })
+    return plan, resolved, unresolved, stats
+
+
+def _plan_attachments(source_sf, parent_ids, resolved, unresolved, max_bytes):
+    """Plan a legacy-Attachment migration: one row per Attachment (single parent each)."""
+    items = gather_attachments(source_sf, parent_ids)
+    logger.info('Attachments: %d across %d parent(s). Parents resolved: %d.',
+                len(items), len(parent_ids), len(resolved))
+    plan = []
+    for a in items:
+        new_parent = resolved.get(a['parent'])
+        plan.append({
+            'doc_id': a['id'],
+            'meta': {'id': a['id'], 'title': a['name'], 'path': a['name'],
+                     'size': a['size'], 'content_type': a['content_type']},
+            'target_parents': [new_parent] if new_parent else [],
+            'unresolved_parents': [] if new_parent else [a['parent']],
+            'oversize': a['size'] > max_bytes,
+        })
+    stats = {'parents_in_scope': len(parent_ids), 'links_found': len(items),
+             'files_found': len(items)}
     return plan, resolved, unresolved, stats
 
 
@@ -375,13 +453,14 @@ def report_rows(plan):
     return out
 
 
-def execute(source_sf, target_sf, plan):
+def execute(source_sf, target_sf, plan, mode='files'):
     """Perform the migration for a plan (idempotent). Returns counts.
 
-    Skip if oversize or no parent resolved; reuse the target ContentDocument if
-    this source file was already migrated (stamp match); otherwise stream the
-    bytes from source and insert into target. Then link the (new or reused)
-    document to every resolved target parent.
+    Skip rows that are oversize or have no resolved parent. In 'files' mode:
+    reuse the target ContentDocument if this source file was already migrated
+    (stamp match), else stream + insert, then link to every resolved parent. In
+    'attachments' mode: one legacy Attachment per row, created directly on the
+    resolved parent (skipped if the parent already has one of that name).
     """
     created = linked = skipped = reused = 0
     for row in plan:
@@ -389,6 +468,18 @@ def execute(source_sf, target_sf, plan):
         if row['oversize'] or not targets:
             skipped += 1
             continue
+
+        if mode == 'attachments':
+            new_parent = targets[0]
+            if existing_target_attachment(target_sf, new_parent, meta['title']):
+                reused += 1
+                continue
+            data = download_attachment_body(source_sf, meta['id'])
+            insert_attachment(target_sf, meta, data, new_parent)
+            created += 1
+            linked += 1
+            continue
+
         doc_id = existing_target_doc(target_sf, meta['id'])
         if doc_id:
             reused += 1

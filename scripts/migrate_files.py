@@ -75,6 +75,8 @@ def main(argv=None):
                     'at your migration spreadsheet.')
     ap.add_argument('--map-old-col', default='old_id', help='crosswalk column with the source Id')
     ap.add_argument('--map-new-col', default='new_id', help='crosswalk column with the target Id')
+    ap.add_argument('--mode', choices=['files', 'attachments'], default='files',
+                    help="'files' = modern Files (ContentVersion); 'attachments' = legacy Attachment")
     ap.add_argument('--max-mb', type=int, default=DEFAULT_MAX_MB,
                     help=f'flag files larger than this many MB (default {DEFAULT_MAX_MB})')
     ap.add_argument('--report', default='file_migration_report.csv', help='CSV report path')
@@ -114,7 +116,7 @@ def main(argv=None):
         return 0
 
     logger.info('\nCOMMIT — writing to %s …', cfg.target)
-    counts = execute(source_sf, target_sf, plan)
+    counts = execute(source_sf, target_sf, plan, cfg.mode)
     logger.info('Done. created=%(created)d reused=%(reused)d linked=%(linked)d skipped=%(skipped)d',
                 counts)
     return 0

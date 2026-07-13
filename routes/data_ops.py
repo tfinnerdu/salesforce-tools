@@ -133,11 +133,13 @@ def _file_migration_cfg(tmp_path):
         max_mb = int(body.get('max_mb', DEFAULT_MAX_MB))
     except (TypeError, ValueError):
         max_mb = DEFAULT_MAX_MB
+    mode = body.get('mode', 'files').strip()
     return MigrationConfig(
         id_map=tmp_path,
         map_old_col=body.get('map_old_col', 'old_id').strip() or 'old_id',
         map_new_col=body.get('map_new_col', 'new_id').strip() or 'new_id',
         max_mb=max_mb,
+        mode=mode if mode in ('files', 'attachments') else 'files',
     )
 
 
@@ -177,7 +179,7 @@ def _run_file_migration(commit):
             'committed': False,
         }
         if commit:
-            data['counts'] = file_migration.execute(source_sf, target_sf, plan)
+            data['counts'] = file_migration.execute(source_sf, target_sf, plan, cfg.mode)
             data['committed'] = True
         return jsonify({'success': True, 'data': data})
     finally:

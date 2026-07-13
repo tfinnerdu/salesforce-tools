@@ -77,13 +77,15 @@ services/            Business logic, one module per feature
   key_map.py               Source → SF Key Map engine: FK resolution +
                            family routing + variant fanout (preview-only)
   ingest.py                Source ingestion → list[dict] (inline/json/csv/sql)
-  file_migration.py        Org→org File (ContentVersion) migrator: stream
-                           VersionData source→target (no local staging), relink
-                           parents by an old→new crosswalk or external-ID
-                           resolution. Engine for the CLI (scripts/migrate_files.py)
-                           + the Data Ops file-migration card; build_plan is
-                           dry-run, execute writes (idempotent via
-                           ExternalDocumentInfo1 stamp)
+  file_migration.py        Org→org file migrator (two modes): 'files'
+                           (ContentVersion, relinked via ContentDocumentLink) or
+                           'attachments' (legacy Attachment, re-created on the new
+                           parent). Streams bytes source→target (no local
+                           staging), remaps parents by an old→new crosswalk or
+                           external-ID resolution. Engine for the CLI
+                           (scripts/migrate_files.py) + the Data Ops
+                           file-migration card; build_plan is dry-run, execute
+                           writes (idempotent)
   sqlserver.py             Shared SQL Server connection (Colleague backend,
                            MS ODBC driver — no Devart in the app)
   cli_metadata.py          CLI tab: describe-driven object/field lists (read-only)

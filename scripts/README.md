@@ -24,6 +24,23 @@ external-Id field (e.g. `SIS_ID__c`) across the two orgs.
   orgs. That field is how old parent Id → new parent Id is resolved.
 - The running user can create Files in the target org (Content permissions).
 
+### Files vs Attachments (`--mode`)
+
+Salesforce has two file systems, and this migrates either:
+
+- **`--mode files`** (default) — modern **Files** (`ContentVersion` / `ContentDocument`),
+  linked to records via `ContentDocumentLink`. Streams `VersionData`, re-inserts,
+  relinks.
+- **`--mode attachments`** — legacy **`Attachment`** records (the ones in a record's
+  *Notes & Attachments* related list). Streams each `Attachment.Body` and re-creates
+  it on the remapped parent. One attachment has exactly one parent, so the crosswalk
+  must map the **object the attachment hangs off** (old→new).
+
+Not sure which you have? In the source org, an attachment shows up under a record's
+*Notes & Attachments* list and as an `Attachment` row (`00P…` Id); a File shows under
+*Files* and as `ContentDocumentLink`. (Reading either requires the integration user to
+have **Query All Files** / **View All Data** in the source org.)
+
 ### Two ways to remap parents
 
 Both answer the same question — "which target record is this source record's file

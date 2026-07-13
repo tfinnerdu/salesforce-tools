@@ -34,7 +34,7 @@ def _patch(monkeypatch, counts=None):
         _FAKE_PLAN, {}, {},
         {'parents_in_scope': 1, 'links_found': 1, 'files_found': 1}))
     if counts is not None:
-        monkeypatch.setattr(fm, 'execute', lambda s, t, p: counts)
+        monkeypatch.setattr(fm, 'execute', lambda s, t, p, mode='files': counts)
 
 
 def test_plan_dry_run_envelope(client, monkeypatch):

@@ -1275,7 +1275,7 @@ MC.backup = {
 MC.fileMigration = {
   _dryRunOk: false,
   _snapshot: '',
-  _fields: ['fmSource', 'fmTarget', 'fmOldCol', 'fmNewCol', 'fmMaxMb', 'fmCsv'],
+  _fields: ['fmMode', 'fmSource', 'fmTarget', 'fmOldCol', 'fmNewCol', 'fmMaxMb', 'fmCsv'],
 
   init() {
     const src = document.getElementById('fmSource');
@@ -1310,6 +1310,7 @@ MC.fileMigration = {
 
   _formData() {
     const fd = new FormData();
+    fd.append('mode', document.getElementById('fmMode').value);
     fd.append('source', document.getElementById('fmSource').value);
     fd.append('target', document.getElementById('fmTarget').value);
     fd.append('map_old_col', document.getElementById('fmOldCol').value.trim());
