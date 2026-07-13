@@ -209,7 +209,6 @@
     <Content Include="static\js\mc-deploy-snippet.js" />
     <Content Include="static\js\mc-impact-snippet.js" />
     <Content Include="static\js\mc-key-map-snippet.js" />
-    <Content Include="static\js\mc-logs-snippet.js" />
     <Content Include="static\js\mc-migration-snippet.js" />
     <Content Include="static\js\mc-observe-snippet.js" />
     <Content Include="static\js\mc-scenarios-snippet.js" />
