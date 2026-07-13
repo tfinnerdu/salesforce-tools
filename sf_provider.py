@@ -734,14 +734,26 @@ class MockSalesforce:
             return _build_describe(obj_name)
 
         if 'sobjects' in path_lower and 'describe' not in path_lower:
-            # DescribeGlobal
-            return {
-                'sobjects': [
-                    {'name': o, 'label': o, 'queryable': True, 'custom': o.endswith('__c')}
-                    for o in ['Account', 'ContactPointEmail', 'ContactPointPhone',
-                               'ContactPointAddress', 'IndividualApplication', 'Opportunity']
-                ]
-            }
+            # DescribeGlobal. `layoutable` is the "can add custom fields" proxy;
+            # the system objects below are queryable but NOT layoutable, so the
+            # object picker offers them for describe/SOQL but hides them from the
+            # CLI field builder (mirrors real ContentDocumentLink / ContentNote).
+            customizable = ['Account', 'ContactPointEmail', 'ContactPointPhone',
+                            'ContactPointAddress', 'IndividualApplication',
+                            'Opportunity', 'Case']
+            system = ['ContentDocumentLink', 'ContentNote']
+            sobjects = [
+                {'name': o, 'label': o, 'queryable': True, 'custom': o.endswith('__c'),
+                 'layoutable': True, 'createable': True, 'updateable': True,
+                 'deletable': True}
+                for o in customizable
+            ] + [
+                {'name': o, 'label': o, 'queryable': True, 'custom': False,
+                 'layoutable': False, 'createable': True, 'updateable': False,
+                 'deletable': True}
+                for o in system
+            ]
+            return {'sobjects': sobjects}
 
         if 'limits' in path_lower and 'sobjects' not in path_lower and 'query' not in path_lower:
             return self._mock_limits()

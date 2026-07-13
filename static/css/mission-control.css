@@ -884,6 +884,29 @@ a {
   color: #fff;
 }
 
+/* Shared object picker — one body-level menu positioned (fixed) under the
+   focused input by MC.objectPicker, so it escapes card/overflow clipping. */
+.mc-objpick-menu {
+  position: fixed;
+  z-index: 1080;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+.mc-objpick-label {
+  color: #6c757d;
+  font-family: var(--bs-font-sans-serif, sans-serif);
+  font-size: 0.75rem;
+  margin-left: 0.4rem;
+}
+.mc-objpick-menu .mc-typeahead-item.active .mc-objpick-label,
+.mc-objpick-menu .mc-typeahead-item:hover .mc-objpick-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 /* ── CLI tab: copyable command boxes ─────────────────────────────────────── */
 .mc-code {
   position: relative;

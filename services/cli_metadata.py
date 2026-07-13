@@ -24,7 +24,18 @@ def list_objects(org: str = 'dev') -> list:
 
 
 def list_objects_from(sf) -> list:
-    """Object list from an injected SF client (see list_objects)."""
+    """Object list from an injected SF client (see list_objects).
+
+    Each object carries the DescribeGlobal capability flags the shared object
+    picker filters on, so one call to `/meta/objects` can be scoped per context
+    (SOQL wants ``queryable``; the CLI field builder wants ``customizable`` —
+    i.e. ``layoutable`` — so system objects like ContentDocumentLink / ContentNote
+    that reject custom fields never appear where they'd only fail on deploy).
+    ``layoutable`` is the reliable DescribeGlobal proxy for "can add custom
+    fields": it's true for custom objects and standard objects with page
+    layouts, and false for relationship/system objects (ContentDocumentLink,
+    ContentNote, ``*__Share``, ``*__History`` …).
+    """
     result = sf.restful('sobjects') or {}
     objs = [
         {
@@ -32,6 +43,10 @@ def list_objects_from(sf) -> list:
             'label': s.get('label') or s.get('name'),
             'custom': bool(s.get('custom', False)),
             'queryable': bool(s.get('queryable', True)),
+            'layoutable': bool(s.get('layoutable', True)),
+            'createable': bool(s.get('createable', True)),
+            'updateable': bool(s.get('updateable', True)),
+            'deletable': bool(s.get('deletable', True)),
         }
         for s in result.get('sobjects', [])
         if s.get('name')

@@ -554,7 +554,7 @@ Samples up to 40 fields on any object and reports how many records have data in 
 
 Generates a full field catalog for any Salesforce object with complete metadata for every field.
 
-**How to use it:** Enter the Object API Name and click **Generate**. Click **Export CSV** to download as a spreadsheet.
+**How to use it:** Start typing in the **SObject Name** box — it autocompletes against the selected org's objects (the same searchable picker used across the app) — pick one and click **Generate**. Click **Export CSV** to download as a spreadsheet. Every object box in Mission Control now works this way; each is scoped to what makes sense for that tab (Data Dictionary lists everything you can describe; SOQL lists queryable objects; the CLI field builder lists only objects that accept custom fields).
 
 **Output columns:** Field Name · Label · Type · Length · Required · Unique · External ID · Formula · Picklist Values · Help Text · Description
 
@@ -1420,7 +1420,12 @@ Every command box has a **Copy** button.
 
 ### 2. Build fields
 
-- Pick an **Object** (the dropdown is loaded live from the selected org).
+- Pick an **Object** (the dropdown is loaded live from the selected org). It
+  only lists objects that **accept custom fields** — system/relationship objects
+  like `ContentDocumentLink`, `ContentNote`, `*__Share` and `*__History` are
+  hidden here, because Salesforce rejects custom fields on them (they'd fail on
+  deploy). They still appear in the Command composer and Data Dictionary, where
+  describing/querying them is valid.
 - Choose the **Operation:**
   - **Create new field** — you're adding a brand-new field.
   - **Edit existing field (flip to External ID)** — you're turning an existing field into an External ID. Pick the field from the **Existing field** dropdown; its current settings prefill so the redeploy doesn't wipe them.

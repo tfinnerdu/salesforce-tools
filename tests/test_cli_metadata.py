@@ -65,6 +65,40 @@ def test_list_objects_wrapper_uses_get_sf():
     assert any(o['name'] == 'Student_Advisement__c' and o['custom'] for o in objs)
 
 
+def test_list_objects_carries_capability_flags():
+    """The shared picker filters on these; a non-layoutable system object (like
+    ContentDocumentLink) must be reported so the CLI field builder can hide it."""
+    sf = _sf({'sobjects': {'sobjects': [
+        {'name': 'Account', 'label': 'Account', 'queryable': True,
+         'layoutable': True, 'createable': True, 'updateable': True,
+         'deletable': True},
+        {'name': 'ContentDocumentLink', 'label': 'Content Document Link',
+         'queryable': True, 'layoutable': False, 'createable': True,
+         'updateable': False, 'deletable': True},
+    ]}})
+    objs = {o['name']: o for o in cli_metadata.list_objects_from(sf)}
+    acct = objs['Account']
+    assert acct['layoutable'] is True and acct['updateable'] is True
+    cdl = objs['ContentDocumentLink']
+    assert cdl['queryable'] is True          # still describable / queryable
+    assert cdl['layoutable'] is False        # but NOT a custom-field target
+    assert cdl['updateable'] is False
+
+
+def test_list_objects_defaults_missing_flags_true():
+    """Flags absent from an older describe payload default to permissive True so
+    the picker never silently hides an object it lacks metadata for."""
+    sf = _sf({'sobjects': {'sobjects': [
+        {'name': 'Legacy__c', 'label': 'Legacy'},  # no capability flags at all
+    ]}})
+    obj = cli_metadata.list_objects_from(sf)[0]
+    assert obj['queryable'] is True
+    assert obj['layoutable'] is True
+    assert obj['createable'] is True
+    assert obj['updateable'] is True
+    assert obj['deletable'] is True
+
+
 # ── describe_fields ───────────────────────────────────────────────────────────
 
 def test_describe_fields_from_returns_expected_shape():

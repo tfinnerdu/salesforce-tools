@@ -225,6 +225,33 @@ line to stdout (the Argo-visible notification). A non-clean run returns HTTP 500
 so `curl -f` fails and Argo flags the workflow. Blank `SCHEDULER_TOKEN` disables
 scheduled runs entirely.
 
+## Shared object picker
+
+Every tab's "which SObject?" input is fed from **one** describe-driven source
+instead of each tab hardcoding, freetext-ing, or re-querying its own list.
+`GET /meta/objects` (`routes/meta.py`, backed by `services/cli_metadata.py`)
+returns the org's full SObject list plus DescribeGlobal capability flags
+(`queryable` / `layoutable` / `createable` / `updateable` / `deletable`).
+`MC.objectPicker` (in `mission-control.js`) fetches that once per org (cached),
+renders a searchable body-level typeahead, and **filters per context** so an
+object only appears where the action can actually succeed:
+
+- `all` — describe/read (Data Dictionary, FLS read, schema diff)
+- `queryable` — SOQL Workbench, FK lookups, record inspector
+- `customizable` (= `layoutable`) — the CLI **field builder**, so system objects
+  that reject custom fields (`ContentDocumentLink`, `ContentNote`, `*__Share`,
+  `*__History`) never appear where they'd only fail on deploy
+- `createable` / `updateable` / `deletable` — Data Ops DML by operation
+
+Wire declaratively, mirroring `data-mc-confirm`: add
+`data-mc-objpick="<capability>"` to any `<input>` and the global
+`MC.objectPicker.autowire()` (DOMContentLoaded) attaches it. Special widgets
+(Join Builder's SF-object field, Org Diff's tag multi-add) call
+`MC.objectPicker.attach(id, {capability, onSelect})` directly. The input stays
+free-typeable — the picker is assistive, not restrictive, so an object the
+describe doesn't return can still be typed by hand. The org picker reloads the
+page on change, so the per-org cache needs no explicit invalidation.
+
 ## Confirmation dialogs
 
 Every state-changing UI action (SF writes, bulk DML, Conductor reruns, trigger-bypass changes, log/trace-flag deletes) is gated by a confirmation modal. The shared primitive is `MC.confirm()` in `mission-control.js`; most buttons opt in declaratively via a `data-mc-confirm` attribute, intercepted by a capture-phase guard. Conditional cases (anonymizer live run, bulk-update live run) call `MC.confirm()` directly.

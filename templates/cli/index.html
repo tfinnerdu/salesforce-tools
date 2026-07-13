@@ -199,7 +199,7 @@
         </div>
         <div class="col-md-3">
           <label for="cliFlsObject" class="form-label fw-semibold small mb-1">Reference object</label>
-          <input type="text" id="cliFlsObject" class="form-control form-control-sm" placeholder="e.g. Case" autocomplete="off">
+          <input type="text" id="cliFlsObject" data-mc-objpick="all" class="form-control form-control-sm" placeholder="e.g. Case" autocomplete="off">
         </div>
         <div class="col-md-4">
           <label for="cliFlsField" class="form-label fw-semibold small mb-1">Reference field</label>
@@ -227,7 +227,7 @@
           Existing fields <span class="text-muted fw-normal">(optional &mdash; fields that already exist and only need visibility)</span>
         </label>
         <div class="d-flex gap-2 mb-1">
-          <input id="cliExistingObj" class="form-control form-control-sm" style="max-width:220px" placeholder="object, e.g. Case" autocomplete="off">
+          <input id="cliExistingObj" data-mc-objpick="customizable" class="form-control form-control-sm" style="max-width:220px" placeholder="object, e.g. Case" autocomplete="off">
           <button id="btnLoadExistingFields" type="button" class="btn btn-outline-secondary btn-sm text-nowrap">Load custom fields</button>
         </div>
         <textarea id="cliExistingFields" class="form-control form-control-sm" rows="3"

@@ -22,6 +22,7 @@ from routes.dashboard import dashboard_bp
 from routes.scenarios import scenarios_bp
 from routes.key_map import key_map_bp
 from routes.cli import cli_bp
+from routes.meta import meta_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +51,7 @@ def create_app() -> Flask:
     app.register_blueprint(scenarios_bp)
     app.register_blueprint(key_map_bp)
     app.register_blueprint(cli_bp)
+    app.register_blueprint(meta_bp)
 
     @app.before_request
     def _ensure_active_org():

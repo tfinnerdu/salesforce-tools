@@ -330,6 +330,140 @@ MC.sfObjectLink = (objectApiName) => {
 };
 
 
+// ── Shared object picker ──────────────────────────────────────────────────────
+// One searchable, describe-driven object typeahead for every tab. Backed by the
+// shared /meta/objects call (cached per org) and filtered per context via a
+// capability so an object only appears where the action can succeed:
+//   'all'          — describe/read (Data Dictionary, FLS read) — everything
+//   'queryable'    — SOQL Workbench, FK lookups
+//   'customizable' — CLI field builder (layoutable): hides ContentDocumentLink,
+//                    ContentNote, *__Share/*__History that reject custom fields
+//   'createable' / 'updateable' / 'deletable' — Data Ops DML by operation
+// Attach with MC.objectPicker.attach('inputId', {capability, onSelect}). The
+// input stays free-typeable (assistive, not restrictive), so an object the
+// describe doesn't return can still be entered by hand.
+MC.objectPicker = {
+  _cache: {},          // org -> Promise<array of {name,label,queryable,layoutable,...}>
+  _menu: null,
+  _onChoose: null,
+  _activeIdx: -1,
+
+  _list(org) {
+    if (!this._cache[org]) {
+      this._cache[org] = MC.api('/meta/objects')
+        .then(d => d || [])
+        .catch(err => { delete this._cache[org]; throw err; });
+    }
+    return this._cache[org];
+  },
+
+  _cap(o, cap) {
+    switch (cap) {
+      case 'queryable':    return o.queryable   !== false;
+      case 'customizable': return o.layoutable  !== false;
+      case 'createable':   return o.createable  !== false;
+      case 'updateable':   return o.updateable  !== false;
+      case 'deletable':    return o.deletable   !== false;
+      default:             return true;               // 'all'
+    }
+  },
+
+  _ensureMenu() {
+    if (this._menu) return this._menu;
+    const menu = document.createElement('div');
+    menu.className = 'mc-objpick-menu d-none';
+    menu.setAttribute('role', 'listbox');
+    document.body.appendChild(menu);
+    // mousedown (not click) so it fires before the input's blur
+    menu.addEventListener('mousedown', (e) => {
+      const item = e.target.closest('.mc-typeahead-item');
+      if (item) { e.preventDefault(); this._choose(item.dataset.val); }
+    });
+    // any scroll (capture) or resize dismisses — the fixed menu would otherwise drift
+    window.addEventListener('scroll', () => this._hide(), true);
+    window.addEventListener('resize', () => this._hide());
+    this._menu = menu;
+    return menu;
+  },
+
+  _choose(val) { if (this._onChoose) this._onChoose(val); },
+  _hide() { if (this._menu) this._menu.classList.add('d-none'); },
+
+  _position(input) {
+    const r = input.getBoundingClientRect();
+    const menu = this._menu;
+    menu.style.top = `${r.bottom + 2}px`;
+    menu.style.left = `${r.left}px`;
+    menu.style.width = `${r.width}px`;
+  },
+
+  attach(inputId, opts = {}) {
+    const input = document.getElementById(inputId);
+    if (!input || input.dataset.objpick) return;      // idempotent
+    input.dataset.objpick = '1';
+    input.setAttribute('autocomplete', 'off');
+    const cap = opts.capability || 'all';
+
+    const render = async () => {
+      let objs;
+      try { objs = await this._list(MC.activeOrg()); }
+      catch (_) { return; }                            // leave as plain free-text on failure
+      const q = input.value.trim().toLowerCase();
+      const matches = objs
+        .filter(o => this._cap(o, cap))
+        .filter(o => !q || o.name.toLowerCase().includes(q) ||
+                            (o.label || '').toLowerCase().includes(q))
+        .slice(0, 50);
+      const menu = this._ensureMenu();
+      if (matches.length === 0) { this._hide(); return; }
+      this._activeIdx = -1;
+      this._onChoose = (val) => {
+        input.value = val;
+        this._hide();
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        if (opts.onSelect) opts.onSelect(val);
+      };
+      menu.innerHTML = matches.map(o =>
+        `<div class="mc-typeahead-item" data-val="${MC._escHtml(o.name)}">` +
+        `${MC._escHtml(o.name)}` +
+        (o.label && o.label !== o.name
+          ? ` <span class="mc-objpick-label">${MC._escHtml(o.label)}</span>` : '') +
+        `</div>`
+      ).join('');
+      this._position(input);
+      menu.classList.remove('d-none');
+    };
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', () => setTimeout(() => this._hide(), 150));
+    input.addEventListener('keydown', (e) => {
+      const menu = this._menu;
+      if (!menu || menu.classList.contains('d-none')) return;
+      const items = Array.from(menu.querySelectorAll('.mc-typeahead-item'));
+      if (items.length === 0) return;
+      if (e.key === 'ArrowDown')      { e.preventDefault(); this._activeIdx = Math.min(this._activeIdx + 1, items.length - 1); }
+      else if (e.key === 'ArrowUp')   { e.preventDefault(); this._activeIdx = Math.max(this._activeIdx - 1, 0); }
+      else if (e.key === 'Enter')     { if (this._activeIdx >= 0) { e.preventDefault(); e.stopImmediatePropagation(); this._choose(items[this._activeIdx].dataset.val); } return; }
+      else if (e.key === 'Escape')    { this._hide(); return; }
+      else return;
+      items.forEach((el, i) => el.classList.toggle('active', i === this._activeIdx));
+      items[this._activeIdx]?.scrollIntoView({ block: 'nearest' });
+    });
+  },
+
+  // Declarative wiring: any <input data-mc-objpick="<capability>"> gets the
+  // picker automatically (mirrors the app's data-mc-confirm pattern). Empty or
+  // missing value defaults to 'all'. Idempotent, so safe to call more than once.
+  autowire(root = document) {
+    root.querySelectorAll('[data-mc-objpick]').forEach(el => {
+      if (!el.id) return;
+      this.attach(el.id, { capability: el.dataset.mcObjpick || 'all' });
+    });
+  },
+};
+
+
 // ── Readiness ─────────────────────────────────────────────────────────────────
 
 MC.readiness = {
@@ -1338,10 +1472,13 @@ MC.soql = {
     const loadingEl = document.getElementById('objectListLoading');
     if (loadingEl) loadingEl.classList.remove('d-none');
     try {
-      const data = await MC.api('/soql/objects');
-      this._objects = (data.sobjects || data || []).map(o =>
-        typeof o === 'string' ? { name: o, label: o } : o
-      );
+      // Shared object source (/meta/objects); SOQL can only query queryable
+      // objects, so keep that scope here — the sidebar stays correct while
+      // every tab reads from one call.
+      const data = await MC.api('/meta/objects');
+      this._objects = (data.sobjects || data || [])
+        .map(o => typeof o === 'string' ? { name: o, label: o } : o)
+        .filter(o => o.queryable !== false);
       if (listEl) {
         listEl.innerHTML = this._objects.map(o =>
           `<div class="object-explorer-item" data-name="${MC._escHtml(o.name)}"
@@ -1739,6 +1876,17 @@ MC.orgDiff = {
   init() {
     document.getElementById('btnRunDiff')?.addEventListener('click', () => this.run());
     document.getElementById('btnResetObjects')?.addEventListener('click', () => this._resetObjects());
+    // Attach the shared picker first (so its keydown runs before the tag input's
+    // Enter handler); picking a suggestion adds it as a chip. Schema diff works
+    // on any object, so 'all'.
+    MC.objectPicker.attach('objectTagInput', {
+      capability: 'all',
+      onSelect: (val) => {
+        this._addObject(val);
+        const input = document.getElementById('objectTagInput');
+        if (input) input.value = '';
+      },
+    });
     this._initTagInput();
   },
 
@@ -1914,7 +2062,6 @@ MC.orgDiff = {
 // ── Join Builder ──────────────────────────────────────────────────────────────
 
 MC.joinBuilder = {
-  _sfObjects: [],
   _sqlTables: [],
 
   init() {
@@ -1925,7 +2072,9 @@ MC.joinBuilder = {
       const sql = document.getElementById('generatedSql')?.textContent || '';
       MC.copyToClipboard(sql);
     });
-    this._attachTypeahead('sfObject', 'sfObjectMenu', () => this._sfObjects);
+    // SF object side uses the shared picker (queryable — a join reads records);
+    // the SQL table side keeps its own typeahead (SQL Server tables, not SF).
+    MC.objectPicker.attach('sfObject', { capability: 'queryable' });
     this._attachTypeahead('sqlTable', 'sqlTableMenu', () => this._sqlTables);
     this.loadSfObjects();
     this.loadSqlSchema();
@@ -2002,12 +2151,13 @@ MC.joinBuilder = {
   // ── Typeahead data sources ──────────────────────────────────────────────────
 
   async loadSfObjects() {
+    // Reuse the shared picker's cached /meta/objects list (no duplicate fetch)
+    // just to show the queryable-object count under the field.
     const status = document.getElementById('sfObjectStatus');
     try {
-      const objects = await MC.api('/data-ops/sf-objects') || [];
-      const names = objects.map(o => (typeof o === 'string' ? o : (o.name || ''))).filter(Boolean);
-      this._sfObjects = names;
-      if (status) status.textContent = `${names.length.toLocaleString()} objects — type to filter.`;
+      const objs = (await MC.objectPicker._list(MC.activeOrg()))
+        .filter(o => o.queryable !== false);
+      if (status) status.textContent = `${objs.length.toLocaleString()} objects — type to filter.`;
     } catch (err) {
       if (status) status.textContent = 'Could not load objects: ' + err.message;
     }
@@ -2427,6 +2577,9 @@ MC.settings = {
 
 
 // ── Org Switcher (navbar) ─────────────────────────────────────────────────────
+
+// Attach the shared object picker to every declarative [data-mc-objpick] input.
+document.addEventListener('DOMContentLoaded', () => MC.objectPicker.autowire());
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('orgPicker')?.addEventListener('change', async (e) => {

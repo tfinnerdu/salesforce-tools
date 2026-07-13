@@ -377,10 +377,15 @@ MC.cli = {
     const sel = document.getElementById('cliObject');
     try {
       const objs = await MC.api('/cli/objects');
-      const opts = '<option value="">Select an object…</option>' +
-        objs.map(o => `<option value="${MC._escHtml(o.name)}">${MC._escHtml(o.name)}${o.label && o.label !== o.name ? ` — ${MC._escHtml(o.label)}` : ''}</option>`).join('');
-      sel.innerHTML = opts;
-      document.getElementById('cliRecipeObject').innerHTML = opts;  // composer shares the object list
+      const optionsFor = (list) => '<option value="">Select an object…</option>' +
+        list.map(o => `<option value="${MC._escHtml(o.name)}">${MC._escHtml(o.name)}${o.label && o.label !== o.name ? ` — ${MC._escHtml(o.label)}` : ''}</option>`).join('');
+      // Field builder: only objects that accept custom fields (layoutable) —
+      // hides ContentDocumentLink / ContentNote / *__Share, which reject custom
+      // fields and only fail on deploy.
+      sel.innerHTML = optionsFor(objs.filter(o => o.layoutable !== false));
+      // Command composer describes/queries — any object is valid there, so it
+      // keeps the full list.
+      document.getElementById('cliRecipeObject').innerHTML = optionsFor(objs);
     } catch (err) {
       sel.innerHTML = '<option value="">Failed to load objects</option>';
       MC.showToast(`Could not load objects: ${err.message}`, 'danger');
