@@ -303,10 +303,16 @@ def api_generate():
     username = get_org_config(_org()).get('username', '')
     layout_name = (payload.get('layout_name') or '').strip()
     rt_name = (payload.get('recordtype_name') or '').strip()
+    # Retrieve from a source org (e.g. EDA), deploy to the target Alias. Blank
+    # retrieve-alias falls back to the target alias (single-org case).
+    layout_retrieve_alias = (payload.get('layout_retrieve_alias') or '').strip() or alias
+    rt_retrieve_alias = (payload.get('rt_retrieve_alias') or '').strip() or alias
 
     assign_entries = [{'name': permset_name, 'username': username}]
     for h in humans:
-        assign_entries.append({'name': h['api_name'], 'username': '<staff-username>'})
+        # Default the visibility permset to the same integration username (a real,
+        # runnable value) — the admin edits it if it should go to staff instead.
+        assign_entries.append({'name': h['api_name'], 'username': username or '<staff-username>'})
 
     return ok({
         'install': cli_script.install_snippet(),
@@ -327,10 +333,10 @@ def api_generate():
         'has_flips': bool(flip_fields),
         'has_human_permset': bool(humans),
         'has_new_objects': bool(object_names),
-        'layout_list': cli_script.layout_list_snippet(alias),
-        'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, alias),
+        'layout_list': cli_script.layout_list_snippet(layout_retrieve_alias),
+        'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, layout_retrieve_alias),
         'layout_deploy': cli_script.layout_deploy_snippet(layout_name, alias, dry_run=False),
-        'recordtype_retrieve': cli_script.recordtype_retrieve_snippet(rt_name, alias),
+        'recordtype_retrieve': cli_script.recordtype_retrieve_snippet(rt_name, rt_retrieve_alias),
         'recordtype_deploy': cli_script.recordtype_deploy_snippet(rt_name, alias, dry_run=False),
     })
 

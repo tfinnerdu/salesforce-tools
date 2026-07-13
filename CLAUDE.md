@@ -228,7 +228,9 @@ the composer's lane is generating the CLI command, not running it in-browser.
 on the layout — a third metadata type. Layouts can't be read synchronously here
 (simple_salesforce's Metadata API is async-retrieve-only), so the flow is:
 generate a **list-layouts** command (`sf org list metadata -m Layout`, to discover
-the exact `<Object>-<Layout Name>` fullName) then the retrieve command, the admin
+the exact `<Object>-<Layout Name>` fullName) then the retrieve command — both use a
+per-section **"retrieve from" source alias** (e.g. EDA) while deploy targets the top
+Alias, so a cross-org retrieve→deploy needs no field-swapping — the admin
 pastes the retrieved `.layout-meta.xml`,
 and `cli_layout` adds the fields (a new `<layoutSections>`, or into an existing
 section's first column) via **pure string surgery that leaves every other byte

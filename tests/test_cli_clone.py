@@ -267,6 +267,45 @@ def test_new_object_bad_api_name_rejected(client):
     }), content_type='application/json')
     assert resp.status_code == 400
 
+
+def test_generate_retrieve_from_source_deploy_to_target(client):
+    # Retrieve layout/record type FROM 'eda', deploy TO the target alias 'UAT'.
+    resp = client.post('/cli/generate', data=json.dumps({
+        'alias': 'UAT',
+        'layout_name': 'Case-Case Layout', 'layout_retrieve_alias': 'eda',
+        'recordtype_name': 'Case.Advisee', 'rt_retrieve_alias': 'eda',
+    }), content_type='application/json')
+    data = resp.get_json()['data']
+    assert '--target-org eda' in data['layout_list']   # list uses --target-org
+    assert '-o eda' in data['layout_retrieve']
+    assert '-o eda' in data['recordtype_retrieve']
+    assert '-o UAT' in data['layout_deploy']        # deploy targets the top alias
+    assert '-o UAT' in data['recordtype_deploy']
+
+
+def test_generate_retrieve_alias_defaults_to_target(client):
+    resp = client.post('/cli/generate', data=json.dumps({
+        'alias': 'UAT', 'layout_name': 'Case-Case Layout',
+    }), content_type='application/json')
+    data = resp.get_json()['data']
+    assert '-o UAT' in data['layout_retrieve']       # blank retrieve alias → target
+
+
+def test_generate_visibility_assign_uses_integration_username(client, monkeypatch):
+    import routes.cli as cli_routes
+    monkeypatch.setattr(cli_routes, 'get_org_config', lambda org: {'username': 'integ@doane.edu'})
+    resp = client.post('/cli/generate', data=json.dumps({
+        'alias': 'UAT',
+        'fields': [{'object': 'Case', 'api_name': 'Foo__c', 'label': 'Foo', 'type': 'Text'}],
+        'permset': {'api_name': 'Case_Integration', 'label': 'Case Integration',
+                    'field_perms': [{'field': 'Case.Foo__c', 'readable': True, 'editable': True}]},
+        'human_permset': {'api_name': 'Case_Vis', 'label': 'Case Vis', 'editable': True},
+    }), content_type='application/json')
+    data = resp.get_json()['data']
+    # Both the integration and the visibility permset assign to the real username.
+    assert data['assign'].count('integ@doane.edu') >= 2
+    assert '<staff-username>' not in data['assign']
+
 def test_route_plan(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
         resp = client.post('/cli/clone-object/plan',

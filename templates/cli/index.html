@@ -391,10 +391,17 @@
         Not a layout editor; it edits the real metadata.
       </p>
 
+      <div class="row g-3 mb-2">
+        <div class="col-md-5">
+          <label for="cliLayoutRetrieveAlias" class="form-label fw-semibold small mb-1">Retrieve from <span class="text-muted fw-normal">(source org alias)</span></label>
+          <input id="cliLayoutRetrieveAlias" class="form-control form-control-sm" placeholder="e.g. eda — blank = the Alias above" autocomplete="off">
+          <div class="form-text">The org you pull the layout <strong>from</strong> (e.g. EDA). Blank = the <strong>Alias</strong> at the top. The <em>deploy</em> below always targets the top Alias, so you retrieve from EDA and deploy to your sandbox without swapping fields.</div>
+        </div>
+      </div>
       <div class="mb-3">
-        <label class="form-label fw-semibold small mb-1">Step A0 &mdash; list layouts in your source org (find the exact name)</label>
+        <label class="form-label fw-semibold small mb-1">Step A0 &mdash; list layouts in the source org (find the exact name)</label>
         <div class="mc-code" data-copy="snpLayoutList"><pre id="snpLayoutList" class="mb-0"></pre></div>
-        <div class="form-text">Uses the <strong>Alias</strong> at the top of this tab as the source org. Each result's <code>fullName</code> (e.g. <code>Case-Case Layout</code>) goes in the box below.</div>
+        <div class="form-text">Each result's <code>fullName</code> (e.g. <code>Case-Case Layout</code>) goes in the box below.</div>
       </div>
       <div class="row g-3 mb-2">
         <div class="col-md-6">
@@ -477,9 +484,14 @@
           <label for="cliRtName" class="form-label fw-semibold small mb-1">Record type full name</label>
           <input id="cliRtName" class="form-control form-control-sm" placeholder="e.g. Case.Advisee_Case" autocomplete="off">
         </div>
+        <div class="col-md-5">
+          <label for="cliRtRetrieveAlias" class="form-label fw-semibold small mb-1">Retrieve from <span class="text-muted fw-normal">(source org alias)</span></label>
+          <input id="cliRtRetrieveAlias" class="form-control form-control-sm" placeholder="e.g. eda — blank = the Alias above" autocomplete="off">
+          <div class="form-text">The org you pull the record type <strong>from</strong>. Blank = the top <strong>Alias</strong>. The deploy below targets the top Alias.</div>
+        </div>
       </div>
       <div class="mb-3">
-        <label class="form-label fw-semibold small mb-1">Step A &mdash; retrieve the record type</label>
+        <label class="form-label fw-semibold small mb-1">Step A &mdash; retrieve the record type from the source org</label>
         <div class="mc-code" data-copy="snpRtRetrieve"><pre id="snpRtRetrieve" class="mb-0"></pre></div>
       </div>
       <div class="mb-2">

@@ -82,6 +82,7 @@ MC.cli = {
 
     // Page layout card.
     document.getElementById('cliLayoutName').addEventListener('input', () => this._refresh());
+    document.getElementById('cliLayoutRetrieveAlias').addEventListener('input', () => this._refresh());
     document.querySelectorAll('input[name="layoutMode"]').forEach(r =>
       r.addEventListener('change', () => this._onLayoutMode()));
     document.getElementById('btnLayoutSections').addEventListener('click', () => this._loadLayoutSections());
@@ -91,6 +92,7 @@ MC.cli = {
 
     // Record type card.
     document.getElementById('cliRtName').addEventListener('input', () => this._refresh());
+    document.getElementById('cliRtRetrieveAlias').addEventListener('input', () => this._refresh());
     document.getElementById('btnBuildRt').addEventListener('click', () => this._buildRt());
     document.getElementById('btnDownloadRt').addEventListener('click', () => this._downloadRt());
 
@@ -129,7 +131,9 @@ MC.cli = {
       existing_fields: this._existingFields(),
       new_objects: this.newObjects,
       layout_name: document.getElementById('cliLayoutName').value.trim(),
+      layout_retrieve_alias: document.getElementById('cliLayoutRetrieveAlias').value.trim(),
       recordtype_name: document.getElementById('cliRtName').value.trim(),
+      rt_retrieve_alias: document.getElementById('cliRtRetrieveAlias').value.trim(),
     };
   },
 
