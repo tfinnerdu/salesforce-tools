@@ -155,6 +155,78 @@
     </div>
   </div>
 
+  <!-- ── Clone object → package ──────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      Clone object <span class="text-muted fw-normal">(read a source object's custom fields &rarr; deployable metadata package)</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Describe an object in the <strong>{{ active_org|upper }}</strong> org and generate a
+        <code>force-app</code> package of its custom fields &mdash; reusing the same byte-for-byte
+        field generator as the builder above. Relationship (lookup / master-detail), formula,
+        roll-up, auto-number, and unsupported-type fields can't be reproduced 1:1, so they're
+        <strong>listed as skipped</strong>, never silently dropped. Deploy is upsert (creates a
+        field if missing, updates it if present).
+      </p>
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-6 col-md-4">
+          <label for="cliCloneObject" class="form-label fw-semibold small mb-1">Source object</label>
+          <input id="cliCloneObject" data-mc-objpick="all" type="text" class="form-control form-control-sm"
+                 placeholder="e.g. Accommodation__c" autocomplete="off">
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnClonePreview" class="btn btn-slate btn-sm">Preview</button>
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnClonePackage" class="btn btn-doane btn-sm" disabled>&#8681; Download package (.zip)</button>
+        </div>
+      </div>
+      <div class="mt-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="cliCloneShell">
+          <label class="form-check-label small" for="cliCloneShell">
+            Include the object definition
+            <span class="text-muted">(creates the object if it doesn't exist in the target yet &mdash;
+            best-effort shell; leave off to just sync fields into an object that already exists)</span>
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="cliClonePermset" checked>
+          <label class="form-check-label small" for="cliClonePermset">
+            Also generate a permission set granting these fields
+            <span class="text-muted">(read/edit &mdash; otherwise the new fields aren't visible)</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="cliCloneResult" class="mt-3 d-none">
+        <div id="cliCloneSummary" class="mb-2"></div>
+        <div id="cliCloneShellNote" class="alert alert-info py-1 small d-none"></div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <h6 class="fw-semibold small mb-1">Fields to clone (<span id="cliCloneFieldCount">0</span>)</h6>
+            <div class="table-responsive" style="max-height:260px;overflow:auto">
+              <table class="table table-sm table-striped small mb-0">
+                <thead><tr><th>Field</th><th>Type</th></tr></thead>
+                <tbody id="cliCloneFields"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <h6 class="fw-semibold small mb-1">Skipped (<span id="cliCloneSkipCount">0</span>)</h6>
+            <div class="table-responsive" style="max-height:260px;overflow:auto">
+              <table class="table table-sm table-striped small mb-0">
+                <thead><tr><th>Field</th><th>Reason</th></tr></thead>
+                <tbody id="cliCloneSkipped"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Permission set ──────────────────────────────────────────────────── -->
   <div class="card shadow-sm mb-3">
     <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">

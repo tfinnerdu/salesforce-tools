@@ -180,11 +180,13 @@
     <Compile Include="scripts\migrate_files.py" />
     <Compile Include="routes\cli.py" />
     <Compile Include="routes\meta.py" />
+    <Compile Include="services\cli_clone.py" />
     <Compile Include="services\cli_metadata.py" />
     <Compile Include="services\cli_script.py" />
     <Compile Include="services\cli_fls.py" />
     <Compile Include="services\cli_layout.py" />
     <Compile Include="services\cli_recordtype.py" />
+    <Compile Include="tests\test_cli_clone.py" />
     <Compile Include="tests\test_cli_metadata.py" />
     <Compile Include="tests\test_cli_script.py" />
     <Compile Include="tests\test_cli_routes.py" />

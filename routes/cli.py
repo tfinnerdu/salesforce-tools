@@ -15,7 +15,7 @@ import logging
 from flask import Blueprint, Response, render_template, request, session
 
 from config import Config, get_org_config
-from services import cli_fls, cli_layout, cli_metadata, cli_recordtype, cli_script
+from services import cli_clone, cli_fls, cli_layout, cli_metadata, cli_recordtype, cli_script
 from sf_provider import available_orgs
 from utils.responses import error_response, new_request_id, ok
 
@@ -324,6 +324,71 @@ def api_package():
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('cli package build failed')
+        return error_response(str(exc), 'PACKAGE_FAILED', 500)
+
+    return Response(
+        zip_bytes,
+        mimetype='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Clone a whole object's schema into a package ─────────────────────────────
+
+def _clone_permset(object_name: str, fields: list) -> dict:
+    """An access permission set granting read/edit on every cloned field."""
+    base = object_name[:-3] if object_name.endswith('__c') else object_name
+    name = f'{base}_Access'
+    return {
+        'api_name': name,
+        'label': name.replace('_', ' '),
+        'description': f'Field access for cloned {object_name}.',
+        'field_perms': cli_fls.human_field_perms(fields, editable=True),
+    }
+
+
+@cli_bp.route('/clone-object/plan', methods=['POST'])
+def api_clone_object_plan():
+    """Describe the active-org source object → a clone plan (fields + skipped + shell)."""
+    payload = request.get_json(silent=True) or {}
+    obj = (payload.get('object') or '').strip()
+    include_shell = bool(payload.get('include_shell'))
+    if not obj:
+        return error_response('object is required', 'INVALID_INPUT', 400)
+    try:
+        return ok(cli_clone.plan_from_object(_org(), obj, include_shell=include_shell))
+    except Exception as exc:
+        logger.exception('cli clone plan failed for %s', obj)
+        return error_response(str(exc), 'SF_DESCRIBE_FAILED', 502)
+
+
+@cli_bp.route('/clone-object/package', methods=['POST'])
+def api_clone_object_package():
+    """Build the force-app zip for a cloned object (fields + optional shell + permset)."""
+    payload = request.get_json(silent=True) or {}
+    obj = (payload.get('object') or '').strip()
+    project = (payload.get('project') or '').strip()
+    alias = (payload.get('alias') or '').strip()
+    include_shell = bool(payload.get('include_shell'))
+    include_permset = bool(payload.get('include_permset'))
+    if not obj:
+        return error_response('object is required', 'INVALID_INPUT', 400)
+    try:
+        plan = cli_clone.plan_from_object(_org(), obj, include_shell=include_shell)
+        fields = plan['fields']
+        object_shells = [plan['shell']] if plan['shell'] else None
+        if not fields and not object_shells:
+            return error_response(
+                'Nothing to clone — the object has no reproducible custom fields. '
+                'Tick "include the object definition" to at least create the object shell.',
+                'INVALID_INPUT', 400)
+        permset = _clone_permset(obj, fields) if (include_permset and fields) else None
+        zip_bytes, filename = cli_script.build_package_zip(
+            project or obj, fields, permset, alias, object_shells=object_shells)
+    except ValueError as exc:
+        return error_response(str(exc), 'INVALID_INPUT', 400)
+    except Exception as exc:
+        logger.exception('cli clone package failed for %s', obj)
         return error_response(str(exc), 'PACKAGE_FAILED', 500)
 
     return Response(

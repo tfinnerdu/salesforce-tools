@@ -716,4 +716,113 @@ MC.cli = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => MC.cli.init());
+// ── Clone object → package ─────────────────────────────────────────────────
+// Describe a source object and turn its custom fields into the same force-app
+// package the builder produces. Self-contained: Preview → (clean) Download,
+// re-locked on any input change so you never download a stale plan.
+MC.cliClone = {
+  _lastKey: null,
+
+  init() {
+    document.getElementById('btnClonePreview')?.addEventListener('click', () => this.preview());
+    document.getElementById('btnClonePackage')?.addEventListener('click', () => this.download());
+    ['cliCloneObject', 'cliCloneShell', 'cliClonePermset'].forEach(id => {
+      const el = document.getElementById(id);
+      el?.addEventListener('change', () => this._lock());
+      el?.addEventListener('input', () => this._lock());
+    });
+  },
+
+  _obj() { return (document.getElementById('cliCloneObject')?.value || '').trim(); },
+  _shell() { return document.getElementById('cliCloneShell')?.checked || false; },
+  _permset() { return document.getElementById('cliClonePermset')?.checked || false; },
+  _key() { return `${this._obj()}|${this._shell()}|${this._permset()}`; },
+
+  _lock() {
+    const btn = document.getElementById('btnClonePackage');
+    if (btn) btn.disabled = true;
+  },
+
+  async preview() {
+    const obj = this._obj();
+    if (!obj) { MC.showToast('Enter a source object', 'warning'); return; }
+    MC.showSpinner();
+    try {
+      const data = await MC.api('/cli/clone-object/plan', 'POST',
+        { object: obj, include_shell: this._shell() });
+      this._render(data);
+      const btn = document.getElementById('btnClonePackage');
+      const nothing = data.fields.length === 0 && !data.shell;
+      if (btn) btn.disabled = nothing;
+      this._lastKey = nothing ? null : this._key();
+      if (nothing) MC.showToast('Nothing to clone — no reproducible custom fields (tick “include the object definition” to at least create the shell).', 'warning');
+    } catch (err) {
+      MC.showToast('Preview failed: ' + err.message, 'danger');
+    } finally { MC.hideSpinner(); }
+  },
+
+  _render(d) {
+    const c = d.counts;
+    document.getElementById('cliCloneSummary').innerHTML =
+      `<span class="badge bg-success me-1">clone ${c.custom_fields} field(s)</span>`
+      + `<span class="badge bg-${c.skipped ? 'warning' : 'secondary'} me-1">skip ${c.skipped}</span>`
+      + `<span class="badge bg-secondary me-1">${c.standard_fields} standard</span>`
+      + (d.shell ? '<span class="badge bg-info me-1">+ object shell</span>' : '');
+    document.getElementById('cliCloneFieldCount').textContent = d.fields.length;
+    document.getElementById('cliCloneSkipCount').textContent = d.skipped.length;
+    document.getElementById('cliCloneFields').innerHTML = d.fields.map(f =>
+      `<tr><td><code>${MC._escHtml(f.api_name)}</code></td><td>${MC._escHtml(f.type)}</td></tr>`).join('')
+      || '<tr><td colspan="2" class="text-muted">None</td></tr>';
+    document.getElementById('cliCloneSkipped').innerHTML = d.skipped.map(s =>
+      `<tr><td><code>${MC._escHtml(s.api_name)}</code></td><td class="text-muted">${MC._escHtml(s.reason)}</td></tr>`).join('')
+      || '<tr><td colspan="2" class="text-muted">None</td></tr>';
+    const note = document.getElementById('cliCloneShellNote');
+    if (d.shell) {
+      note.classList.remove('d-none');
+      note.innerHTML = '<strong>Object shell included (best-effort):</strong> '
+        + (d.shell.notes || []).map(n => MC._escHtml(n)).join('; ') + '.';
+    } else {
+      note.classList.add('d-none');
+    }
+    document.getElementById('cliCloneResult').classList.remove('d-none');
+  },
+
+  async download() {
+    if (this._lastKey === null || this._key() !== this._lastKey) {
+      MC.showToast('Preview the object first (inputs changed).', 'warning');
+      this._lock();
+      return;
+    }
+    MC.showSpinner();
+    try {
+      const resp = await fetch('/cli/clone-object/package', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object: this._obj(),
+          include_shell: this._shell(),
+          include_permset: this._permset(),
+          project: (document.getElementById('cliProject')?.value || '').trim(),
+          alias: (document.getElementById('cliAlias')?.value || '').trim(),
+        }),
+      });
+      if (!resp.ok) {
+        let msg = 'Package build failed';
+        try { msg = (await resp.json()).error || msg; } catch (_) {}
+        MC.showToast(msg, 'danger'); return;
+      }
+      const blob = await resp.blob();
+      const disp = resp.headers.get('Content-Disposition') || '';
+      const m = disp.match(/filename="?([^"]+)"?/);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = m ? m[1] : 'sf-cli-package.zip'; a.click();
+      URL.revokeObjectURL(url);
+      MC.showToast('Package downloaded', 'success');
+    } catch (err) {
+      MC.showToast(err.message, 'danger');
+    } finally { MC.hideSpinner(); }
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => { MC.cli.init(); MC.cliClone.init(); });

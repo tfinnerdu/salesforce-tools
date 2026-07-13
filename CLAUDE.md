@@ -98,7 +98,12 @@ services/            Business logic, one module per feature
   sqlserver.py             Shared SQL Server connection (Colleague backend,
                            MS ODBC driver — no Devart in the app)
   cli_metadata.py          CLI tab: describe-driven object/field lists (read-only)
-  cli_script.py            CLI tab: sf-command + field/permset XML + zip generator
+  cli_script.py            CLI tab: sf-command + field/permset/object XML + zip generator
+  cli_clone.py             CLI tab: clone a whole object's schema — describe a
+                           source object → field specs for the existing generator
+                           (+ best-effort CustomObject shell). Skips & reports
+                           relationships/formula/roll-up/auto-number/unsupported
+                           types (can't reproduce 1:1). Read-only; deploy is upsert
   cli_fls.py               CLI tab: read a field's FLS from a source org (clone
                            visibility) + synthesize a human permission set
   cli_layout.py            CLI tab: add fields to a pasted page-layout XML (new
@@ -186,6 +191,19 @@ second, human-facing permission set that grants the built fields the same access
 — carried alongside the integration permset through the deploy, dual assign, and
 package zip. FLS only — page-layout and record-type availability are handled
 separately by their own paste-and-inject sections (below).
+
+**Clone object (`cli_clone.py`).** Instead of hand-adding fields, describe a
+whole *source* object and generate a deployable package of its custom fields:
+`POST /cli/clone-object/plan` (preview — fields, per-field skip reasons, optional
+shell) and `POST /cli/clone-object/package` (the force-app zip). It maps each
+describe field to the same field spec the builder uses, so `cli_script`'s
+byte-for-byte generators produce the artifacts. Fields it can't reproduce 1:1 —
+relationships (there's no Lookup type in the builder), formula/roll-up,
+auto-number, and unsupported types (currency, percent, multipicklist, rich text)
+— are **listed as skipped**, never dropped silently. An opt-in best-effort
+`CustomObject` shell (Text name field, `sharingModel` defaulted since describe
+omits it) creates the object if it doesn't exist yet; deploy is upsert. Reuses
+`build_package_zip` (now with `object_shells`) + an optional access permission set.
 
 **Command composer.** A bottom-of-tab utility (`POST /cli/recipes`,
 `cli_script.command_recipes`) that turns an object + field selection into
