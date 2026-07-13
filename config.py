@@ -1,7 +1,32 @@
+import logging
 import os
+import secrets
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_secret_key() -> str:
+    """SECRET_KEY, with no publicly-known fallback constant.
+
+    A hardcoded default (the old 'dev-secret-change-in-prod') let anyone forge
+    session cookies if it ever reached production. Instead, when SECRET_KEY is
+    unset we mint a random per-process key: sessions can't be forged, local dev
+    still runs, and the warning makes a prod deploy that forgot to inject the
+    secret visible in logs. Set SECRET_KEY in production so sessions survive
+    restarts and are consistent across pods.
+    """
+    key = os.environ.get('SECRET_KEY', '')
+    if key:
+        return key
+    logger.warning(
+        'SECRET_KEY not set — using a random ephemeral key. Set SECRET_KEY in '
+        'production (sessions will not persist across restarts or extra pods).'
+    )
+    return secrets.token_hex(32)
 
 
 def get_org_config(org: str = 'dev') -> dict:
@@ -17,7 +42,7 @@ def get_org_config(org: str = 'dev') -> dict:
 
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-change-in-prod')
+    SECRET_KEY = _resolve_secret_key()
     DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://localhost/sf_mission_control')
     CONDUCTOR_URL = os.environ.get('CONDUCTOR_URL', 'http://conductor:8080')
     CONDUCTOR_API_KEY = os.environ.get('CONDUCTOR_API_KEY', '')

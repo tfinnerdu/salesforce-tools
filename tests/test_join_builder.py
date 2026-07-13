@@ -162,6 +162,37 @@ def test_run_join_no_conn_str_sf_records_fetched():
     assert result['sf_records_fetched'] == 3
 
 
+def test_run_join_rejects_write_sql():
+    """A write/DDL sql_query is rejected by the read-only guard before any DB
+    call — the Join Builder only ever reads the warehouse."""
+    from services.join_builder import run_join
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
+         patch('services.join_builder.Config') as mock_cfg:
+        mock_cfg.SQLSERVER_CONN = 'Driver=SQL Server;Server=localhost'
+        result = run_join(
+            org='dev',
+            sql_query='DELETE FROM students',
+            soql_query='SELECT Id FROM Account',
+            join_mapping={'sql_field': 'sis_id', 'sf_field': 'SIS_ID__c'},
+        )
+    assert result['success'] is False
+    assert 'only' in result['error'].lower()          # "Only SELECT / WITH…"
+    assert result['sf_records_fetched'] == 3           # SF fetch still reported
+
+
+def test_run_join_rejects_embedded_write():
+    """A write keyword buried after a leading SELECT is also rejected."""
+    from services.join_builder import run_join
+    with patch('services.join_builder.get_sf', return_value=_join_sf()), \
+         patch('services.join_builder.Config') as mock_cfg:
+        mock_cfg.SQLSERVER_CONN = 'conn'
+        result = run_join(
+            'dev',
+            'SELECT 1; DROP TABLE students',
+            'SELECT Id FROM Account', {})
+    assert result['success'] is False
+
+
 def test_run_join_pyodbc_failure_returns_error():
     from services.join_builder import run_join
 

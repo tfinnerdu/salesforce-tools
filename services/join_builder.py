@@ -76,6 +76,20 @@ def run_join(org: str, sql_query: str, soql_query: str, join_mapping: dict) -> d
             'hint': 'Configure SQLSERVER_CONN in .env',
         }
 
+    # Defence in depth: the Join Builder only ever reads. Reject write/DDL SQL
+    # outright through the same guard the ingest path uses, so a crafted
+    # sql_query can't INSERT/UPDATE/DELETE/DROP/EXEC against the warehouse.
+    from services.sqlserver import assert_read_only
+    try:
+        assert_read_only(sql_query)
+    except ValueError as exc:
+        return {
+            'success': False,
+            'error': str(exc),
+            'sf_records_fetched': sf_count,
+            'hint': 'Join Builder runs read-only SQL — remove the write/DDL statement.',
+        }
+
     try:
         import pyodbc  # type: ignore
         conn = pyodbc.connect(conn_str, timeout=10)

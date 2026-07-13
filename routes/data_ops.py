@@ -410,19 +410,6 @@ def api_sql_schema_refresh():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
-@data_ops_bp.route('/sf-objects')
-def api_sf_objects():
-    """All queryable Salesforce objects — for the Join Builder object picker."""
-    org = session.get('active_org', 'dev')
-    try:
-        from services import soql_workbench
-        objects = soql_workbench.list_objects(org)
-        return jsonify({'success': True, 'data': objects})
-    except Exception as exc:
-        logger.exception('sf objects list failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
-
-
 @data_ops_bp.route('/sf-object-fields')
 def api_sf_object_fields():
     """Field list for one SF object — for the Join Builder field checker."""

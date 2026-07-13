@@ -752,7 +752,8 @@ MC.bulkDelete = {
       const d = await MC.api('/data-ops/delete/execute', 'POST', {object: obj, where_clause: where, bypass_triggers: bypass});
       const alert = document.getElementById('deleteResultAlert');
       const wrap = document.getElementById('deleteResultWrap');
-      if (alert) alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">Deleted <strong>${d.deleted}</strong> records. Errors: ${d.errors}.</div>`;
+      if (alert) alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">Deleted <strong>${d.deleted}</strong> records. Errors: ${d.errors}.</div>`
+        + (d.truncated ? `<div class="alert alert-warning mt-2">&#9888; Capped at <strong>${(d.cap ?? 0).toLocaleString()}</strong> records — more may match. Re-run to process the rest.</div>` : '');
       wrap?.classList.remove('d-none');
       document.getElementById('btnDeleteExecute')?.classList.add('d-none');
     } catch (err) {
@@ -841,7 +842,8 @@ MC.bulkModify = {
       const d = await MC.api('/data-ops/modify/execute', 'POST', {object: obj, where_clause: where, field_updates, bypass_triggers: bypass});
       const alert = document.getElementById('modifyResultAlert');
       document.getElementById('modifyResultWrap')?.classList.remove('d-none');
-      if (alert) alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">Updated <strong>${d.updated}</strong> records. Errors: ${d.errors}.</div>`;
+      if (alert) alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">Updated <strong>${d.updated}</strong> records. Errors: ${d.errors}.</div>`
+        + (d.truncated ? `<div class="alert alert-warning mt-2">&#9888; Capped at <strong>${(d.cap ?? 0).toLocaleString()}</strong> records — more may match. Re-run to process the rest.</div>` : '');
       document.getElementById('btnModifyExecute')?.classList.add('d-none');
     } catch (err) {
       MC.showToast('Modify failed: ' + err.message, 'danger');
@@ -916,7 +918,8 @@ MC.bulkReassign = {
       const d = await MC.api('/data-ops/reassign/execute', 'POST', {object: obj, where_clause: where, new_owner_id: newOwnerId, bypass_triggers: bypass});
       const alert = document.getElementById('reassignResultAlert');
       document.getElementById('reassignResultWrap')?.classList.remove('d-none');
-      if (alert) alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">Reassigned <strong>${d.reassigned}</strong> records. Errors: ${d.errors}.</div>`;
+      if (alert) alert.innerHTML = `<div class="alert alert-${d.errors > 0 ? 'warning' : 'success'}">Reassigned <strong>${d.reassigned}</strong> records. Errors: ${d.errors}.</div>`
+        + (d.truncated ? `<div class="alert alert-warning mt-2">&#9888; Capped at <strong>${(d.cap ?? 0).toLocaleString()}</strong> records — more may match. Re-run to process the rest.</div>` : '');
       document.getElementById('btnReassignExecute')?.classList.add('d-none');
     } catch (err) {
       MC.showToast('Reassign failed: ' + err.message, 'danger');

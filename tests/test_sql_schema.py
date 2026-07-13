@@ -174,18 +174,6 @@ def test_sql_schema_refresh_route(client, monkeypatch):
     assert body['data']['table_count'] == 2
 
 
-def test_sf_objects_route(client, monkeypatch):
-    from services import soql_workbench
-    fake = MagicMock()
-    fake.restful.return_value = {'sobjects': [
-        {'name': 'Account', 'label': 'Account', 'queryable': True, 'custom': False},
-    ]}
-    monkeypatch.setattr(soql_workbench, 'get_sf', lambda org: fake)
-    resp = client.get('/data-ops/sf-objects')
-    assert resp.status_code == 200
-    assert resp.get_json()['success'] is True
-
-
 def test_sf_object_fields_route(client, monkeypatch):
     from services import soql_workbench
     fake = MagicMock()

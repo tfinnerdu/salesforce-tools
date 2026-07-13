@@ -104,6 +104,18 @@ def test_bulk_delete_execute_counts_succeeded_and_failed():
     assert result['deleted'] == 1
     assert result['errors'] == 1
     assert result['total'] == 2
+    assert result['truncated'] is False   # 2 < 10k cap
+
+
+def test_bulk_delete_execute_flags_truncation(monkeypatch):
+    """When the fetch hits the cap, the result flags truncation so the operator
+    knows more records may match than were acted on."""
+    monkeypatch.setattr(bulk_ops, '_MAX_BULK_ROWS', 2)
+    sf = _fake_bulk_sf([{'Id': '001AAA'}, {'Id': '001BBB'}], processed=2, failed=0)
+    with patch('services.bulk_ops.get_sf', return_value=sf):
+        result = bulk_ops.bulk_delete_execute('dev', 'Account', 'Id != null')
+    assert result['truncated'] is True
+    assert result['cap'] == 2
 
 
 # ── Modify ────────────────────────────────────────────────────────────────────

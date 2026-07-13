@@ -63,7 +63,8 @@ def bulk_delete_execute(org: str, object_name: str, where_clause: str,
         if bypass_triggers:
             set_bypass_triggers(sf, False)
 
-    return {'deleted': res['succeeded'], 'errors': res['failed'], 'total': len(records)}
+    return {'deleted': res['succeeded'], 'errors': res['failed'], 'total': len(records),
+            'truncated': len(records) >= _MAX_BULK_ROWS, 'cap': _MAX_BULK_ROWS}
 
 
 # ── Modify (bulk field update) ────────────────────────────────────────────────
@@ -98,7 +99,8 @@ def bulk_modify_execute(org: str, object_name: str, where_clause: str,
         if bypass_triggers:
             set_bypass_triggers(sf, False)
 
-    return {'updated': res['succeeded'], 'errors': res['failed'], 'total': len(records)}
+    return {'updated': res['succeeded'], 'errors': res['failed'], 'total': len(records),
+            'truncated': len(records) >= _MAX_BULK_ROWS, 'cap': _MAX_BULK_ROWS}
 
 
 # ── Reassign ──────────────────────────────────────────────────────────────────
@@ -142,7 +144,8 @@ def bulk_reassign_execute(org: str, object_name: str, where_clause: str,
         if bypass_triggers:
             set_bypass_triggers(sf, False)
 
-    return {'reassigned': res['succeeded'], 'errors': res['failed'], 'total': len(records)}
+    return {'reassigned': res['succeeded'], 'errors': res['failed'], 'total': len(records),
+            'truncated': len(records) >= _MAX_BULK_ROWS, 'cap': _MAX_BULK_ROWS}
 
 
 # ── Export ────────────────────────────────────────────────────────────────────

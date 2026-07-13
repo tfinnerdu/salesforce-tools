@@ -362,7 +362,9 @@ def test_update_record_calls_sf_update():
     sf.Account.update.assert_called_once_with('id123', {'PersonEmail': 'x@x.com'})
 
 
-def test_update_record_attribute_error_non_fatal():
+def test_update_record_attribute_error_reports_failure():
+    """When the object isn't on the client, nothing is written — the result
+    must say so (updated False + error) rather than a false confirmation."""
     from services.soql_workbench import update_record
 
     class _NoAttrSF:
@@ -372,4 +374,5 @@ def test_update_record_attribute_error_non_fatal():
 
     with patch('services.soql_workbench.get_sf', return_value=_NoAttrSF()):
         result = update_record('dev', 'NonExistentObject', 'id1', 'Field', 'val')
-    assert result['updated'] is True  # Always returns confirmation dict
+    assert result['updated'] is False
+    assert 'error' in result

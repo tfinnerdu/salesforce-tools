@@ -156,7 +156,15 @@ def update_record(org: str, object_name: str, record_id: str, field_name: str, v
         with dml_guard(sf, bypass=bypass):
             sf_obj.update(record_id, {field_name: value})
     except AttributeError as exc:
+        # The object isn't available on the client — nothing was written, so
+        # report the failure instead of a false "updated" confirmation.
         logger.warning("update_record: object %s not found on client: %s", object_name, exc)
+        return {
+            'updated': False,
+            'record_id': record_id,
+            'field_name': field_name,
+            'error': f"Object '{object_name}' is not available on this org.",
+        }
     return {
         'updated': True,
         'record_id': record_id,
