@@ -69,6 +69,38 @@ def soql_in_list(values):
     return ', '.join("'" + escape_soql(v) + "'" for v in values)
 
 
+def load_id_map(path, old_col='old_id', new_col='new_id'):
+    """Load an old-parent-Id → new-parent-Id crosswalk from a CSV.
+
+    Reads the columns named ``old_col`` / ``new_col`` if present, else falls back
+    to the first two columns — so you can point ``--id-map`` straight at an
+    existing migration spreadsheet (e.g. ``--map-old-col Accommodation__c
+    --map-new-col NEW_Accommodation__c``). Rows with a blank old or new value are
+    skipped; the last value wins on duplicate old Ids.
+    """
+    with open(path, newline='', encoding='utf-8-sig') as fh:
+        reader = csv.reader(fh)
+        rows = list(reader)
+    if not rows:
+        return {}
+    header = rows[0]
+    try:
+        oi, ni = header.index(old_col), header.index(new_col)
+        data_rows = rows[1:]
+    except ValueError:
+        # Named columns not found — treat as a headerless two-column file.
+        oi, ni = 0, 1
+        data_rows = rows if header[:1] and header[0] != old_col else rows[1:]
+    id_map = {}
+    for r in data_rows:
+        if len(r) <= max(oi, ni):
+            continue
+        old, new = r[oi].strip(), r[ni].strip()
+        if old and new:
+            id_map[old] = new
+    return id_map
+
+
 def compose_parent_map(src_id_to_ext, ext_to_target_id):
     """Compose source-parent-Id → target-parent-Id via the shared external Id.
 
@@ -101,7 +133,7 @@ def scope_parent_ids(sf, cfg):
     if cfg.by == 'filter':
         where = cfg.where or 'Id != null'
         rows = _query_all(sf, f"SELECT Id FROM {cfg.parent} WHERE {where}")
-        return [r['Id'] for r in rows]
+        return [r['Id'] for r in rows if r.get('Id')]
 
     # list mode: file of Ids or external-Id values, one per line
     with open(cfg.ids_file, encoding='utf-8') as fh:
@@ -114,7 +146,7 @@ def scope_parent_ids(sf, cfg):
             rows = _query_all(
                 sf, f"SELECT Id FROM {cfg.parent} "
                     f"WHERE {cfg.ext_id} IN ({soql_in_list(batch)})")
-            ids.extend(r['Id'] for r in rows)
+            ids.extend(r['Id'] for r in rows if r.get('Id'))
     return list(dict.fromkeys(ids))  # de-dupe, preserve order
 
 
@@ -129,8 +161,10 @@ def gather_files(sf, parent_ids):
         rows = _query_all(
             sf, "SELECT ContentDocumentId, LinkedEntityId FROM ContentDocumentLink "
                 f"WHERE LinkedEntityId IN ({soql_in_list(batch)})")
-        links.extend({'doc': r['ContentDocumentId'], 'parent': r['LinkedEntityId']}
-                     for r in rows)
+        for r in rows:
+            doc, parent = r.get('ContentDocumentId'), r.get('LinkedEntityId')
+            if doc and parent:
+                links.append({'doc': doc, 'parent': parent})
 
     doc_ids = list({lk['doc'] for lk in links})
     files = {}
@@ -140,7 +174,10 @@ def gather_files(sf, parent_ids):
                 "ContentSize FROM ContentVersion "
                 f"WHERE ContentDocumentId IN ({soql_in_list(batch)}) AND IsLatest = true")
         for r in rows:
-            files[r['ContentDocumentId']] = {
+            doc_id = r.get('ContentDocumentId')
+            if not doc_id:
+                continue
+            files[doc_id] = {
                 'id': r['Id'],
                 'title': r.get('Title') or 'file',
                 'path': r.get('PathOnClient') or r.get('Title') or 'file',
@@ -158,7 +195,8 @@ def resolve_parents(source_sf, target_sf, cfg, parent_ids):
             source_sf, f"SELECT Id, {cfg.ext_id} FROM {cfg.parent} "
                        f"WHERE Id IN ({soql_in_list(batch)})")
         for r in rows:
-            src_id_to_ext[r['Id']] = r.get(cfg.ext_id)
+            if r.get('Id'):
+                src_id_to_ext[r['Id']] = r.get(cfg.ext_id)
 
     ext_values = [v for v in src_id_to_ext.values() if v]
     ext_to_target_id = {}
@@ -167,7 +205,8 @@ def resolve_parents(source_sf, target_sf, cfg, parent_ids):
             target_sf, f"SELECT Id, {cfg.ext_id} FROM {cfg.parent} "
                        f"WHERE {cfg.ext_id} IN ({soql_in_list(batch)})")
         for r in rows:
-            ext_to_target_id[r.get(cfg.ext_id)] = r['Id']
+            if r.get(cfg.ext_id) and r.get('Id'):
+                ext_to_target_id[r[cfg.ext_id]] = r['Id']
 
     return compose_parent_map(src_id_to_ext, ext_to_target_id)
 
@@ -228,13 +267,26 @@ def create_link(target_sf, doc_id, target_parent_id):
 
 def build_plan(source_sf, target_sf, cfg):
     """Read + resolve everything; return (plan_rows, resolved, unresolved)."""
-    parent_ids = scope_parent_ids(source_sf, cfg)
-    logger.info('Scope: %d source parent record(s).', len(parent_ids))
+    if cfg.id_map:
+        # Crosswalk mode: the CSV already carries old→new parent Ids, so scope
+        # (its keys) and remap come straight from it — no external-Id lookups.
+        resolved = load_id_map(cfg.id_map, cfg.map_old_col, cfg.map_new_col)
+        unresolved = {}
+        parent_ids = list(resolved.keys())
+        logger.info('Scope: %d parent Id(s) from crosswalk %s.', len(parent_ids), cfg.id_map)
+    else:
+        # External-Id mode: resolve after we know which parents actually have files.
+        resolved = None
+        unresolved = {}
+        parent_ids = scope_parent_ids(source_sf, cfg)
+        logger.info('Scope: %d source parent record(s).', len(parent_ids))
+
     if not parent_ids:
         return [], {}, {}
 
     links, files = gather_files(source_sf, parent_ids)
-    resolved, unresolved = resolve_parents(source_sf, target_sf, cfg, parent_ids)
+    if resolved is None:
+        resolved, unresolved = resolve_parents(source_sf, target_sf, cfg, parent_ids)
     logger.info('Files: %d unique across %d link(s). Parents resolved: %d, unresolved: %d.',
                 len(files), len(links), len(resolved), len(unresolved))
 
@@ -310,13 +362,20 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--source', required=True, help='source org name (e.g. eda)')
     ap.add_argument('--target', required=True, help='target org name (e.g. prod)')
-    ap.add_argument('--parent', required=True, help='parent SObject (e.g. Account, Case)')
-    ap.add_argument('--ext-id', required=True, dest='ext_id',
-                    help='external-Id field on the parent used to remap old→new (e.g. SIS_ID__c)')
+    ap.add_argument('--parent', default='', help='parent SObject (e.g. Account, Case) — '
+                    'required unless --id-map is used')
+    ap.add_argument('--ext-id', default='', dest='ext_id',
+                    help='external-Id field on the parent to remap old→new (e.g. SIS_ID__c) — '
+                    'required unless --id-map is used')
     ap.add_argument('--by', choices=['filter', 'list'], default='filter',
-                    help='scope mode: SOQL filter on the parent, or a file of Ids/ext-Ids')
+                    help='scope mode (external-Id path): SOQL filter, or a file of Ids/ext-Ids')
     ap.add_argument('--where', default='', help="SOQL WHERE for --by filter")
     ap.add_argument('--ids-file', default='', help='file of parent Ids/ext-Id values for --by list')
+    ap.add_argument('--id-map', default='', help='crosswalk CSV of old→new parent Ids; when set, '
+                    'it drives both scope and remap (no external-Id lookups). Point it straight '
+                    'at your migration spreadsheet.')
+    ap.add_argument('--map-old-col', default='old_id', help='crosswalk column with the source Id')
+    ap.add_argument('--map-new-col', default='new_id', help='crosswalk column with the target Id')
     ap.add_argument('--max-mb', type=int, default=DEFAULT_MAX_MB,
                     help=f'flag files larger than this many MB (default {DEFAULT_MAX_MB})')
     ap.add_argument('--report', default='file_migration_report.csv', help='CSV report path')
@@ -324,14 +383,22 @@ def main(argv=None):
                     help='actually write to the target org (default is dry-run)')
     cfg = ap.parse_args(argv)
 
-    if cfg.by == 'list' and not cfg.ids_file:
-        ap.error('--by list requires --ids-file')
+    if cfg.id_map:
+        if not os.path.exists(cfg.id_map):
+            ap.error(f'--id-map file not found: {cfg.id_map}')
+    else:
+        # External-Id path needs the parent object + its external-Id field.
+        if not cfg.parent or not cfg.ext_id:
+            ap.error('--parent and --ext-id are required unless --id-map is used')
+        if cfg.by == 'list' and not cfg.ids_file:
+            ap.error('--by list requires --ids-file')
 
     source_sf = get_sf(cfg.source)
     target_sf = get_sf(cfg.target)
 
-    logger.info('Planning migration: %s → %s  (parent %s, ext-Id %s)',
-                cfg.source, cfg.target, cfg.parent, cfg.ext_id)
+    remap = (f'crosswalk {cfg.id_map}' if cfg.id_map
+             else f'parent {cfg.parent} by ext-Id {cfg.ext_id}')
+    logger.info('Planning migration: %s → %s  (%s)', cfg.source, cfg.target, remap)
     plan, resolved, unresolved = build_plan(source_sf, target_sf, cfg)
     write_report(cfg.report, plan)
 

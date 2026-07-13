@@ -24,25 +24,51 @@ external-Id field (e.g. `SIS_ID__c`) across the two orgs.
   orgs. That field is how old parent Id → new parent Id is resolved.
 - The running user can create Files in the target org (Content permissions).
 
+### Two ways to remap parents
+
+Both answer the same question — "which target record is this source record's file
+supposed to hang off?" — they just establish the old→new link differently:
+
+- **Crosswalk (`--id-map`)** — you already have the old→new parent Ids (e.g. the
+  DemandTools multi-org export). Point the script straight at that CSV; it drives
+  both scope and remap with **no external-Id lookups**. Simplest and fastest when
+  you have the Id pairs.
+- **External-Id (`--parent` + `--ext-id`)** — you *don't* have an Id list, but the
+  parent carries a durable business key that's the same in both orgs (e.g.
+  `SIS_ID__c`). The script matches on it and live-verifies the target record
+  exists. Use when you have no crosswalk.
+
 ### Usage
 
 Dry-run is the default — it reads, resolves parents, and writes a CSV report,
 but changes **nothing** until you add `--commit`.
 
 ```bash
-# Dry run: every file on Person Accounts, matched by SIS_ID__c
+# ── Crosswalk mode: point straight at your existing migration spreadsheet ──
+# (columns can be anything — name them; here the file's parent is Accommodation__c)
+python scripts/migrate_files.py --source eda --target prod \
+    --id-map accommodations.csv \
+    --map-old-col Accommodation__c --map-new-col NEW_Accommodation__c
+
+# Or a plain old_id,new_id crosswalk:
+python scripts/migrate_files.py --source eda --target prod --id-map account_map.csv
+
+# ── External-Id mode: every file on Person Accounts, matched by SIS_ID__c ──
 python scripts/migrate_files.py --source eda --target prod \
     --parent Account --ext-id SIS_ID__c --by filter --where "IsPersonAccount = true"
 
-# Explicit list of parents (a file of record Ids or external-Id values, one per line)
+# External-Id, explicit list of parents (record Ids or ext-Id values, one per line)
 python scripts/migrate_files.py --source eda --target prod \
     --parent Case --ext-id Legacy_Case_Id__c --by list --ids-file cases.txt
 
-# Same command, actually write to the target org
-python scripts/migrate_files.py --source eda --target prod \
-    --parent Account --ext-id SIS_ID__c --by filter --where "IsPersonAccount = true" \
-    --commit
+# Add --commit to any of the above to actually write to the target org
+python scripts/migrate_files.py --source eda --target prod --id-map account_map.csv --commit
 ```
+
+`--id-map` reads the columns named by `--map-old-col` / `--map-new-col` (default
+`old_id` / `new_id`), falling back to the first two columns — so an existing
+spreadsheet with extra columns works as-is. Rows with a blank old or new value
+are skipped.
 
 Read the `file_migration_report.csv` it produces before committing — it lists,
 per file, the resolved/unresolved parent counts, size, and the action it would
