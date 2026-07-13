@@ -172,6 +172,7 @@
     <Compile Include="tests\test_record_inspector.py" />
     <Compile Include="utils\__init__.py" />
     <Compile Include="utils\responses.py" />
+    <Compile Include="utils\soql.py" />
     <Compile Include="routes\cli.py" />
     <Compile Include="routes\meta.py" />
     <Compile Include="services\cli_metadata.py" />
@@ -183,6 +184,7 @@
     <Compile Include="tests\test_cli_script.py" />
     <Compile Include="tests\test_cli_routes.py" />
     <Compile Include="tests\test_meta_routes.py" />
+    <Compile Include="tests\test_soql_safety.py" />
     <Compile Include="tests\test_cli_fls.py" />
     <Compile Include="tests\test_cli_layout.py" />
     <Compile Include="tests\test_cli_recordtype.py" />

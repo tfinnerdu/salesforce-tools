@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from config import Config
 from sf_provider import get_sf
+from utils.soql import escape_soql
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def get_users(org: str, search: str = '') -> list:
     sf = get_sf(org)
     where_parts = ["IsActive = true"]
     if search:
-        safe = search.replace("'", "\\'")
+        safe = escape_soql(search)
         where_parts.append(f"(Name LIKE '%{safe}%' OR Username LIKE '%{safe}%')")
     where = ' AND '.join(where_parts)
     soql = (
@@ -89,7 +90,7 @@ def get_user_detail(org: str, user_id: str) -> dict:
     user_soql = (
         f"SELECT Id, Name, Username, Email, IsActive, Profile.Id, Profile.Name, "
         f"Profile.UserLicense.Name, LastLoginDate "
-        f"FROM User WHERE Id = '{user_id}' LIMIT 1"
+        f"FROM User WHERE Id = '{escape_soql(user_id)}' LIMIT 1"
     )
     user_res = sf.query(user_soql)
     user_records = user_res.get('records', [])
@@ -104,7 +105,7 @@ def get_user_detail(org: str, user_id: str) -> dict:
         f"SELECT PermissionSet.Id, PermissionSet.Name, PermissionSet.Label, "
         f"PermissionSet.Description "
         f"FROM PermissionSetAssignment "
-        f"WHERE AssigneeId = '{user_id}' "
+        f"WHERE AssigneeId = '{escape_soql(user_id)}' "
         f"AND PermissionSet.IsOwnedByProfile = false "
         f"ORDER BY PermissionSet.Label"
     )
@@ -125,7 +126,7 @@ def get_user_detail(org: str, user_id: str) -> dict:
     # Aggregate object permissions across all perm sets for this user
     obj_perms = {}
     if pset_ids:
-        id_list = "', '".join(pset_ids)
+        id_list = "', '".join(escape_soql(p) for p in pset_ids)
         obj_soql = (
             f"SELECT SobjectType, PermissionsRead, PermissionsCreate, PermissionsEdit, "
             f"PermissionsDelete, PermissionsViewAllRecords, PermissionsModifyAllRecords "
@@ -176,7 +177,7 @@ def get_pset_detail(org: str, pset_id: str) -> dict:
     # Perm set metadata
     ps_soql = (
         f"SELECT Id, Name, Label, Description, IsCustom, Type "
-        f"FROM PermissionSet WHERE Id = '{pset_id}' LIMIT 1"
+        f"FROM PermissionSet WHERE Id = '{escape_soql(pset_id)}' LIMIT 1"
     )
     ps_res = sf.query(ps_soql)
     ps_records = ps_res.get('records', [])
@@ -188,7 +189,7 @@ def get_pset_detail(org: str, pset_id: str) -> dict:
     assign_soql = (
         f"SELECT Assignee.Id, Assignee.Name, Assignee.Username "
         f"FROM PermissionSetAssignment "
-        f"WHERE PermissionSetId = '{pset_id}' "
+        f"WHERE PermissionSetId = '{escape_soql(pset_id)}' "
         f"ORDER BY Assignee.Name LIMIT 200"
     )
     assign_res = sf.query_all(assign_soql)
@@ -205,7 +206,7 @@ def get_pset_detail(org: str, pset_id: str) -> dict:
     obj_soql = (
         f"SELECT SobjectType, PermissionsRead, PermissionsCreate, PermissionsEdit, "
         f"PermissionsDelete, PermissionsViewAllRecords, PermissionsModifyAllRecords "
-        f"FROM ObjectPermissions WHERE ParentId = '{pset_id}' ORDER BY SobjectType"
+        f"FROM ObjectPermissions WHERE ParentId = '{escape_soql(pset_id)}' ORDER BY SobjectType"
     )
     obj_res = sf.query_all(obj_soql)
     obj_perms = [
@@ -224,7 +225,7 @@ def get_pset_detail(org: str, pset_id: str) -> dict:
     # Field permissions (top 200 — grouped by object)
     field_soql = (
         f"SELECT SobjectType, Field, PermissionsRead, PermissionsEdit "
-        f"FROM FieldPermissions WHERE ParentId = '{pset_id}' "
+        f"FROM FieldPermissions WHERE ParentId = '{escape_soql(pset_id)}' "
         f"ORDER BY SobjectType, Field LIMIT 500"
     )
     field_res = sf.query_all(field_soql)
@@ -261,7 +262,7 @@ def get_object_access_matrix(org: str, object_name: str) -> dict:
         f"PermissionsRead, PermissionsCreate, PermissionsEdit, "
         f"PermissionsDelete, PermissionsViewAllRecords, PermissionsModifyAllRecords "
         f"FROM ObjectPermissions "
-        f"WHERE SobjectType = '{object_name}' "
+        f"WHERE SobjectType = '{escape_soql(object_name)}' "
         f"AND Parent.IsOwnedByProfile = false "
         f"ORDER BY Parent.Label"
     )
@@ -289,7 +290,7 @@ def get_field_access_matrix(org: str, object_name: str) -> dict:
     soql = (
         f"SELECT Parent.Id, Parent.Name, Parent.Label, Field, PermissionsRead, PermissionsEdit "
         f"FROM FieldPermissions "
-        f"WHERE SobjectType = '{object_name}' "
+        f"WHERE SobjectType = '{escape_soql(object_name)}' "
         f"AND Parent.IsOwnedByProfile = false "
         f"ORDER BY Field, Parent.Label LIMIT 1000"
     )
@@ -334,7 +335,7 @@ def get_field_access(org: str, object_name: str) -> dict:
     soql = (
         f"SELECT Id, SobjectType, Field, PermissionsRead, PermissionsEdit "
         f"FROM FieldPermissions "
-        f"WHERE SobjectType = '{object_name}' "
+        f"WHERE SobjectType = '{escape_soql(object_name)}' "
         f"ORDER BY Field "
         f"LIMIT 500"
     )

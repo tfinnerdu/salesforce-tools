@@ -107,8 +107,10 @@ def bulk_modify_execute(org: str, object_name: str, where_clause: str,
 
 def search_users(org: str, query: str = '') -> list:
     """Search active users for the owner picker."""
+    from utils.soql import escape_soql
     sf = get_sf(org)
-    where = f"AND (Name LIKE '%{query}%' OR Username LIKE '%{query}%')" if query else ''
+    q = escape_soql(query)
+    where = f"AND (Name LIKE '%{q}%' OR Username LIKE '%{q}%')" if query else ''
     soql = f"SELECT Id, Name, Username FROM User WHERE IsActive = true {where} ORDER BY Name LIMIT 20"
     result = sf.query(soql)
     return [{'id': r['Id'], 'name': r.get('Name', ''), 'username': r.get('Username', '')}

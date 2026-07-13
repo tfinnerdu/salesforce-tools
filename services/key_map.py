@@ -27,6 +27,7 @@ from typing import Optional
 
 from config import Config
 from db import db_available, get_cursor
+from utils.soql import escape_soql
 
 logger = logging.getLogger(__name__)
 
@@ -376,8 +377,8 @@ def _bulk_lookup(sf, sobject: str, field: str, values: list) -> dict:
     CHUNK = 200
     for i in range(0, len(values), CHUNK):
         chunk = values[i:i + CHUNK]
-        # Quote string literals; SOQL ' escaping for safety.
-        literals = ', '.join("'" + str(v).replace("'", "\\'") + "'" for v in chunk)
+        # Quote string literals with full SOQL escaping (backslash + quote).
+        literals = ', '.join("'" + escape_soql(v) + "'" for v in chunk)
         soql = f"SELECT Id, {field} FROM {sobject} WHERE {field} IN ({literals})"
         try:
             res = sf.query(soql)

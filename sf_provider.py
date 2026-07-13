@@ -47,7 +47,14 @@ def set_bypass_triggers(sf, enable: bool) -> None:
         return
     try:
         sf.restful(f'sobjects/{setting}/', method='PATCH', json={field: enable})
-        logger.info("bypass_triggers set to %s on %s", enable, setting)
+        if enable:
+            # Org-wide: disables Apex triggers for ALL users until restored.
+            # Log loudly so any bypass window is visible in the Argo/stdout logs.
+            logger.warning(
+                "Apex trigger bypass ENABLED org-wide via %s.%s — affects all "
+                "users until restored.", setting, field)
+        else:
+            logger.info("Apex trigger bypass restored on %s.%s", setting, field)
     except Exception as exc:
         logger.warning("set_bypass_triggers(%s) failed: %s", enable, exc)
 
