@@ -275,10 +275,29 @@ def build_plan(source_sf, target_sf, cfg):
     """Read + resolve everything (no writes); return (plan, resolved, unresolved)."""
     if cfg.id_map:
         # Crosswalk mode: the CSV carries old→new parent Ids, so scope (its keys)
-        # and remap come straight from it — no external-Id lookups.
-        resolved = load_id_map(cfg.id_map, cfg.map_old_col, cfg.map_new_col)
-        unresolved = {}
-        parent_ids = list(resolved.keys())
+        # and remap come straight from it — no external-Id lookups. Validate Ids
+        # up front: a non-Id old value (usually a wrong column mapping) otherwise
+        # makes Salesforce reject the whole source query with a cryptic
+        # "invalid parameter value". Query only valid source Ids; flag bad targets.
+        full_map = load_id_map(cfg.id_map, cfg.map_old_col, cfg.map_new_col)
+        resolved, unresolved = {}, {}
+        for old, new in full_map.items():
+            if not is_sf_id(old):
+                continue
+            if is_sf_id(new):
+                resolved[old] = new
+            else:
+                unresolved[old] = f'target value {new!r} is not a Salesforce Id'
+        parent_ids = [k for k in full_map if is_sf_id(k)]
+        if not parent_ids:
+            sample = next(iter(full_map), '<empty file>')
+            raise ValueError(
+                f"No Salesforce record Ids found in the '{cfg.map_old_col}' column "
+                f"(e.g. {sample!r}). Check the Old-Id / New-Id column names — they "
+                f"must be the source and target parent record-Id columns.")
+        skipped = len(full_map) - len(parent_ids)
+        if skipped:
+            logger.warning('Crosswalk: skipped %d row(s) whose old value is not a Salesforce Id.', skipped)
         logger.info('Scope: %d parent Id(s) from crosswalk.', len(parent_ids))
     else:
         resolved = None

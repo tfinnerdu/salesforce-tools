@@ -6,6 +6,8 @@ with unittest.mock doubles for the two orgs.
 """
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from services import file_migration as fm
 from services.file_migration import MigrationConfig
 
@@ -29,25 +31,25 @@ def _source_sf(cdl, cv):
 
 def test_build_plan_crosswalk_maps_file_to_new_parent(tmp_path):
     csv = tmp_path / 'map.csv'
-    csv.write_text('old_id,new_id\na1OLD,a1NEW\n')
+    csv.write_text('old_id,new_id\na1OLD1234567890,a1NEW1234567890\n')
     src = _source_sf(
-        cdl=[{'ContentDocumentId': '069A', 'LinkedEntityId': 'a1OLD'}],
+        cdl=[{'ContentDocumentId': '069A', 'LinkedEntityId': 'a1OLD1234567890'}],
         cv=[{'Id': '068A', 'Title': 'photo', 'PathOnClient': 'photo.jpg',
              'FileExtension': 'jpg', 'ContentDocumentId': '069A', 'ContentSize': 1000}],
     )
     cfg = MigrationConfig(id_map=str(csv))
     plan, resolved, unresolved = fm.build_plan(src, MagicMock(), cfg)
-    assert resolved == {'a1OLD': 'a1NEW'}
+    assert resolved == {'a1OLD1234567890': 'a1NEW1234567890'}
     assert len(plan) == 1
-    assert plan[0]['target_parents'] == ['a1NEW']
+    assert plan[0]['target_parents'] == ['a1NEW1234567890']
     assert plan[0]['oversize'] is False
 
 
 def test_build_plan_crosswalk_flags_oversize(tmp_path):
     csv = tmp_path / 'map.csv'
-    csv.write_text('old_id,new_id\na1OLD,a1NEW\n')
+    csv.write_text('old_id,new_id\na1OLD1234567890,a1NEW1234567890\n')
     src = _source_sf(
-        cdl=[{'ContentDocumentId': '069A', 'LinkedEntityId': 'a1OLD'}],
+        cdl=[{'ContentDocumentId': '069A', 'LinkedEntityId': 'a1OLD1234567890'}],
         cv=[{'Id': '068A', 'Title': 'big', 'ContentDocumentId': '069A',
              'ContentSize': 50 * 1024 * 1024}],   # 50 MB > 35 MB cap
     )
@@ -55,19 +57,48 @@ def test_build_plan_crosswalk_flags_oversize(tmp_path):
     assert plan[0]['oversize'] is True
 
 
+def test_build_plan_crosswalk_rejects_non_id_old_column(tmp_path):
+    # Wrong column mapping → old values aren't Salesforce Ids → clear error,
+    # not a cryptic "invalid parameter value" from Salesforce.
+    csv = tmp_path / 'bad.csv'
+    csv.write_text('old_id,new_id\nBob Smith,Jane Doe\n')
+    with pytest.raises(ValueError) as exc:
+        fm.build_plan(MagicMock(), MagicMock(), MigrationConfig(id_map=str(csv)))
+    assert 'old_id' in str(exc.value)
+
+
+def test_build_plan_crosswalk_flags_invalid_target_id(tmp_path):
+    csv = tmp_path / 'm.csv'
+    csv.write_text('old_id,new_id\na1OLD1234567890,not-an-id\n')
+    plan, resolved, unresolved = fm.build_plan(
+        _source_sf([], []), MagicMock(), MigrationConfig(id_map=str(csv)))
+    assert resolved == {}
+    assert 'a1OLD1234567890' in unresolved
+
+
+def test_build_plan_crosswalk_skips_invalid_old_keeps_valid(tmp_path):
+    csv = tmp_path / 'm.csv'
+    csv.write_text('old_id,new_id\n'
+                   'a1OLD1234567890,a1NEW1234567890\n'
+                   'BADOLD,BADNEW\n')
+    plan, resolved, unresolved = fm.build_plan(
+        _source_sf([], []), MagicMock(), MigrationConfig(id_map=str(csv)))
+    assert resolved == {'a1OLD1234567890': 'a1NEW1234567890'}
+
+
 def test_build_plan_file_with_unmapped_parent_has_no_target(tmp_path):
     csv = tmp_path / 'map.csv'
-    csv.write_text('old_id,new_id\na1OLD,a1NEW\n')
+    csv.write_text('old_id,new_id\na1OLD1234567890,a1NEW1234567890\n')
     # File links to a parent that's NOT in the crosswalk → no resolved target.
     src = _source_sf(
-        cdl=[{'ContentDocumentId': '069A', 'LinkedEntityId': 'a1OLD'},
-             {'ContentDocumentId': '069B', 'LinkedEntityId': 'zzUNMAPPED'}],
+        cdl=[{'ContentDocumentId': '069A', 'LinkedEntityId': 'a1OLD1234567890'},
+             {'ContentDocumentId': '069B', 'LinkedEntityId': 'zzUNMAP12345678'}],
         cv=[{'Id': '068B', 'Title': 'orphan', 'ContentDocumentId': '069B', 'ContentSize': 1}],
     )
     plan, _, _ = fm.build_plan(src, MagicMock(), MigrationConfig(id_map=str(csv)))
     row = next(r for r in plan if r['doc_id'] == '069B')
     assert row['target_parents'] == []
-    assert 'zzUNMAPPED' in row['unresolved_parents']
+    assert 'zzUNMAP12345678' in row['unresolved_parents']
 
 
 # ── summarize / report_rows ───────────────────────────────────────────────────
