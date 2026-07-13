@@ -64,6 +64,11 @@ services/            Business logic, one module per feature
   error_reconciler.py      §7 Conductor failure categorization
   schema_diff.py           §8 sandbox vs prod field diff
   soql_workbench.py        §9 SOQL runner + object explorer
+  field_locator.py         Schema → Field Finder: inverse of the Data
+                           Dictionary (field → which objects have it). Tooling
+                           CustomField query keyed on DeveloperName (input's __c
+                           / namespace auto-stripped); opt-in describe deep-scan
+                           also finds standard fields (capped). Read-only.
   external_id_coverage.py  §10 SIS_ID__c / Ethos_Guid__c coverage
   contactpoint_scanner.py  §11 broken ContactPoint parent links
   crosswalk_diff.py        §4 EDA→Ed Cloud field mapping diff

@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% block title %}Field Finder - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<!-- Sub-nav -->
+<nav class="sub-nav mb-3">
+  <div class="container-fluid">
+    <ul class="nav nav-pills gap-1">
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/crosswalk">Crosswalk Field Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/org-diff">Org Schema Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/metadata-diff">Org Metadata Diff</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/field-usage">Field Usage</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="/schema/field-finder">Field Finder</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/data-dictionary">Data Dictionary</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/apex-search">Apex Code Search</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/snapshots">Snapshots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/schema/inspect">Record Inspector</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <!-- Page header -->
+  <div class="mc-page-header d-flex align-items-center gap-2">
+    <h4 class="mc-page-title mb-0">Field Finder
+      <span class="mc-info-icon"
+            data-bs-toggle="popover"
+            data-bs-trigger="focus"
+            tabindex="0"
+            data-bs-title="Field Finder"
+            data-bs-content="The inverse of the Data Dictionary: give it a field and it lists every object that has it. Custom fields resolve instantly via the Tooling API's CustomField object; tick 'Deep scan' to also describe every object and catch standard fields. Paste the API name however you have it — a trailing __c or a namespace prefix is stripped for you.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-5 col-lg-4">
+          <label for="ffField" class="form-label small fw-semibold mb-1">Field API name</label>
+          <input id="ffField" type="text" class="form-control form-control-sm"
+                 placeholder="e.g. SIS_ID__c or SIS_ID">
+          <div class="form-text">The <code>__c</code> and any namespace are stripped automatically.</div>
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnFfFind" class="btn btn-doane btn-sm">&#9654; Find</button>
+        </div>
+        <div class="col-sm-auto">
+          <button id="btnFfExport" class="btn btn-outline-secondary btn-sm" disabled>&#8681; Export CSV</button>
+        </div>
+        <div class="col-12">
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" id="ffDeepScan">
+            <label class="form-check-label small" for="ffDeepScan">
+              Deep scan — also find <strong>standard</strong> fields
+              <span class="text-muted">(describes every object; can take up to a minute on a large org)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="ffLoading" class="text-center py-4 d-none">
+    <div class="spinner-border text-warning" role="status">
+      <span class="visually-hidden">Searching…</span>
+    </div>
+    <p id="ffLoadingText" class="mt-2 text-muted small">Querying the Tooling API…</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="ffEmpty" class="text-center py-5 text-muted">
+    <p class="mb-1">No results yet.</p>
+    <p class="small">Enter a field API name and click <strong>Find</strong> to see which objects have it.</p>
+  </div>
+
+  <!-- Results -->
+  <div id="ffResultsWrap" class="d-none">
+    <p id="ffSummaryLine" class="text-muted small mb-2"></p>
+    <div id="ffNoMatch" class="alert alert-warning py-2 small d-none"></div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" id="ffTable">
+            <thead style="background-color: var(--doane-slate); color: #fff;">
+              <tr>
+                <th>Object</th>
+                <th>Field API Name</th>
+                <th>Label</th>
+                <th>Type</th>
+                <th>Custom</th>
+              </tr>
+            </thead>
+            <tbody id="ffTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+MC.fieldFinder = {
+  init() {
+    document.getElementById('btnFfFind')?.addEventListener('click', () => this.run());
+    document.getElementById('ffField')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.run();
+    });
+    document.getElementById('btnFfExport')?.addEventListener('click', () => {
+      const field = (document.getElementById('ffField')?.value || 'field').trim();
+      MC.exportTableCSV('ffTable', `${field || 'field'}-objects.csv`);
+    });
+  },
+
+  async run() {
+    const field = (document.getElementById('ffField')?.value || '').trim();
+    if (!field) { MC.showToast('Enter a field API name.', 'warning'); return; }
+    const deep = document.getElementById('ffDeepScan')?.checked || false;
+
+    document.getElementById('ffEmpty')?.classList.add('d-none');
+    document.getElementById('ffResultsWrap')?.classList.add('d-none');
+    document.getElementById('ffLoading')?.classList.remove('d-none');
+    document.getElementById('ffLoadingText').textContent = deep
+      ? 'Deep scan — describing every object, this can take a minute…'
+      : 'Querying the Tooling API…';
+    document.getElementById('btnFfExport').disabled = true;
+
+    try {
+      const resp = await fetch('/schema/field-finder/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, include_standard: deep }),
+      });
+      const json = await resp.json();
+      document.getElementById('ffLoading')?.classList.add('d-none');
+      if (!json.success) {
+        MC.showToast('Error: ' + (json.error || 'Unknown error'), 'danger');
+        document.getElementById('ffEmpty')?.classList.remove('d-none');
+        return;
+      }
+      this._render(json.data);
+    } catch (err) {
+      document.getElementById('ffLoading')?.classList.add('d-none');
+      document.getElementById('ffEmpty')?.classList.remove('d-none');
+      MC.showToast('Request failed: ' + err.message, 'danger');
+    }
+  },
+
+  _render(data) {
+    const rows = data.results || [];
+
+    // Summary line
+    const parts = [];
+    parts.push(`<code>${MC._escHtml(data.normalized)}</code> found on <strong>${data.object_count}</strong> object(s)`);
+    parts.push(`${data.custom_matches} custom` + (data.standard_matches ? ` · ${data.standard_matches} standard` : ''));
+    parts.push(data.method === 'describe'
+      ? `deep scan of ${data.deep_scanned} object(s)${data.truncated ? ' (capped)' : ''}`
+      : 'Tooling API (custom fields)');
+    document.getElementById('ffSummaryLine').innerHTML = parts.join(' — ');
+
+    // No-match hint (custom-only searches miss standard fields)
+    const noMatch = document.getElementById('ffNoMatch');
+    if (rows.length === 0) {
+      noMatch.classList.remove('d-none');
+      noMatch.innerHTML = data.method === 'describe'
+        ? `No object has a field named <code>${MC._escHtml(data.normalized)}</code>. Check the spelling (the API name without <code>__c</code>).`
+        : `No <strong>custom</strong> field named <code>${MC._escHtml(data.normalized)}</code>. If it's a <strong>standard</strong> field, tick <strong>Deep scan</strong> and search again.`;
+    } else {
+      noMatch.classList.add('d-none');
+    }
+
+    // Rows
+    const tbody = document.getElementById('ffTableBody');
+    tbody.innerHTML = '';
+    const check = '<span class="text-success fw-bold" aria-label="yes">&#10003;</span>';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      if (r.custom) tr.style.background = 'rgba(255,193,7,0.08)';
+      tr.innerHTML = `
+        <td class="fw-semibold">${MC._escHtml(r.object)}</td>
+        <td><code class="small">${MC._escHtml(r.api_name)}</code></td>
+        <td class="small">${MC._escHtml(r.label)}</td>
+        <td>${r.type ? `<span class="badge rounded-pill bg-light text-dark border font-monospace" style="font-size:0.7em;">${MC._escHtml(r.type)}</span>` : ''}</td>
+        <td>${r.custom ? check : ''}</td>`;
+      tbody.appendChild(tr);
+    }
+
+    document.getElementById('ffResultsWrap')?.classList.remove('d-none');
+    document.getElementById('btnFfExport').disabled = rows.length === 0;
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => MC.fieldFinder.init());
+</script>
+{% endblock %}

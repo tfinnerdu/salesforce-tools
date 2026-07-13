@@ -45,6 +45,11 @@ def field_usage():
     return render_template('schema/field_usage.html')
 
 
+@schema_bp.route('/field-finder')
+def field_finder():
+    return render_template('schema/field_finder.html')
+
+
 @schema_bp.route('/data-dictionary')
 def data_dictionary():
     return render_template('schema/data_dictionary.html')
@@ -105,6 +110,24 @@ def api_field_usage_run():
         return jsonify({'success': True, 'data': result})
     except Exception as exc:
         logger.exception('field usage run failed')
+        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+
+
+@schema_bp.route('/field-finder/run', methods=['POST'])
+def api_field_finder_run():
+    org = session.get('active_org', 'dev')
+    body = request.get_json(silent=True) or {}
+    field = body.get('field', '').strip()
+    if not field:
+        return jsonify({'success': False, 'data': None, 'error': 'field required'}), 400
+    include_standard = bool(body.get('include_standard', False))
+    try:
+        from services import field_locator
+        result = field_locator.find(org=org, field_name=field,
+                                    include_standard=include_standard)
+        return jsonify({'success': True, 'data': result})
+    except Exception as exc:
+        logger.exception('field finder failed')
         return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
 
 
