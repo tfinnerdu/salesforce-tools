@@ -188,20 +188,54 @@ def object_meta_xml(shell: dict) -> str:
 
 # ── XML: permission set ──────────────────────────────────────────────────────
 
+def object_perms_for(objects: list, editable: bool) -> list:
+    """Object-permission specs for a set of objects at read or read/write level.
+
+    Read-only grants allowRead; editable also grants create + edit (not delete or
+    view/modify-all — those stay a deliberate opt-in). This is what makes a
+    metadata-deployed object *visible*, which field FLS alone can't do.
+    """
+    return [{'object': o, 'read': True, 'create': bool(editable),
+             'edit': bool(editable), 'delete': False,
+             'view_all': False, 'modify_all': False} for o in objects if o]
+
+
 def permission_set_xml(api_name: str, label: str, field_perms: list,
-                       description: str = '') -> str:
+                       description: str = '', object_perms: list = None) -> str:
     """Render a PermissionSet `.permissionset-meta.xml`.
 
     field_perms: [{field: 'Object.Field__c', readable: bool, editable: bool}].
-    Emits one single-line <fieldPermissions> per entry, in the given order
-    (matches the Conductor integration permission set).
+    object_perms: [{object, read, create, edit, delete, view_all, modify_all}] —
+    object-level access so the permset opens the object itself, not just its
+    fields (field FLS is moot if the object is hidden).
+    Emits one single-line entry per permission, matching retrieve output.
     """
     if not api_name:
         raise ValueError('permission set requires api_name')
+
+    def _b(v):
+        return 'true' if v else 'false'
+
     lines = [XML_HEADER, PS_OPEN, _tag('label', label or api_name)]
     if description:
         lines.append(_tag('description', description))
     lines.append(_tag('hasActivationRequired', False))
+    for op in (object_perms or []):
+        obj = escape(str(op.get('object', '')))
+        if not obj:
+            continue
+        # Sub-elements are all required, in retrieve's alphabetical order.
+        lines.append(
+            '    <objectPermissions>'
+            f'<allowCreate>{_b(op.get("create"))}</allowCreate>'
+            f'<allowDelete>{_b(op.get("delete"))}</allowDelete>'
+            f'<allowEdit>{_b(op.get("edit"))}</allowEdit>'
+            f'<allowRead>{_b(op.get("read", True))}</allowRead>'
+            f'<modifyAllRecords>{_b(op.get("modify_all"))}</modifyAllRecords>'
+            f'<object>{obj}</object>'
+            f'<viewAllRecords>{_b(op.get("view_all"))}</viewAllRecords>'
+            '</objectPermissions>'
+        )
     for fp in field_perms:
         field = escape(str(fp.get('field', '')))
         readable = 'true' if fp.get('readable', True) else 'false'
@@ -561,7 +595,8 @@ def build_package_zip(project: str, fields: list, permset: dict = None,
             path = f'force-app/main/default/permissionsets/{name}.permissionset-meta.xml'
             zf.writestr(path, permission_set_xml(
                 name, ps.get('label', name),
-                ps.get('field_perms', []), ps.get('description', '')))
+                ps.get('field_perms', []), ps.get('description', ''),
+                ps.get('object_perms')))
         zf.writestr('manifest/package.xml',
                     package_xml(fields, permset_name, api_version, extra_names,
                                 object_names, layout_names))

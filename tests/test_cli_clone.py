@@ -227,6 +227,71 @@ def test_members_prepends_custom_objects():
     assert members[0] == 'CustomObject:Foo__c'
 
 
+# ── cli_script: object permissions in a permission set ────────────────────────
+
+def test_object_perms_for_levels():
+    ro = cli_script.object_perms_for(['RoomAssignment__c'], editable=False)[0]
+    assert ro['read'] is True and ro['create'] is False and ro['edit'] is False
+    rw = cli_script.object_perms_for(['RoomAssignment__c'], editable=True)[0]
+    assert rw['read'] and rw['create'] and rw['edit']
+
+
+def test_permission_set_xml_with_object_permissions():
+    xml = cli_script.permission_set_xml(
+        'RA_Access', 'RA Access',
+        [{'field': 'RoomAssignment__c.Room__c', 'readable': True, 'editable': True}],
+        object_perms=cli_script.object_perms_for(['RoomAssignment__c'], True))
+    assert '<objectPermissions>' in xml
+    assert '<object>RoomAssignment__c</object>' in xml
+    assert '<allowRead>true</allowRead>' in xml and '<allowEdit>true</allowEdit>' in xml
+    assert '<field>RoomAssignment__c.Room__c</field>' in xml   # field perms still present
+
+
+def test_permission_set_xml_no_object_perms_by_default():
+    xml = cli_script.permission_set_xml('P', 'P',
+                                        [{'field': 'A.B__c', 'readable': True, 'editable': False}])
+    assert '<objectPermissions>' not in xml   # additive — unchanged when not requested
+
+
+def test_clone_permset_grants_object_access(client):
+    with patch('services.cli_clone.get_sf', return_value=_sf()):
+        resp = client.post('/cli/clone-object/package',
+                           data=json.dumps({'object': 'Accommodation__c', 'include_permset': True}),
+                           content_type='application/json')
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        ps = next(n for n in zf.namelist() if 'permissionsets/' in n)
+        content = zf.read(ps).decode()
+    assert '<objectPermissions>' in content
+    assert '<object>Accommodation__c</object>' in content
+
+
+def test_human_permset_object_access(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'p', 'alias': 'UAT',
+        'fields': [{'object': 'RoomAssignment__c', 'api_name': 'Room__c', 'label': 'Room',
+                    'type': 'Text', 'readable': True, 'editable': True}],
+        'human_permset': {'api_name': 'RA_Vis', 'label': 'RA Vis',
+                          'editable': True, 'object_access': True},
+    }), content_type='application/json')
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        ps = zf.read('force-app/main/default/permissionsets/RA_Vis.permissionset-meta.xml').decode()
+    assert '<objectPermissions>' in ps and '<object>RoomAssignment__c</object>' in ps
+
+
+def test_human_permset_no_object_access_when_off(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'p', 'alias': 'UAT',
+        'fields': [{'object': 'RoomAssignment__c', 'api_name': 'Room__c', 'label': 'Room',
+                    'type': 'Text', 'readable': True, 'editable': True}],
+        'human_permset': {'api_name': 'RA_Vis', 'label': 'RA Vis',
+                          'editable': True, 'object_access': False},
+    }), content_type='application/json')
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        ps = zf.read('force-app/main/default/permissionsets/RA_Vis.permissionset-meta.xml').decode()
+    assert '<objectPermissions>' not in ps
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 def test_route_plan_honors_source_org(client, monkeypatch):

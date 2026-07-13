@@ -189,6 +189,8 @@ def _human_permsets_from(payload, fields, existing_fields=None) -> list:
     description = (hp.get('description') or '').strip()
     editable = bool(hp.get('editable'))
 
+    grant_object = bool(hp.get('object_access'))
+
     def _perms(edit):
         perms = cli_fls.human_field_perms(fields, edit)
         seen = {fp['field'] for fp in perms}
@@ -198,15 +200,25 @@ def _human_permsets_from(payload, fields, existing_fields=None) -> list:
                 seen.add(ef)
         return perms
 
-    permsets = [{'api_name': name, 'label': label, 'description': description,
-                 'field_perms': _perms(editable)}]
+    def _objects_of(field_perms):
+        objs = []
+        for fp in field_perms:
+            obj = (fp.get('field') or '').split('.', 1)[0]
+            if obj and obj not in objs:
+                objs.append(obj)
+        return objs
+
+    def _make(name_, label_, desc_, edit_):
+        fp = _perms(edit_)
+        ps = {'api_name': name_, 'label': label_, 'description': desc_, 'field_perms': fp}
+        if grant_object:   # open the object itself, not just its fields
+            ps['object_perms'] = cli_script.object_perms_for(_objects_of(fp), edit_)
+        return ps
+
+    permsets = [_make(name, label, description, editable)]
     if editable and hp.get('readonly_companion'):
-        permsets.append({
-            'api_name': f'{name}_ReadOnly',
-            'label': f'{label} (Read Only)',
-            'description': (description + ' Read-only companion.').strip(),
-            'field_perms': _perms(False),
-        })
+        permsets.append(_make(f'{name}_ReadOnly', f'{label} (Read Only)',
+                              (description + ' Read-only companion.').strip(), False))
     return permsets
 
 
@@ -405,8 +417,10 @@ def _clone_permset(object_name: str, fields: list) -> dict:
     return {
         'api_name': name,
         'label': name.replace('_', ' '),
-        'description': f'Field access for cloned {object_name}.',
+        'description': f'Object + field access for cloned {object_name}.',
         'field_perms': cli_fls.human_field_perms(fields, editable=True),
+        # A cloned object is hidden by default — grant object access so it's usable.
+        'object_perms': cli_script.object_perms_for([object_name], editable=True),
     }
 
 

@@ -218,6 +218,7 @@ MC.cli = {
       label: document.getElementById('hpsLabel').value.trim(),
       editable: document.getElementById('hpsEditable').checked,
       readonly_companion: document.getElementById('hpsReadonlyCompanion').checked,
+      object_access: document.getElementById('hpsObjectAccess').checked,
     };
   },
 

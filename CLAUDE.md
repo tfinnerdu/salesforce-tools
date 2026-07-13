@@ -193,7 +193,9 @@ second, human-facing permission set. Reading a field loads **all of that object'
 custom fields** into the set at the source field's access level (read vs edit)
 and auto-names it, so the read visibly produces a deployable permset — carried
 alongside the integration permset through the deploy, dual assign, and package
-zip. FLS only — page-layout and record-type availability are handled separately
+zip. The set can also grant **object** permissions (`cli_script.object_perms_for`
+→ `<objectPermissions>`), since a metadata-deployed object is hidden until object
+access is granted — field FLS alone won't make it visible. FLS only — page-layout and record-type availability are handled separately
 by their own paste-and-inject sections (below).
 
 **New object (builder).** The field builder can define fresh `CustomObject`s
