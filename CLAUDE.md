@@ -189,13 +189,22 @@ Stateless — nothing is persisted. Describe-driven pickers demo under `SHOW_MOC
 so a created field isn't visible to anyone. The Visibility section reads a
 reference field's FLS from a *source* org (e.g. EDA) via the `FieldPermissions`
 object (`GET /cli/fls`, read-only, modeled on `perm_auditor`) and generates a
-second, human-facing permission set that grants the built fields the same access
-— carried alongside the integration permset through the deploy, dual assign, and
-package zip. FLS only — page-layout and record-type availability are handled
-separately by their own paste-and-inject sections (below).
+second, human-facing permission set. Reading a field loads **all of that object's
+custom fields** into the set at the source field's access level (read vs edit)
+and auto-names it, so the read visibly produces a deployable permset — carried
+alongside the integration permset through the deploy, dual assign, and package
+zip. FLS only — page-layout and record-type availability are handled separately
+by their own paste-and-inject sections (below).
+
+**New object (builder).** The field builder can define fresh `CustomObject`s
+(API name, label, plural, sharing) that ride in the package as a shell and get
+injected into the Object picker so fields target them; `_members`/`deploy_snippet`
+put `CustomObject:` ahead of its `CustomField:` members so one deploy creates the
+object then its fields.
 
 **Clone object (`cli_clone.py`).** Instead of hand-adding fields, describe a
-whole *source* object and generate a deployable package of its custom fields:
+whole object in a chosen **source org** (per-run picker) and generate a deployable
+package of its custom fields:
 `POST /cli/clone-object/plan` (preview — fields, per-field skip reasons, optional
 shell) and `POST /cli/clone-object/package` (the force-app zip). It maps each
 describe field to the same field spec the builder uses, so `cli_script`'s
@@ -218,7 +227,9 @@ the composer's lane is generating the CLI command, not running it in-browser.
 **Page layout (`cli_layout.py`).** A field isn't on the record page until it's
 on the layout — a third metadata type. Layouts can't be read synchronously here
 (simple_salesforce's Metadata API is async-retrieve-only), so the flow is:
-generate the retrieve command, the admin pastes the retrieved `.layout-meta.xml`,
+generate a **list-layouts** command (`sf org list metadata -m Layout`, to discover
+the exact `<Object>-<Layout Name>` fullName) then the retrieve command, the admin
+pastes the retrieved `.layout-meta.xml`,
 and `cli_layout` adds the fields (a new `<layoutSections>`, or into an existing
 section's first column) via **pure string surgery that leaves every other byte
 untouched** — never a rebuilt layout designer. Fields already on the layout are

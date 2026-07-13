@@ -190,7 +190,82 @@ def test_build_package_zip_object_only():
         assert 'force-app/main/default/objects/Foo__c/Foo__c.object-meta.xml' in zf.namelist()
 
 
+# ── cli_script: layout-list snippet + deploy with object shells ───────────────
+
+def test_layout_list_snippet():
+    s = cli_script.layout_list_snippet('UAT')
+    assert 'list metadata' in s and 'Layout' in s and 'UAT' in s
+
+
+def test_deploy_snippet_puts_object_before_its_fields():
+    s = cli_script.deploy_snippet(
+        [{'object': 'Foo__c', 'api_name': 'Bar__c'}], '', 'UAT', object_names=['Foo__c'])
+    assert s.index('CustomObject:Foo__c') < s.index('CustomField:Foo__c.Bar__c')
+
+
+def test_members_prepends_custom_objects():
+    members = cli_script._members(
+        [{'object': 'Foo__c', 'api_name': 'Bar__c'}], '', None, ['Foo__c'])
+    assert members[0] == 'CustomObject:Foo__c'
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+def test_route_plan_honors_source_org(client, monkeypatch):
+    captured = {}
+
+    def fake_plan(org, obj, include_shell=False):
+        captured['org'] = org
+        return {'object': obj, 'label': obj, 'is_custom': True, 'fields': [],
+                'skipped': [], 'shell': None,
+                'counts': {'custom_fields': 0, 'skipped': 0, 'standard_fields': 0, 'total_fields': 0}}
+
+    monkeypatch.setattr(cli_clone, 'plan_from_object', fake_plan)
+    resp = client.post('/cli/clone-object/plan',
+                       data=json.dumps({'object': 'Foo__c', 'source_org': 'sandbox'}),
+                       content_type='application/json')
+    assert resp.status_code == 200
+    assert captured['org'] == 'sandbox'
+
+
+def test_route_plan_rejects_unknown_source_org(client):
+    resp = client.post('/cli/clone-object/plan',
+                       data=json.dumps({'object': 'Foo__c', 'source_org': 'nope'}),
+                       content_type='application/json')
+    assert resp.status_code == 400
+
+
+def test_generate_includes_layout_list_and_new_object_deploy(client):
+    resp = client.post('/cli/generate', data=json.dumps({
+        'alias': 'UAT',
+        'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
+        'new_objects': [{'object': 'Foo__c', 'label': 'Foo'}],
+    }), content_type='application/json')
+    assert resp.status_code == 200
+    data = resp.get_json()['data']
+    assert 'list metadata' in data['layout_list']
+    assert data['has_new_objects'] is True
+    assert 'CustomObject:Foo__c' in data['deploy_full']
+
+
+def test_package_includes_new_object_shell(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'proj', 'alias': 'UAT',
+        'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
+        'new_objects': [{'object': 'Foo__c', 'label': 'Foo', 'plural_label': 'Foos'}],
+    }), content_type='application/json')
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        names = zf.namelist()
+    assert any(n.endswith('Foo__c.object-meta.xml') for n in names)
+
+
+def test_new_object_bad_api_name_rejected(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'p', 'alias': 'UAT', 'fields': [],
+        'new_objects': [{'object': 'NoSuffix', 'label': 'X'}],
+    }), content_type='application/json')
+    assert resp.status_code == 400
 
 def test_route_plan(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):

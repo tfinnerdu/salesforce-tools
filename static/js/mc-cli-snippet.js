@@ -10,6 +10,7 @@
 MC.cli = {
 
   fields: [],            // list of field specs the user has added
+  newObjects: [],        // fresh CustomObject shells to create (with their fields)
   _fieldsCache: {},      // object name -> describe fields (for flip prefill)
   _refreshTimer: null,
   _apiNameEdited: false, // once the user hand-edits the API name, stop auto-deriving
@@ -56,6 +57,7 @@ MC.cli = {
     document.getElementById('cliApiName').addEventListener('input', (e) => {
       this._apiNameEdited = e.target.value.trim() !== '';
     });
+    document.getElementById('btnAddObject')?.addEventListener('click', () => this._addObject());
     document.getElementById('cliType').addEventListener('change', () => this._renderProps());
     document.getElementById('cliFieldMode').addEventListener('change', () => this._onModeChange());
     document.getElementById('cliObject').addEventListener('change', () => this._onObjectChange());
@@ -125,9 +127,75 @@ MC.cli = {
       } : {},
       human_permset: this._humanPermset(),
       existing_fields: this._existingFields(),
+      new_objects: this.newObjects,
       layout_name: document.getElementById('cliLayoutName').value.trim(),
       recordtype_name: document.getElementById('cliRtName').value.trim(),
     };
+  },
+
+  // ── New object (create a fresh CustomObject) ────────────────────────────────
+
+  _addObject() {
+    const g = id => document.getElementById(id);
+    const api = g('noApiName').value.trim();
+    if (!api) { MC.showToast('Enter an object API name', 'warning'); return; }
+    if (!api.endsWith('__c')) { MC.showToast('Object API name must end with "__c"', 'warning'); return; }
+    if (this.newObjects.some(o => o.object === api)) { MC.showToast(`${api} is already added`, 'warning'); return; }
+    const label = g('noLabel').value.trim() || api.slice(0, -3).replace(/_/g, ' ');
+    this.newObjects.push({
+      object: api,
+      label,
+      plural_label: g('noPlural').value.trim() || `${label}s`,
+      name_label: 'Name',
+      sharing_model: g('noSharing').value,
+    });
+    ['noApiName', 'noLabel', 'noPlural'].forEach(id => { g(id).value = ''; });
+    this._renderNewObjects();
+    this._syncObjectDropdown();
+    this._refresh();
+    MC.showToast(`Object ${api} added — select it below to add fields`, 'success');
+  },
+
+  _removeObject(api) {
+    this.newObjects = this.newObjects.filter(o => o.object !== api);
+    this._renderNewObjects();
+    this._syncObjectDropdown();
+    this._refresh();
+  },
+
+  _renderNewObjects() {
+    const host = document.getElementById('newObjectList');
+    if (!host) return;
+    host.innerHTML = this.newObjects.map(o =>
+      `<span class="badge bg-doane d-inline-flex align-items-center gap-1" style="font-size:.8rem">
+         ${MC._escHtml(o.object)} <span class="text-white-50">(${MC._escHtml(o.sharing_model)})</span>
+         <button type="button" class="btn-close btn-close-white btn-sm" style="font-size:.5rem"
+                 aria-label="remove" data-obj="${MC._escHtml(o.object)}"></button>
+       </span>`).join('');
+    host.querySelectorAll('button[data-obj]').forEach(b =>
+      b.addEventListener('click', () => this._removeObject(b.dataset.obj)));
+  },
+
+  // Add the new objects to the field-builder Object <select> so fields can target them.
+  _syncObjectDropdown() {
+    const sel = document.getElementById('cliObject');
+    if (!sel) return;
+    const current = sel.value;
+    this.newObjects.forEach(o => {
+      if (!Array.from(sel.options).some(opt => opt.value === o.object)) {
+        const opt = document.createElement('option');
+        opt.value = o.object;
+        opt.textContent = `${o.object} (new)`;
+        sel.insertBefore(opt, sel.firstChild);
+      }
+    });
+    // Drop options for objects that were removed.
+    Array.from(sel.options).forEach(opt => {
+      if (opt.textContent.endsWith('(new)') && !this.newObjects.some(o => o.object === opt.value)) {
+        opt.remove();
+      }
+    });
+    if (current) sel.value = current;
   },
 
   _existingFields() {
@@ -176,9 +244,41 @@ MC.cli = {
       const r = await MC.api(`/cli/fls?org=${encodeURIComponent(org)}`
         + `&object=${encodeURIComponent(object)}&field=${encodeURIComponent(field)}`);
       this._renderFls(r, org);
+      await this._applyFlsToObject(object);   // grant ALL of the object's custom fields
     } catch (e) {
       MC.showToast(`FLS read failed: ${e.message}`, 'danger');
     } finally { loading.classList.add('d-none'); }
+  },
+
+  // After reading a field's visibility, load every custom field of that object
+  // into the permission set (and auto-name it) so "Read visibility" produces a
+  // permission set that grants the whole object's fields — not a no-op.
+  async _applyFlsToObject(object) {
+    let custom = [];
+    try {
+      const data = await MC.api(`/cli/objects/${encodeURIComponent(object)}/fields`);
+      custom = (data.fields || []).filter(f => f.custom).map(f => `${object}.${f.name}`);
+    } catch (e) { /* the field table still rendered; grant step is best-effort */ }
+    if (custom.length) {
+      const ta = document.getElementById('cliExistingFields');
+      const have = new Set(ta.value.split('\n').map(s => s.trim()).filter(Boolean));
+      custom.forEach(c => have.add(c));
+      ta.value = [...have].join('\n');
+    }
+    // Auto-name the visibility permission set so it actually generates.
+    const nameEl = document.getElementById('hpsName');
+    const labelEl = document.getElementById('hpsLabel');
+    if (!nameEl.value.trim()) {
+      const base = object.endsWith('__c') ? object.slice(0, -3) : object;
+      nameEl.value = `${base}_Field_Visibility`.replace(/[^A-Za-z0-9_]/g, '_');
+    }
+    if (!labelEl.value.trim()) labelEl.value = nameEl.value.replace(/_/g, ' ');
+    this._refresh();
+    if (custom.length) {
+      MC.showToast(`Loaded ${custom.length} custom field(s) from ${object} into permission set "${nameEl.value}"`, 'success');
+    } else {
+      MC.showToast(`Permission set "${nameEl.value}" ready — add the fields to grant (none custom found on ${object})`, 'info');
+    }
   },
 
   _renderFls(r, org) {
@@ -356,6 +456,7 @@ MC.cli = {
       set('snpDeployFull', s.deploy_full);
       set('snpAssign', s.assign);
       set('snpDeployDir', s.deploy_dir);
+      set('snpLayoutList', s.layout_list);
       set('snpLayoutRetrieve', s.layout_retrieve);
       set('snpLayoutDeploy', s.layout_deploy);
       set('snpRtRetrieve', s.recordtype_retrieve);
@@ -750,17 +851,18 @@ MC.cliClone = {
   init() {
     document.getElementById('btnClonePreview')?.addEventListener('click', () => this.preview());
     document.getElementById('btnClonePackage')?.addEventListener('click', () => this.download());
-    ['cliCloneObject', 'cliCloneShell', 'cliClonePermset'].forEach(id => {
+    ['cliCloneSourceOrg', 'cliCloneObject', 'cliCloneShell', 'cliClonePermset'].forEach(id => {
       const el = document.getElementById(id);
       el?.addEventListener('change', () => this._lock());
       el?.addEventListener('input', () => this._lock());
     });
   },
 
+  _srcOrg() { return (document.getElementById('cliCloneSourceOrg')?.value || '').trim(); },
   _obj() { return (document.getElementById('cliCloneObject')?.value || '').trim(); },
   _shell() { return document.getElementById('cliCloneShell')?.checked || false; },
   _permset() { return document.getElementById('cliClonePermset')?.checked || false; },
-  _key() { return `${this._obj()}|${this._shell()}|${this._permset()}`; },
+  _key() { return `${this._srcOrg()}|${this._obj()}|${this._shell()}|${this._permset()}`; },
 
   _lock() {
     const btn = document.getElementById('btnClonePackage');
@@ -773,7 +875,7 @@ MC.cliClone = {
     MC.showSpinner();
     try {
       const data = await MC.api('/cli/clone-object/plan', 'POST',
-        { object: obj, include_shell: this._shell() });
+        { object: obj, include_shell: this._shell(), source_org: this._srcOrg() });
       this._render(data);
       const btn = document.getElementById('btnClonePackage');
       const nothing = data.fields.length === 0 && !data.shell;
@@ -824,6 +926,7 @@ MC.cliClone = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           object: this._obj(),
+          source_org: this._srcOrg(),
           include_shell: this._shell(),
           include_permset: this._permset(),
           project: (document.getElementById('cliProject')?.value || '').trim(),

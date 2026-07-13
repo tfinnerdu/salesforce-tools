@@ -284,8 +284,12 @@ def retrieve_snippet(alias: str) -> str:
             '  -m PermissionSet')
 
 
-def _members(fields: list, permset_name: str, extra_permset_names: list = None) -> list:
-    members = [f'CustomField:{f["object"]}.{f["api_name"]}' for f in fields]
+def _members(fields: list, permset_name: str, extra_permset_names: list = None,
+             object_names: list = None) -> list:
+    # CustomObject first — a field's object must exist for the same deploy to
+    # create its fields (Metadata deploy resolves the dependency within one run).
+    members = [f'CustomObject:{name}' for name in (object_names or []) if name]
+    members += [f'CustomField:{f["object"]}.{f["api_name"]}' for f in fields]
     if permset_name:
         members.append(f'PermissionSet:{permset_name}')
     for name in (extra_permset_names or []):
@@ -295,12 +299,14 @@ def _members(fields: list, permset_name: str, extra_permset_names: list = None) 
 
 
 def deploy_snippet(fields: list, permset_name: str, alias: str,
-                   dry_run: bool = False, extra_permset_names: list = None) -> str:
+                   dry_run: bool = False, extra_permset_names: list = None,
+                   object_names: list = None) -> str:
     """Steps 8/9 — deploy the authored components by name. dry_run adds --dry-run.
     extra_permset_names carries additional permission sets (e.g. the cloned
-    human-visibility set) alongside the integration one."""
+    human-visibility set) alongside the integration one. object_names carries
+    new/cloned CustomObject shells so the object deploys with its fields."""
     alias = alias or '<alias>'
-    members = _members(fields, permset_name, extra_permset_names)
+    members = _members(fields, permset_name, extra_permset_names, object_names)
     lines = ['sf project deploy start `']
     for m in members:
         lines.append(f'  -m "{m}" `')
@@ -375,6 +381,12 @@ def assign_snippets(entries: list, alias: str) -> str:
         for e in entries if e.get('name')
     ]
     return '\n'.join(lines)
+
+
+def layout_list_snippet(alias: str) -> str:
+    """List every layout in the source org so you can find a layout's exact
+    fullName (``<Object>-<Layout Name>``) to retrieve."""
+    return f'sf org list metadata --metadata-type Layout --target-org {alias or "<alias>"}'
 
 
 def layout_retrieve_snippet(layout_name: str, alias: str) -> str:

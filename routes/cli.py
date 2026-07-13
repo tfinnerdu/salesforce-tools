@@ -115,6 +115,28 @@ def _permset_from(payload) -> dict:
     }
 
 
+def _object_shells_from(payload) -> list:
+    """Normalize the new-object definitions (create fresh CustomObjects) from the
+    builder. Each entry: {object, label, plural_label, name_label, sharing_model}.
+    Raises ValueError on a malformed API name."""
+    out = []
+    for item in (payload.get('new_objects') or []):
+        obj = (item.get('object') or '').strip()
+        if not obj:
+            continue
+        if not obj.endswith('__c'):
+            raise ValueError(f'new object API name must end with "__c" (got "{obj}")')
+        label = (item.get('label') or obj[:-3].replace('_', ' ')).strip()
+        out.append({
+            'object': obj,
+            'label': label,
+            'plural_label': (item.get('plural_label') or f'{label}s').strip(),
+            'name_label': (item.get('name_label') or 'Name').strip(),
+            'sharing_model': (item.get('sharing_model') or 'ReadWrite').strip(),
+        })
+    return out
+
+
 def _existing_fields_from(payload) -> list:
     """Validate + normalize the existing-field list (fields that already exist in
     the org and just need visibility). Each entry is an `Object.Field` API name.
@@ -268,6 +290,7 @@ def api_generate():
     try:
         fields = _validate_fields(payload.get('fields') or [])
         existing = _existing_fields_from(payload)
+        object_shells = _object_shells_from(payload)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
 
@@ -275,6 +298,7 @@ def api_generate():
     permset_name = permset.get('api_name', '')
     humans = _human_permsets_from(payload, fields, existing)
     extra_names = [h['api_name'] for h in humans]
+    object_names = [s['object'] for s in object_shells]
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
     layout_name = (payload.get('layout_name') or '').strip()
@@ -292,14 +316,18 @@ def api_generate():
         'backup': cli_script.backup_snippet(flip_fields, alias),
         'verify': cli_script.verify_snippet(flip_fields, alias),
         'deploy_dry_run': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=True,
-                                                    extra_permset_names=extra_names),
+                                                    extra_permset_names=extra_names,
+                                                    object_names=object_names),
         'deploy_full': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=False,
-                                                 extra_permset_names=extra_names),
+                                                 extra_permset_names=extra_names,
+                                                 object_names=object_names),
         'assign': cli_script.assign_snippets(assign_entries, alias),
         'deploy_dir': cli_script.deploy_dir_snippet(alias, dry_run=False),
-        'members': cli_script._members(fields, permset_name, extra_names),
+        'members': cli_script._members(fields, permset_name, extra_names, object_names),
         'has_flips': bool(flip_fields),
         'has_human_permset': bool(humans),
+        'has_new_objects': bool(object_names),
+        'layout_list': cli_script.layout_list_snippet(alias),
         'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, alias),
         'layout_deploy': cli_script.layout_deploy_snippet(layout_name, alias, dry_run=False),
         'recordtype_retrieve': cli_script.recordtype_retrieve_snippet(rt_name, alias),
@@ -317,11 +345,12 @@ def api_package():
     try:
         fields = _validate_fields(payload.get('fields') or [])
         existing = _existing_fields_from(payload)
+        object_shells = _object_shells_from(payload)
         permset = _permset_from(payload)
         humans = _human_permsets_from(payload, fields, existing)
         zip_bytes, filename = cli_script.build_package_zip(
             project, fields, permset or None, alias,
-            extra_permsets=humans or None)
+            extra_permsets=humans or None, object_shells=object_shells or None)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
@@ -349,16 +378,28 @@ def _clone_permset(object_name: str, fields: list) -> dict:
     }
 
 
+def _source_org(payload) -> str:
+    """The org whose schema the clone reads from (defaults to the active org)."""
+    src = (payload.get('source_org') or _org()).strip()
+    if src not in Config.AVAILABLE_ORGS:
+        raise ValueError(f'Unknown source org: {src}')
+    return src
+
+
 @cli_bp.route('/clone-object/plan', methods=['POST'])
 def api_clone_object_plan():
-    """Describe the active-org source object → a clone plan (fields + skipped + shell)."""
+    """Describe a source-org object → a clone plan (fields + skipped + shell)."""
     payload = request.get_json(silent=True) or {}
     obj = (payload.get('object') or '').strip()
     include_shell = bool(payload.get('include_shell'))
     if not obj:
         return error_response('object is required', 'INVALID_INPUT', 400)
     try:
-        return ok(cli_clone.plan_from_object(_org(), obj, include_shell=include_shell))
+        source = _source_org(payload)
+    except ValueError as exc:
+        return error_response(str(exc), 'INVALID_INPUT', 400)
+    try:
+        return ok(cli_clone.plan_from_object(source, obj, include_shell=include_shell))
     except Exception as exc:
         logger.exception('cli clone plan failed for %s', obj)
         return error_response(str(exc), 'SF_DESCRIBE_FAILED', 502)
@@ -376,7 +417,11 @@ def api_clone_object_package():
     if not obj:
         return error_response('object is required', 'INVALID_INPUT', 400)
     try:
-        plan = cli_clone.plan_from_object(_org(), obj, include_shell=include_shell)
+        source = _source_org(payload)
+    except ValueError as exc:
+        return error_response(str(exc), 'INVALID_INPUT', 400)
+    try:
+        plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell)
         fields = plan['fields']
         object_shells = [plan['shell']] if plan['shell'] else None
         if not fields and not object_shells:

@@ -75,6 +75,47 @@
     </div>
   </div>
 
+  <!-- ── New object (optional — create a fresh CustomObject) ─────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+      New object <span class="text-muted fw-normal">(optional &mdash; create a fresh object so your fields have somewhere to land)</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-2">
+        Building fields on an object that doesn't exist yet? Define it here and it's added to the package
+        (a <code>CustomObject</code> shell) and to the Object picker below, so it deploys ahead of its fields.
+      </p>
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-3">
+          <label for="noApiName" class="form-label fw-semibold small mb-1">API name</label>
+          <input id="noApiName" type="text" class="form-control form-control-sm" placeholder="e.g. Accommodation__c" autocomplete="off">
+        </div>
+        <div class="col-sm-3">
+          <label for="noLabel" class="form-label fw-semibold small mb-1">Label</label>
+          <input id="noLabel" type="text" class="form-control form-control-sm" placeholder="e.g. Accommodation" autocomplete="off">
+        </div>
+        <div class="col-sm-3">
+          <label for="noPlural" class="form-label fw-semibold small mb-1">Plural label</label>
+          <input id="noPlural" type="text" class="form-control form-control-sm" placeholder="e.g. Accommodations" autocomplete="off">
+        </div>
+        <div class="col-sm-2">
+          <label for="noSharing" class="form-label fw-semibold small mb-1">Sharing</label>
+          <select id="noSharing" class="form-select form-select-sm">
+            <option value="ReadWrite">Public Read/Write</option>
+            <option value="Read">Public Read Only</option>
+            <option value="Private">Private</option>
+            <option value="ControlledByParent">Controlled by Parent</option>
+          </select>
+        </div>
+        <div class="col-sm-1">
+          <button id="btnAddObject" class="btn btn-doane btn-sm w-100">+ Add</button>
+        </div>
+      </div>
+      <div class="form-text">Name field is a Text “Name” (the common case). Deploy the whole folder (or the by-name deploy, which now includes the object) so the object lands before its fields.</div>
+      <div id="newObjectList" class="mt-2 d-flex flex-wrap gap-2"></div>
+    </div>
+  </div>
+
   <!-- ── Step 6: Build fields ────────────────────────────────────────────── -->
   <div class="card shadow-sm mb-3">
     <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
@@ -162,14 +203,20 @@
     </div>
     <div class="card-body">
       <p class="text-muted small mb-3">
-        Describe an object in the <strong>{{ active_org|upper }}</strong> org and generate a
-        <code>force-app</code> package of its custom fields &mdash; reusing the same byte-for-byte
-        field generator as the builder above. Relationship (lookup / master-detail), formula,
+        Describe an object in the selected <strong>source org</strong> and generate a
+        <code>force-app</code> package of its custom fields to deploy into your target org &mdash;
+        reusing the same byte-for-byte field generator as the builder above. Relationship (lookup / master-detail), formula,
         roll-up, auto-number, and unsupported-type fields can't be reproduced 1:1, so they're
         <strong>listed as skipped</strong>, never silently dropped. Deploy is upsert (creates a
         field if missing, updates it if present).
       </p>
       <div class="row g-2 align-items-end">
+        <div class="col-sm-4 col-md-3">
+          <label for="cliCloneSourceOrg" class="form-label fw-semibold small mb-1">Source org</label>
+          <select id="cliCloneSourceOrg" class="form-select form-select-sm">
+            {% for org in nav_orgs %}<option value="{{ org }}"{% if org == active_org %} selected{% endif %}>{{ org }}</option>{% endfor %}
+          </select>
+        </div>
         <div class="col-sm-6 col-md-4">
           <label for="cliCloneObject" class="form-label fw-semibold small mb-1">Source object</label>
           <input id="cliCloneObject" data-mc-objpick="all" type="text" class="form-control form-control-sm"
@@ -258,9 +305,10 @@
     </div>
     <div class="card-body">
       <p class="text-muted small mb-3">
-        Read how a reference field is exposed in a source org (which profiles / permission sets can see &amp; edit it),
-        then generate a <strong>human-visibility permission set</strong> that grants the built fields the same access.
-        Read-only against the source org.
+        Read how a reference field is exposed in a source org (which profiles / permission sets can see &amp; edit it).
+        Reading it loads <strong>all of that object's custom fields</strong> into a
+        <strong>human-visibility permission set</strong> at the same access level (read vs edit), and names the set
+        for you &mdash; so it actually generates. Tweak the field list or access below. Read-only against the source org.
       </p>
       <div class="row g-3 align-items-end mb-2">
         <div class="col-md-3">
@@ -327,7 +375,7 @@
           </div>
         </div>
       </div>
-      <div class="form-text">Fill the API name to generate a second permission set (alongside the integration one) that exposes the built fields to your staff. Reading a reference field sets the edit toggle to match it.</div>
+      <div class="form-text">A permission set (alongside the integration one) that exposes the fields to your staff. Reading a reference field above auto-fills this name, sets the edit toggle to match the source, and loads the object's custom fields into the list above.</div>
     </div>
   </div>
 
@@ -343,15 +391,20 @@
         Not a layout editor; it edits the real metadata.
       </p>
 
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">Step A0 &mdash; list layouts in your source org (find the exact name)</label>
+        <div class="mc-code" data-copy="snpLayoutList"><pre id="snpLayoutList" class="mb-0"></pre></div>
+        <div class="form-text">Uses the <strong>Alias</strong> at the top of this tab as the source org. Each result's <code>fullName</code> (e.g. <code>Case-Case Layout</code>) goes in the box below.</div>
+      </div>
       <div class="row g-3 mb-2">
         <div class="col-md-6">
           <label for="cliLayoutName" class="form-label fw-semibold small mb-1">Layout full name</label>
           <input id="cliLayoutName" class="form-control form-control-sm" placeholder="e.g. Case-Case Layout" autocomplete="off">
-          <div class="form-text">From <code>sf org list metadata -m Layout</code> (the <code>fullName</code>).</div>
+          <div class="form-text">The <code>fullName</code> from Step A0.</div>
         </div>
       </div>
       <div class="mb-3">
-        <label class="form-label fw-semibold small mb-1">Step A &mdash; retrieve the layout</label>
+        <label class="form-label fw-semibold small mb-1">Step A &mdash; retrieve that layout</label>
         <div class="mc-code" data-copy="snpLayoutRetrieve"><pre id="snpLayoutRetrieve" class="mb-0"></pre></div>
       </div>
 
