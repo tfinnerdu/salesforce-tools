@@ -1412,7 +1412,7 @@ The page reads top-to-bottom in four parts:
 ### 1. Environment setup (run once per project)
 
 - **Step 2 — Install the CLI:** copy the snippet and run it once per machine to install `sf` and confirm it can see your orgs.
-- **Step 3 — Authorize the org:** the **Alias** comes prefilled (`DoaneUAT`) — keep it, change it, or clear it — and, if needed, adjust the **Sandbox instance URL**. Copy the generated `sf org login web …` command — it opens a browser to log you in. Sandboxes require the instance URL, which is why it's prefilled.
+- **Step 3 — Authorize the org:** the **Alias** comes prefilled (`EC-SB`) — keep it, change it, or clear it — and, if needed, adjust the **Sandbox instance URL**. Copy the generated `sf org login web …` command — it opens a browser to log you in. Sandboxes require the instance URL, which is why it's prefilled.
 - **Step 4 — Generate the project:** the **Project name** (`doane-sf`) and **base path** come prefilled and editable. The snippet creates the local project folder and checks the connection.
 - **Step 5 — Retrieve metadata:** copy the retrieve command to pull down the objects, fields, and permission sets you'll be editing.
 

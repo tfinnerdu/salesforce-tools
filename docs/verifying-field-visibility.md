@@ -51,12 +51,12 @@ you intended.
 **CLI check:**
 ```powershell
 # Fast: is the field present? (describe is large; this filters to the name)
-sf sobject describe --sobject Case --target-org DoaneUAT --json | `
+sf sobject describe --sobject Case --target-org EC-SB --json | `
   Select-String "Group_Information__c"
 ```
 Or just open the field page directly:
 ```powershell
-sf org open --target-org DoaneUAT `
+sf org open --target-org EC-SB `
   --path "/lightning/setup/ObjectManager/Case/FieldsAndRelationships/view"
 ```
 
@@ -86,7 +86,7 @@ confirm the users (or the group you assign by) are listed. FLS granted by an
 `FieldPermissions` query the Visibility section uses to read EDA, pointed at your
 target org:
 ```powershell
-sf data query --target-org DoaneUAT --query `
+sf data query --target-org EC-SB --query `
   "SELECT Parent.Name, Parent.Profile.Name, PermissionsRead, PermissionsEdit `
    FROM FieldPermissions `
    WHERE SobjectType = 'Case' AND Field = 'Case.Group_Information__c'"
@@ -98,7 +98,7 @@ never granted — nobody can see it yet.
 
 **Confirm the assignment via CLI too:**
 ```powershell
-sf data query --target-org DoaneUAT --query `
+sf data query --target-org EC-SB --query `
   "SELECT Assignee.Name, PermissionSet.Name FROM PermissionSetAssignment `
    WHERE PermissionSet.Name = 'Case_Assistance_Fields'"
 ```
@@ -129,11 +129,11 @@ for a user whose profile+record-type is assigned "Advisee Case Layout."
 this is the same retrieve command the CLI tab hands you:
 ```powershell
 # List the Case layouts so you retrieve the exact name:
-sf org list metadata --metadata-type Layout --target-org DoaneUAT | `
+sf org list metadata --metadata-type Layout --target-org EC-SB | `
   Select-String "Case"
 
 # Retrieve one and inspect it for your field:
-sf project retrieve start --target-org DoaneUAT `
+sf project retrieve start --target-org EC-SB `
   --metadata "Layout:Case-Case Layout"
 # then open force-app/main/default/layouts/Case-Case Layout.layout-meta.xml
 # and search for the field API name inside a <layoutItems> block.
@@ -160,7 +160,7 @@ record of that record type.
 
 **CLI check:** like layouts, easiest to retrieve and read the metadata:
 ```powershell
-sf project retrieve start --target-org DoaneUAT `
+sf project retrieve start --target-org EC-SB `
   --metadata "RecordType:Case.Advisee_Case"
 # open force-app/main/default/objects/Case/recordTypes/Advisee_Case.recordType-meta.xml
 # confirm each value appears under the field's <picklistValues> block.
@@ -194,12 +194,12 @@ Run these top to bottom; the first one that's wrong is your problem.
 
 | Check | Fastest verification |
 |---|---|
-| 1. Field exists | `sf sobject describe --sobject Case --target-org DoaneUAT --json \| Select-String "<field>"` |
-| 2. FLS granted (**most common miss**) | `sf data query -o DoaneUAT -q "SELECT Parent.Name, PermissionsRead, PermissionsEdit FROM FieldPermissions WHERE SobjectType='Case' AND Field='Case.<field>'"` → want your permset listed |
-| 2b. Permset assigned | `sf data query -o DoaneUAT -q "SELECT Assignee.Name FROM PermissionSetAssignment WHERE PermissionSet.Name='Case_Assistance_Fields'"` |
-| 3. On the page | `sf project retrieve start -o DoaneUAT -m "Layout:Case-Case Layout"` → grep the field |
+| 1. Field exists | `sf sobject describe --sobject Case --target-org EC-SB --json \| Select-String "<field>"` |
+| 2. FLS granted (**most common miss**) | `sf data query -o EC-SB -q "SELECT Parent.Name, PermissionsRead, PermissionsEdit FROM FieldPermissions WHERE SobjectType='Case' AND Field='Case.<field>'"` → want your permset listed |
+| 2b. Permset assigned | `sf data query -o EC-SB -q "SELECT Assignee.Name FROM PermissionSetAssignment WHERE PermissionSet.Name='Case_Assistance_Fields'"` |
+| 3. On the page | `sf project retrieve start -o EC-SB -m "Layout:Case-Case Layout"` → grep the field |
 | 3b. Right layout assigned | UI: Object Manager → Case → Page Layouts → **Page Layout Assignment** |
-| 4. Picklist values (if applicable) | `sf project retrieve start -o DoaneUAT -m "RecordType:Case.Advisee_Case"` → grep the values |
+| 4. Picklist values (if applicable) | `sf project retrieve start -o EC-SB -m "RecordType:Case.Advisee_Case"` → grep the values |
 | 5. End to end | Setup → Users → **Login As** → open a Case of that record type |
 
 **Symptom → which switch is off:**

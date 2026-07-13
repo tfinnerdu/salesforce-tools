@@ -588,7 +588,7 @@ picker.
 1. Navigate to `/cli`. **Expected:** the page loads with the setup snippets
    (install / login / project / retrieve) already filled from the defaults, and
    the **Object** dropdown populates from the selected org's describe.
-2. In *Environment setup*, type an **Alias** (e.g. `DoaneUAT`) and a **Project
+2. In *Environment setup*, type an **Alias** (e.g. `EC-SB`) and a **Project
    name**. **Expected:** the Step 3 login and Step 4 project snippets update
    within ~0.4s to include your alias/project; the instance URL and base path
    are prefilled and editable.
