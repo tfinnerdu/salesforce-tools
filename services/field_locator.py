@@ -18,7 +18,7 @@ import logging
 
 from services import cli_metadata
 from sf_provider import get_sf
-from utils.soql import escape_soql
+from utils.soql import escape_soql, is_sf_id
 
 logger = logging.getLogger(__name__)
 
@@ -60,27 +60,70 @@ def _add(results: dict, obj: str, entry: dict) -> None:
             existing[key] = entry[key]
 
 
+def _tooling_query(sf, soql: str) -> list:
+    return (sf.restful('tooling/query', params={'q': soql}) or {}).get('records', [])
+
+
+def _resolve_custom_objects(sf, ids: set) -> dict:
+    """Map custom-object Ids (from ``TableEnumOrId``) → their API names.
+
+    A custom field on a *custom* object carries the object's Id in
+    ``TableEnumOrId`` rather than its name; one CustomObject query turns those
+    Ids into ``<ns>__<DeveloperName>__c`` API names. Keyed on the 15-char Id
+    form so a 15-char ``TableEnumOrId`` matches the 18-char queried Id.
+    """
+    ids = [i for i in ids if i]
+    if not ids:
+        return {}
+    in_list = ', '.join("'" + escape_soql(i) + "'" for i in ids)
+    soql = ('SELECT Id, DeveloperName, NamespacePrefix FROM CustomObject '
+            f'WHERE Id IN ({in_list})')
+    mapping = {}
+    for r in _tooling_query(sf, soql):
+        rid, dev = r.get('Id') or '', r.get('DeveloperName') or ''
+        if not rid or not dev:
+            continue
+        ns = r.get('NamespacePrefix') or ''
+        mapping[rid[:15]] = f'{ns}__{dev}__c' if ns else f'{dev}__c'
+    return mapping
+
+
 def _tooling_custom_fields(sf, base: str) -> list:
-    """Tooling CustomField rows whose DeveloperName matches base (exact, case-insensitive)."""
-    soql = ('SELECT DeveloperName, NamespacePrefix, MasterLabel, '
-            'EntityDefinition.QualifiedApiName FROM CustomField '
+    """Tooling CustomField rows whose DeveloperName matches base (exact, case-insensitive).
+
+    Uses only reliably-queryable CustomField columns — ``DeveloperName``,
+    ``NamespacePrefix``, ``TableEnumOrId`` (no ``MasterLabel`` /
+    ``EntityDefinition``, which aren't queryable across API versions).
+    ``TableEnumOrId`` is a standard object's API name, or a custom object's Id
+    (resolved via CustomObject).
+    """
+    soql = ('SELECT DeveloperName, NamespacePrefix, TableEnumOrId '
+            'FROM CustomField '
             f"WHERE DeveloperName = '{escape_soql(base)}'")
-    resp = sf.restful('tooling/query', params={'q': soql}) or {}
-    rows = []
-    for r in resp.get('records', []):
+
+    hits, custom_obj_ids = [], set()
+    for r in _tooling_query(sf, soql):
         dev = r.get('DeveloperName') or ''
-        # The mock (and a LIKE query on real SF) can return extra rows; keep exact.
+        # A LIKE query on real SF (or the unfiltered mock) can return extra rows.
         if dev.lower() != base.lower():
             continue
-        entity = r.get('EntityDefinition') or {}
-        obj = entity.get('QualifiedApiName') or r.get('TableEnumOrId')
-        if not obj:
+        table = r.get('TableEnumOrId') or ''
+        if not table:
             continue
         namespace = r.get('NamespacePrefix') or ''
+        hits.append((dev, namespace, table))
+        if is_sf_id(table):                    # custom object → resolve its name
+            custom_obj_ids.add(table)
+
+    id_to_obj = _resolve_custom_objects(sf, custom_obj_ids)
+
+    rows = []
+    for dev, namespace, table in hits:
+        obj = id_to_obj.get(table[:15], table)   # standard name passes through
         rows.append({
             'object': obj,
             'api_name': _reconstruct_api_name(dev, namespace),
-            'label': r.get('MasterLabel') or r.get('Label') or '',
+            'label': '',
             'namespace': namespace,
             'type': '',
             'custom': True,

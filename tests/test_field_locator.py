@@ -12,9 +12,15 @@ import pytest
 from services import field_locator as fl
 
 
-def _fake_sf(custom_records=None, describe_global=None, describes=None):
-    """SF double: tooling/query → custom_records; sobjects → global; describe → per obj."""
+def _fake_sf(custom_records=None, custom_object_records=None,
+             describe_global=None, describes=None):
+    """SF double dispatching on the Tooling query and the describe path.
+
+    tooling/query → CustomField (``custom_records``) or CustomObject
+    (``custom_object_records``); ``sobjects`` → DescribeGlobal; describe → per obj.
+    """
     custom_records = custom_records or []
+    custom_object_records = custom_object_records or []
     describe_global = describe_global or {'sobjects': []}
     describes = describes or {}
     sf = MagicMock()
@@ -22,6 +28,9 @@ def _fake_sf(custom_records=None, describe_global=None, describes=None):
     def restful(path, method='GET', **kwargs):
         p = path.lower()
         if 'tooling/query' in p:
+            q = ((kwargs.get('params') or {}).get('q') or '').lower()
+            if 'from customobject' in q:
+                return {'records': custom_object_records}
             return {'records': custom_records}
         if 'sobjects' in p and 'describe' in p:
             obj = path.split('/')[1]
@@ -34,14 +43,13 @@ def _fake_sf(custom_records=None, describe_global=None, describes=None):
     return sf
 
 
-def _cf(dev, obj, namespace=None, label=''):
-    """A Tooling CustomField record shaped like the real (and mock) API."""
-    return {
-        'DeveloperName': dev,
-        'NamespacePrefix': namespace,
-        'MasterLabel': label,
-        'EntityDefinition': {'QualifiedApiName': obj},
-    }
+def _cf(dev, table, namespace=None):
+    """A Tooling CustomField record (only the columns the service queries).
+
+    ``table`` is ``TableEnumOrId`` — a standard object's API name or a custom
+    object's Id.
+    """
+    return {'DeveloperName': dev, 'NamespacePrefix': namespace, 'TableEnumOrId': table}
 
 
 # ── normalize_field_name (pure) ───────────────────────────────────────────────
@@ -63,8 +71,8 @@ def test_normalize_field_name(raw, expected):
 # ── Tooling fast path ─────────────────────────────────────────────────────────
 
 def test_find_custom_field_across_objects():
-    sf = _fake_sf(custom_records=[_cf('SIS_ID', 'Account', label='SIS ID'),
-                                  _cf('SIS_ID', 'ContactPointEmail', label='SIS ID')])
+    sf = _fake_sf(custom_records=[_cf('SIS_ID', 'Account'),
+                                  _cf('SIS_ID', 'ContactPointEmail')])
     with patch('services.field_locator.get_sf', return_value=sf):
         result = fl.find('dev', 'SIS_ID__c')
     assert result['normalized'] == 'SIS_ID'
@@ -89,13 +97,28 @@ def test_find_filters_non_exact_developer_names():
 
 
 def test_find_reconstructs_namespaced_api_name():
-    sf = _fake_sf(custom_records=[_cf('Foo', 'hed__Course__c', namespace='hed')])
+    sf = _fake_sf(custom_records=[_cf('Foo', 'Account', namespace='hed')])
     with patch('services.field_locator.get_sf', return_value=sf):
         result = fl.find('dev', 'hed__Foo__c')
     row = result['results'][0]
     assert result['normalized'] == 'Foo'
     assert row['api_name'] == 'hed__Foo__c'
     assert row['namespace'] == 'hed'
+
+
+def test_find_resolves_custom_object_id():
+    # A custom field on a CUSTOM object: TableEnumOrId is the object's Id, which
+    # a follow-up CustomObject query resolves to its API name (15↔18-char safe).
+    sf = _fake_sf(
+        custom_records=[_cf('Rating', '01I5g0000012345')],
+        custom_object_records=[{'Id': '01I5g0000012345AAB', 'DeveloperName': 'Review',
+                                'NamespacePrefix': None}],
+    )
+    with patch('services.field_locator.get_sf', return_value=sf):
+        result = fl.find('dev', 'Rating__c')
+    assert result['object_count'] == 1
+    assert result['results'][0]['object'] == 'Review__c'
+    assert result['results'][0]['api_name'] == 'Rating__c'
 
 
 def test_find_blank_field_returns_empty():
@@ -143,7 +166,7 @@ def test_deep_scan_finds_standard_field():
 def test_deep_scan_enriches_tooling_hit_with_type():
     # Custom field found by BOTH paths → one row, type filled in from describe.
     sf = _fake_sf(
-        custom_records=[_cf('SIS_ID', 'Account', label='SIS ID')],
+        custom_records=[_cf('SIS_ID', 'Account')],
         describe_global={'sobjects': [{'name': 'Account'}]},
         describes={'Account': {'label': 'Account', 'fields': [
             {'name': 'SIS_ID__c', 'label': 'SIS ID', 'type': 'string', 'custom': True}]}})
@@ -187,7 +210,7 @@ def test_get_field_finder_page_returns_200(client):
 
 
 def test_post_field_finder_run_returns_200_success(session_client):
-    sf = _fake_sf(custom_records=[_cf('SIS_ID', 'Account', label='SIS ID')])
+    sf = _fake_sf(custom_records=[_cf('SIS_ID', 'Account')])
     with patch('services.field_locator.get_sf', return_value=sf):
         resp = session_client.post(
             '/schema/field-finder/run',

@@ -709,11 +709,14 @@ class MockSalesforce:
                     objects = ['Account', 'Account', 'Account', 'ContactPointEmail', 'ContactPointEmail']
                     fields = ['SIS_ID__c', 'Ethos_Guid__c', 'Legacy_ID__c', 'SIS_ID__c', 'Source_System__c']
                     labels = ['SIS ID', 'Ethos GUID', 'Legacy ID', 'SIS ID', 'Source System']
+                    # TableEnumOrId is a standard object's API name (or a custom
+                    # object's Id); the Field Finder reads it to locate each field.
                     records = [
                         {
                             'Id': f'00N{i:015d}',
                             'DeveloperName': fields[i - 1].replace('__c', ''),
                             'Label': labels[i - 1],
+                            'TableEnumOrId': objects[i - 1],
                             'EntityDefinition': {'QualifiedApiName': objects[i - 1]},
                             'attributes': {'type': 'CustomField'},
                         }
