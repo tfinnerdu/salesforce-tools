@@ -386,9 +386,10 @@
     </div>
     <div class="card-body">
       <p class="text-muted small mb-3">
-        Layouts can't be read live, so: retrieve the layout with the CLI, paste it below, and this adds
-        your fields (a new section, or an existing one) &mdash; everything else stays byte-for-byte. Then deploy it back.
-        Not a layout editor; it edits the real metadata.
+        Layouts can't be read live, so retrieve one with the CLI and paste it below. Two ways to use it:
+        <strong>Copy as-is</strong> &mdash; no edits; the layout rides in the package + deploy exactly as
+        retrieved (an org-to-org 1:1 copy). Or <strong>add new fields</strong> to it (a new section, or an
+        existing one) via byte-for-byte string surgery. Either way it's real metadata, not a layout editor.
       </p>
 
       <div class="row g-3 mb-2">
@@ -421,6 +422,17 @@
                   style="font-family:var(--bs-font-monospace,monospace);font-size:.78rem"
                   placeholder="&lt;?xml version=&quot;1.0&quot;...&gt;&#10;&lt;Layout ...&gt; ... &lt;/Layout&gt;"></textarea>
       </div>
+
+      <!-- Copy as-is (no edits) -->
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <button id="btnLayoutAsIs" class="btn btn-doane btn-sm">&#128230; Add layout to package (as-is)</button>
+        <span class="text-muted small">1:1 copy &mdash; drops the pasted layout into the package &amp; deploy list unchanged. No field edits needed.</span>
+      </div>
+      <div id="layoutPkgList" class="d-flex flex-wrap gap-2 mb-2"></div>
+      <div class="form-text mb-3">Heads-up: a layout only deploys if the target org already has <strong>every field, record type, and related list it references</strong> — deploy the object + its fields first (whole-folder deploy handles the ordering).</div>
+
+      <hr class="my-2">
+      <div class="small fw-semibold text-muted mb-2">…or add new fields to it (Step C):</div>
 
       <div class="row g-3 mb-2 align-items-end">
         <div class="col-md-4">

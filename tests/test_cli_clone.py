@@ -182,6 +182,24 @@ def test_build_package_zip_with_object_shell():
     assert '<members>Accommodation__c</members>' in pkg
 
 
+def test_build_package_zip_with_layout():
+    layouts = [{'full_name': 'RoomAssignment__c-Room Assignment Layout',
+                'xml': '<?xml version="1.0"?>\n<Layout xmlns="x"><foo/></Layout>\n'}]
+    zip_bytes, _ = cli_script.build_package_zip('p', [], None, 'UAT', layouts=layouts)
+    path = 'force-app/main/default/layouts/RoomAssignment__c-Room Assignment Layout.layout-meta.xml'
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        assert path in zf.namelist()
+        assert '<Layout' in zf.read(path).decode()        # verbatim copy
+        pkg = zf.read('manifest/package.xml').decode()
+    assert '<name>Layout</name>' in pkg
+    assert '<members>RoomAssignment__c-Room Assignment Layout</members>' in pkg
+
+
+def test_deploy_snippet_includes_layout_member():
+    s = cli_script.deploy_snippet([], '', 'UAT', layout_names=['Foo__c-Bar Layout'])
+    assert 'Layout:Foo__c-Bar Layout' in s
+
+
 def test_build_package_zip_object_only():
     # Shell with no fields still packages (create-the-object case).
     shell = {'object': 'Foo__c', 'label': 'Foo', 'plural_label': 'Foos', 'name_label': 'Name'}
@@ -264,6 +282,35 @@ def test_new_object_bad_api_name_rejected(client):
     resp = client.post('/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT', 'fields': [],
         'new_objects': [{'object': 'NoSuffix', 'label': 'X'}],
+    }), content_type='application/json')
+    assert resp.status_code == 400
+
+
+def test_package_includes_pasted_layout(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'p', 'alias': 'UAT', 'fields': [],
+        'layouts': [{'full_name': 'RoomAssignment__c-Room Assignment Layout',
+                     'xml': '<?xml version="1.0"?><Layout xmlns="x">stuff</Layout>'}],
+    }), content_type='application/json')
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        assert any(n.endswith('Room Assignment Layout.layout-meta.xml') for n in zf.namelist())
+
+
+def test_generate_layout_rides_in_deploy(client):
+    resp = client.post('/cli/generate', data=json.dumps({
+        'alias': 'UAT',
+        'layouts': [{'full_name': 'Foo__c-Bar', 'xml': '<Layout>x</Layout>'}],
+    }), content_type='application/json')
+    data = resp.get_json()['data']
+    assert 'Layout:Foo__c-Bar' in data['deploy_full']
+    assert data['has_layouts'] is True
+
+
+def test_layout_not_layout_xml_rejected(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'p', 'alias': 'UAT', 'fields': [],
+        'layouts': [{'full_name': 'Foo__c-Bar', 'xml': '<NotALayout/>'}],
     }), content_type='application/json')
     assert resp.status_code == 400
 

@@ -11,6 +11,7 @@ MC.cli = {
 
   fields: [],            // list of field specs the user has added
   newObjects: [],        // fresh CustomObject shells to create (with their fields)
+  layouts: [],           // pasted page layouts to copy as-is: {full_name, xml}
   _fieldsCache: {},      // object name -> describe fields (for flip prefill)
   _refreshTimer: null,
   _apiNameEdited: false, // once the user hand-edits the API name, stop auto-deriving
@@ -89,6 +90,7 @@ MC.cli = {
     document.getElementById('btnLayoutFillFields').addEventListener('click', () => this._fillLayoutFields());
     document.getElementById('btnBuildLayout').addEventListener('click', () => this._buildLayout());
     document.getElementById('btnDownloadLayout').addEventListener('click', () => this._downloadLayout());
+    document.getElementById('btnLayoutAsIs').addEventListener('click', () => this._packageLayoutAsIs());
 
     // Record type card.
     document.getElementById('cliRtName').addEventListener('input', () => this._refresh());
@@ -130,6 +132,7 @@ MC.cli = {
       human_permset: this._humanPermset(),
       existing_fields: this._existingFields(),
       new_objects: this.newObjects,
+      layouts: this.layouts,
       layout_name: document.getElementById('cliLayoutName').value.trim(),
       layout_retrieve_alias: document.getElementById('cliLayoutRetrieveAlias').value.trim(),
       recordtype_name: document.getElementById('cliRtName').value.trim(),
@@ -366,6 +369,44 @@ MC.cli = {
     const a = document.createElement('a');
     a.href = url; a.download = `${name}.layout-meta.xml`; a.click();
     URL.revokeObjectURL(url);
+  },
+
+  // ── Layout: copy as-is into the package (no edits) ─────────────────────────
+  _packageLayoutAsIs() {
+    const xml = document.getElementById('cliLayoutXml').value;
+    const name = document.getElementById('cliLayoutName').value.trim();
+    if (!xml.trim()) { MC.showToast('Paste the layout XML first', 'warning'); return; }
+    if (xml.indexOf('<Layout') === -1) { MC.showToast("That doesn't look like a Layout (.layout-meta.xml)", 'warning'); return; }
+    if (!name) { MC.showToast('Enter the layout full name (e.g. RoomAssignment__c-Room Assignment Layout)', 'warning'); return; }
+    this._addLayoutToPackage(name, xml);
+  },
+
+  _addLayoutToPackage(fullName, xml) {
+    const i = this.layouts.findIndex(l => l.full_name === fullName);
+    if (i !== -1) this.layouts[i] = { full_name: fullName, xml };
+    else this.layouts.push({ full_name: fullName, xml });
+    this._renderLayouts();
+    this._refresh();
+    MC.showToast(`Layout "${fullName}" added to the package & deploy`, 'success');
+  },
+
+  _removeLayout(fullName) {
+    this.layouts = this.layouts.filter(l => l.full_name !== fullName);
+    this._renderLayouts();
+    this._refresh();
+  },
+
+  _renderLayouts() {
+    const host = document.getElementById('layoutPkgList');
+    if (!host) return;
+    host.innerHTML = this.layouts.map(l =>
+      `<span class="badge bg-doane d-inline-flex align-items-center gap-1" style="font-size:.8rem">
+         ${MC._escHtml(l.full_name)}
+         <button type="button" class="btn-close btn-close-white btn-sm" style="font-size:.5rem"
+                 aria-label="remove" data-lay="${MC._escHtml(l.full_name)}"></button>
+       </span>`).join('');
+    host.querySelectorAll('button[data-lay]').forEach(b =>
+      b.addEventListener('click', () => this._removeLayout(b.dataset.lay)));
   },
 
   // ── Record type: picklist availability ─────────────────────────────────────

@@ -137,6 +137,24 @@ def _object_shells_from(payload) -> list:
     return out
 
 
+def _layouts_from(payload) -> list:
+    """Normalize pasted page layouts to copy as-is: [{full_name, xml}]. Each needs
+    a full name (<Object>-<Layout Name>) and Layout XML. Raises ValueError on a
+    malformed entry."""
+    out = []
+    for item in (payload.get('layouts') or []):
+        full = (item.get('full_name') or '').strip()
+        xml = item.get('xml') or ''
+        if not full and not xml.strip():
+            continue
+        if not full:
+            raise ValueError('a pasted layout needs its full name (e.g. RoomAssignment__c-Room Assignment Layout)')
+        if '<Layout' not in xml:
+            raise ValueError(f'the pasted content for "{full}" is not a Layout (.layout-meta.xml)')
+        out.append({'full_name': full, 'xml': xml})
+    return out
+
+
 def _existing_fields_from(payload) -> list:
     """Validate + normalize the existing-field list (fields that already exist in
     the org and just need visibility). Each entry is an `Object.Field` API name.
@@ -291,6 +309,7 @@ def api_generate():
         fields = _validate_fields(payload.get('fields') or [])
         existing = _existing_fields_from(payload)
         object_shells = _object_shells_from(payload)
+        layouts = _layouts_from(payload)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
 
@@ -299,6 +318,7 @@ def api_generate():
     humans = _human_permsets_from(payload, fields, existing)
     extra_names = [h['api_name'] for h in humans]
     object_names = [s['object'] for s in object_shells]
+    layout_member_names = [lay['full_name'] for lay in layouts]
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
     layout_name = (payload.get('layout_name') or '').strip()
@@ -323,16 +343,20 @@ def api_generate():
         'verify': cli_script.verify_snippet(flip_fields, alias),
         'deploy_dry_run': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=True,
                                                     extra_permset_names=extra_names,
-                                                    object_names=object_names),
+                                                    object_names=object_names,
+                                                    layout_names=layout_member_names),
         'deploy_full': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=False,
                                                  extra_permset_names=extra_names,
-                                                 object_names=object_names),
+                                                 object_names=object_names,
+                                                 layout_names=layout_member_names),
         'assign': cli_script.assign_snippets(assign_entries, alias),
         'deploy_dir': cli_script.deploy_dir_snippet(alias, dry_run=False),
-        'members': cli_script._members(fields, permset_name, extra_names, object_names),
+        'members': cli_script._members(fields, permset_name, extra_names, object_names,
+                                       layout_member_names),
         'has_flips': bool(flip_fields),
         'has_human_permset': bool(humans),
         'has_new_objects': bool(object_names),
+        'has_layouts': bool(layout_member_names),
         'layout_list': cli_script.layout_list_snippet(layout_retrieve_alias),
         'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, layout_retrieve_alias),
         'layout_deploy': cli_script.layout_deploy_snippet(layout_name, alias, dry_run=False),
@@ -352,11 +376,13 @@ def api_package():
         fields = _validate_fields(payload.get('fields') or [])
         existing = _existing_fields_from(payload)
         object_shells = _object_shells_from(payload)
+        layouts = _layouts_from(payload)
         permset = _permset_from(payload)
         humans = _human_permsets_from(payload, fields, existing)
         zip_bytes, filename = cli_script.build_package_zip(
             project, fields, permset or None, alias,
-            extra_permsets=humans or None, object_shells=object_shells or None)
+            extra_permsets=humans or None, object_shells=object_shells or None,
+            layouts=layouts or None)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:

@@ -232,10 +232,12 @@ the exact `<Object>-<Layout Name>` fullName) then the retrieve command — both 
 per-section **"retrieve from" source alias** (e.g. EDA) while deploy targets the top
 Alias, so a cross-org retrieve→deploy needs no field-swapping — the admin
 pastes the retrieved `.layout-meta.xml`,
-and `cli_layout` adds the fields (a new `<layoutSections>`, or into an existing
-section's first column) via **pure string surgery that leaves every other byte
-untouched** — never a rebuilt layout designer. Fields already on the layout are
-skipped. Pinned against the real Case layouts in `tests/fixtures/` +
+and either **copies it as-is** (no edits — the pasted `.layout-meta.xml` rides in
+the package + deploy verbatim under `layouts/`, for an org-to-org 1:1 copy; the
+target must already have every field it references), or `cli_layout` **adds
+fields** to it (a new `<layoutSections>`, or into an existing section's first
+column) via **pure string surgery that leaves every other byte untouched** —
+never a rebuilt layout designer. Fields already on the layout are skipped. Pinned against the real Case layouts in `tests/fixtures/` +
 `tests/test_cli_layout.py`. FLS + layout together complete the create → visible →
 on-the-page lifecycle.
 
