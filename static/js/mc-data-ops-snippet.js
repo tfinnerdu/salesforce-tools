@@ -1267,3 +1267,136 @@ MC.backup = {
     }
   },
 };
+
+
+// ── File migration (org → org, ContentVersion) — Data Ops Import card ──────────
+// Two-phase: a clean dry-run unlocks the (MC.confirm-gated) Migrate button; any
+// input change re-locks it, so you can never commit a stale plan.
+MC.fileMigration = {
+  _dryRunOk: false,
+  _snapshot: '',
+  _fields: ['fmSource', 'fmTarget', 'fmOldCol', 'fmNewCol', 'fmMaxMb', 'fmCsv'],
+
+  init() {
+    const src = document.getElementById('fmSource');
+    const tgt = document.getElementById('fmTarget');
+    if (!src || !tgt) return;   // card not on this page
+    // Preselect source = active org, target = first different org.
+    src.value = MC.activeOrg();
+    const other = Array.from(tgt.options).map(o => o.value).find(v => v !== src.value);
+    if (other) tgt.value = other;
+    document.getElementById('btnFmDryRun').addEventListener('click', () => this.dryRun());
+    document.getElementById('btnFmMigrate').addEventListener('click', () => this.migrate());
+    // Re-lock Migrate the instant any input changes (input + change covers text,
+    // number, select and file). The migrate() snapshot check is the backstop.
+    this._fields.forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('change', () => this._lock());
+      el.addEventListener('input', () => this._lock());
+    });
+  },
+
+  _snapshotInputs() {
+    return this._fields.map(id => document.getElementById(id).value).join('|');
+  },
+
+  _lock() {
+    this._dryRunOk = false;
+    const btn = document.getElementById('btnFmMigrate');
+    if (btn) btn.disabled = true;
+    const hint = document.getElementById('fmMigrateHint');
+    if (hint) hint.textContent = 'Run a dry-run first — a clean preview unlocks Migrate.';
+  },
+
+  _formData() {
+    const fd = new FormData();
+    fd.append('source', document.getElementById('fmSource').value);
+    fd.append('target', document.getElementById('fmTarget').value);
+    fd.append('map_old_col', document.getElementById('fmOldCol').value.trim());
+    fd.append('map_new_col', document.getElementById('fmNewCol').value.trim());
+    fd.append('max_mb', document.getElementById('fmMaxMb').value || '35');
+    const file = document.getElementById('fmCsv').files[0];
+    if (file) fd.append('crosswalk_csv', file);
+    return fd;
+  },
+
+  async _post(url) {
+    const res = await fetch(url, { method: 'POST', body: this._formData() });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || `HTTP ${res.status}`);
+    return json.data;
+  },
+
+  async dryRun() {
+    if (!document.getElementById('fmCsv').files[0]) {
+      MC.showToast('Choose a crosswalk CSV first.', 'warning');
+      return;
+    }
+    if (document.getElementById('fmSource').value === document.getElementById('fmTarget').value) {
+      MC.showToast('Source and target orgs must differ.', 'warning');
+      return;
+    }
+    try {
+      MC.showSpinner();
+      const data = await this._post('/data-ops/file-migration/plan');
+      this._render(data, false);
+      const btn = document.getElementById('btnFmMigrate');
+      const hint = document.getElementById('fmMigrateHint');
+      if (data.summary.migrate > 0) {
+        this._dryRunOk = true;
+        this._snapshot = this._snapshotInputs();
+        btn.disabled = false;
+        hint.textContent = `Ready — Migrate will move ${data.summary.migrate} file(s).`;
+      } else {
+        this._lock();
+        hint.textContent = 'Nothing to migrate in this preview.';
+      }
+    } catch (err) {
+      MC.showToast('Dry run failed: ' + err.message, 'danger');
+    } finally {
+      MC.hideSpinner();
+    }
+  },
+
+  async migrate() {
+    // Belt-and-braces: require a fresh, unchanged dry-run before committing.
+    if (!this._dryRunOk || this._snapshot !== this._snapshotInputs()) {
+      MC.showToast('Inputs changed — run the dry-run again first.', 'warning');
+      this._lock();
+      return;
+    }
+    try {
+      MC.showSpinner();
+      const data = await this._post('/data-ops/file-migration/run');
+      this._render(data, true);
+      const c = data.counts || {};
+      MC.showToast(`Migrated: created ${c.created || 0}, reused ${c.reused || 0}, linked ${c.linked || 0}.`, 'success');
+    } catch (err) {
+      MC.showToast('Migration failed: ' + err.message, 'danger');
+    } finally {
+      MC.hideSpinner();
+      this._lock();   // require a fresh dry-run before another commit
+    }
+  },
+
+  _render(data, committed) {
+    const s = data.summary;
+    const badge = (label, val, cls) => `<span class="badge bg-${cls} me-1">${label}: ${MC._escHtml(String(val))}</span>`;
+    let html = badge('migrate', `${s.migrate} (${s.migrate_mb} MB)`, 'success')
+      + badge('no parent', s.no_parent, s.no_parent ? 'warning' : 'secondary')
+      + badge('too large', s.oversize, s.oversize ? 'warning' : 'secondary')
+      + badge('unresolved parents', s.unresolved_parents, s.unresolved_parents ? 'warning' : 'secondary');
+    if (committed && data.counts) {
+      const c = data.counts;
+      html += `<div class="mt-2 alert alert-success py-1 mb-0">Committed — created ${c.created}, reused ${c.reused}, linked ${c.linked}, skipped ${c.skipped}.</div>`;
+    }
+    document.getElementById('fmSummary').innerHTML = html;
+    document.getElementById('fmRows').innerHTML = (data.rows || []).map(r =>
+      `<tr><td class="font-monospace">${MC._escHtml(r.source_cv_id)}</td>`
+      + `<td>${MC._escHtml(r.title)}</td>`
+      + `<td class="text-end">${Math.round((r.size_bytes || 0) / 1024).toLocaleString()} KB</td>`
+      + `<td class="text-end">${MC._escHtml(String(r.resolved_parents))}</td>`
+      + `<td>${MC._escHtml(r.action)}</td></tr>`).join('');
+    document.getElementById('fmResult').classList.remove('d-none');
+  },
+};

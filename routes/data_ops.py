@@ -125,6 +125,87 @@ def api_import_validate():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
+def _file_migration_cfg(tmp_path):
+    """Build a crosswalk-mode MigrationConfig from the multipart form."""
+    from services.file_migration import MigrationConfig, DEFAULT_MAX_MB
+    body = request.form
+    try:
+        max_mb = int(body.get('max_mb', DEFAULT_MAX_MB))
+    except (TypeError, ValueError):
+        max_mb = DEFAULT_MAX_MB
+    return MigrationConfig(
+        id_map=tmp_path,
+        map_old_col=body.get('map_old_col', 'old_id').strip() or 'old_id',
+        map_new_col=body.get('map_new_col', 'new_id').strip() or 'new_id',
+        max_mb=max_mb,
+    )
+
+
+def _run_file_migration(commit):
+    """Shared handler for the file-migration plan (dry-run) / run (commit) routes.
+
+    Crosswalk-only (the UI slice): the uploaded CSV carries old→new parent Ids.
+    The upload is written to a temp file so the shared engine (which reads a
+    path) is reused unchanged, then removed.
+    """
+    import os
+    import tempfile
+    from services import file_migration
+    from sf_provider import get_sf
+
+    body = request.form
+    source = body.get('source', '').strip()
+    target = body.get('target', '').strip()
+    crosswalk = request.files.get('crosswalk_csv')
+    if not source or not target or not crosswalk:
+        return jsonify({'success': False,
+                        'error': 'source, target and crosswalk_csv are required'}), 400
+
+    fd, tmp_path = tempfile.mkstemp(suffix='.csv')
+    try:
+        with os.fdopen(fd, 'wb') as fh:
+            fh.write(crosswalk.read())
+        cfg = _file_migration_cfg(tmp_path)
+        source_sf = get_sf(source)
+        target_sf = get_sf(target)
+        plan, resolved, unresolved = file_migration.build_plan(source_sf, target_sf, cfg)
+        summary = file_migration.summarize(plan, unresolved, cfg.max_mb)
+        data = {
+            'summary': summary,
+            'rows': file_migration.report_rows(plan)[:500],  # preview cap
+            'committed': False,
+        }
+        if commit:
+            data['counts'] = file_migration.execute(source_sf, target_sf, plan)
+            data['committed'] = True
+        return jsonify({'success': True, 'data': data})
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+@data_ops_bp.route('/file-migration/plan', methods=['POST'])
+def api_file_migration_plan():
+    """Dry-run the org-to-org file migration from an uploaded crosswalk — no writes."""
+    try:
+        return _run_file_migration(commit=False)
+    except Exception as exc:
+        logger.exception('file migration plan failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@data_ops_bp.route('/file-migration/run', methods=['POST'])
+def api_file_migration_run():
+    """Execute the org-to-org file migration (streams files, relinks parents)."""
+    try:
+        return _run_file_migration(commit=True)
+    except Exception as exc:
+        logger.exception('file migration run failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
 @data_ops_bp.route('/import/execute', methods=['POST'])
 def api_import_execute():
     """Execute CSV import via Bulk API."""

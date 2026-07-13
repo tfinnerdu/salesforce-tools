@@ -96,7 +96,10 @@ take. **Run a small batch first** (a tight `--where`).
 
 ### Relationship to the app
 
-This is the standalone **engine** behind the planned **File Migration tab**
-(Phase 2): both selection modes (filter / list) and the per-run external-Id
-remap are the same model. The tab will wrap this logic with a preview-first UI
-and `MC.confirm` gating.
+The engine lives in `services/file_migration.py`; this script is a thin CLI over
+it. The same engine also powers the **Data Ops → Import → "File migration"**
+card, which does the crosswalk flow in the browser: upload the crosswalk CSV,
+run a **dry-run** (preview summary + per-file report), and a clean dry-run
+unlocks a `MC.confirm`-gated **Migrate** button (any input change re-locks it).
+Use the card for crosswalk runs; use this CLI for external-Id scoping
+(`--parent`/`--ext-id`), large batches, or scripted/repeatable runs.

@@ -83,6 +83,7 @@
     <Compile Include="services\schema_diff.py" />
     <Compile Include="services\soql_workbench.py" />
     <Compile Include="services\external_id_coverage.py" />
+    <Compile Include="services\file_migration.py" />
     <Compile Include="services\contactpoint_scanner.py" />
     <Compile Include="services\crosswalk_diff.py" />
     <Compile Include="services\join_builder.py" />
@@ -188,6 +189,8 @@
     <Compile Include="tests\test_meta_routes.py" />
     <Compile Include="tests\test_soql_safety.py" />
     <Compile Include="tests\test_migrate_files.py" />
+    <Compile Include="tests\test_file_migration.py" />
+    <Compile Include="tests\test_file_migration_routes.py" />
     <Compile Include="tests\test_cli_fls.py" />
     <Compile Include="tests\test_cli_layout.py" />
     <Compile Include="tests\test_cli_recordtype.py" />
