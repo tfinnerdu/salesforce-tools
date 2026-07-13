@@ -79,6 +79,14 @@ def test_load_id_map_skips_blank_pairs(tmp_path):
     assert load_id_map(str(p)) == {'001OLD_A': '001NEW_A'}
 
 
+def test_load_id_map_tolerates_header_whitespace(tmp_path):
+    # Excel often leaves a trailing space in headers — the column must still match.
+    p = tmp_path / 'ws.csv'
+    p.write_text('Accommodation__c , NEW_Accommodation__c \na1O111111111111,a1N222222222222\n')
+    got = load_id_map(str(p), old_col='Accommodation__c', new_col='NEW_Accommodation__c')
+    assert got == {'a1O111111111111': 'a1N222222222222'}
+
+
 def test_load_id_map_windows_1252_encoding(tmp_path):
     # Excel export: a curly apostrophe (0x92 in cp1252) in a text column would
     # break a strict UTF-8 read — the Id columns must still load.

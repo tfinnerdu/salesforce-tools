@@ -91,9 +91,9 @@ def load_id_map(path, old_col='old_id', new_col='new_id'):
     rows = _read_csv_rows(path)
     if not rows:
         return {}
-    header = rows[0]
+    header = [h.strip() for h in rows[0]]   # tolerate Excel's stray header whitespace
     try:
-        oi, ni = header.index(old_col), header.index(new_col)
+        oi, ni = header.index(old_col.strip()), header.index(new_col.strip())
         data_rows = rows[1:]
     except ValueError:
         # Named columns not found — treat as a headerless two-column file.
