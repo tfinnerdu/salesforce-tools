@@ -24,9 +24,10 @@ external-Id field (e.g. `SIS_ID__c`) across the two orgs.
   orgs. That field is how old parent Id → new parent Id is resolved.
 - The running user can create Files in the target org (Content permissions).
 
-### Files vs Attachments (`--mode`)
+### Files vs Attachments (`--mode` / `--dest`)
 
-Salesforce has two file systems, and this migrates either:
+Salesforce has two file systems, and this migrates either — and the **read** side
+(`--mode`) and **write** side (`--dest`) are independent:
 
 - **`--mode files`** (default) — modern **Files** (`ContentVersion` / `ContentDocument`),
   linked to records via `ContentDocumentLink`. Streams `VersionData`, re-inserts,
@@ -35,25 +36,34 @@ Salesforce has two file systems, and this migrates either:
   *Notes & Attachments* related list). Streams each `Attachment.Body` and re-creates
   it on the remapped parent. One attachment has exactly one parent, so the crosswalk
   must map the **object the attachment hangs off** (old→new).
+- **`--dest {files,attachments}`** — what to *write* (defaults to the same as `--mode`).
+  Set it to **convert** one system to the other, e.g. `--mode attachments --dest files`
+  reads legacy Attachments and writes modern Files. `ShareType`/`Visibility` apply only
+  when writing Files.
 
 Not sure which you have? In the source org, an attachment shows up under a record's
 *Notes & Attachments* list and as an `Attachment` row (`00P…` Id); a File shows under
 *Files* and as `ContentDocumentLink`. (Reading either requires the integration user to
 have **Query All Files** / **View All Data** in the source org.)
 
-### Two ways to remap parents
+### Three ways to remap parents (`--remap`)
 
-Both answer the same question — "which target record is this source record's file
-supposed to hang off?" — they just establish the old→new link differently:
+All answer the same question — "which target record is this source record's file
+supposed to hang off?" — they just establish the old→new link differently. `--remap`
+is inferred (`crosswalk` if `--id-map`, else `ext_id`) but can be set explicitly:
 
-- **Crosswalk (`--id-map`)** — you already have the old→new parent Ids (e.g. the
-  DemandTools multi-org export). Point the script straight at that CSV; it drives
-  both scope and remap with **no external-Id lookups**. Simplest and fastest when
-  you have the Id pairs.
-- **External-Id (`--parent` + `--ext-id`)** — you *don't* have an Id list, but the
-  parent carries a durable business key that's the same in both orgs (e.g.
-  `SIS_ID__c`). The script matches on it and live-verifies the target record
+- **Crosswalk (`--remap crosswalk`, `--id-map`)** — you already have the old→new
+  parent Ids (e.g. the DemandTools multi-org export). Point the script straight at
+  that CSV; it drives both scope and remap with **no external-Id lookups**. Simplest
+  and fastest when you have the Id pairs.
+- **External-Id (`--remap ext_id`, `--parent` + `--ext-id`)** — you *don't* have an
+  Id list, but the parent carries a durable business key that's the same in both orgs
+  (e.g. `SIS_ID__c`). The script matches on it and live-verifies the target record
   exists. Use when you have no crosswalk.
+- **Same parent (`--remap identity`)** — keep the **same** parent record Id (new =
+  old). For an **in-place conversion** (e.g. legacy Attachments → modern Files) within
+  one org — set `--source` and `--target` to the same org — or a same-Id copy. Scope
+  by `--by filter --parent <Object> --where ...` or `--by list --ids-file`.
 
 ### Usage
 
@@ -78,6 +88,11 @@ python scripts/migrate_files.py --source eda --target prod \
 python scripts/migrate_files.py --source eda --target prod \
     --parent Case --ext-id Legacy_Case_Id__c --by list --ids-file cases.txt
 
+# ── In-place conversion: legacy Attachments → modern Files within one org ──
+python scripts/migrate_files.py --source prod --target prod \
+    --remap identity --mode attachments --dest files \
+    --parent Accommodation__c --by filter --where "Id != null"
+
 # Add --commit to any of the above to actually write to the target org
 python scripts/migrate_files.py --source eda --target prod --id-map account_map.csv --commit
 ```
@@ -94,11 +109,13 @@ take. **Run a small batch first** (a tight `--where`).
 ### How it stays safe & repeatable
 
 - **Dry-run by default**; writes only with `--commit`.
-- **Idempotent** — each created `ContentVersion` is stamped with the source
+- **Idempotent** — a created `ContentVersion` is stamped with the source
   ContentVersion Id in `ExternalDocumentInfo1`; a re-run finds the stamp and
   **reuses** the existing target file (relinking only) instead of duplicating it.
-- Links are created with `ShareType = V` (Viewer) and `Visibility = AllUsers`,
-  matching the Data Loader guide's defaults.
+  When writing Attachments, a re-run skips any the target parent already has by
+  name.
+- Files links default to `ShareType = V` (Viewer) and `Visibility = AllUsers`
+  (matching the Data Loader guide) — the app exposes both as per-run options.
 
 ### Known limits
 
@@ -114,9 +131,10 @@ take. **Run a small batch first** (a tight `--where`).
 ### Relationship to the app
 
 The engine lives in `services/file_migration.py`; this script is a thin CLI over
-it. The same engine also powers the **Data Ops → Import → "File migration"**
-card, which does the crosswalk flow in the browser: upload the crosswalk CSV,
+it. The same engine also powers the **Data Ops → File Migration** tab, which
+exposes all three remap methods (crosswalk / external-Id / same-parent), the
+read/write mode toggles, and `ShareType`/`Visibility` in the browser: configure,
 run a **dry-run** (preview summary + per-file report), and a clean dry-run
 unlocks a `MC.confirm`-gated **Migrate** button (any input change re-locks it).
-Use the card for crosswalk runs; use this CLI for external-Id scoping
-(`--parent`/`--ext-id`), large batches, or scripted/repeatable runs.
+Use the tab for interactive runs; use this CLI for large batches or
+scripted/repeatable runs.

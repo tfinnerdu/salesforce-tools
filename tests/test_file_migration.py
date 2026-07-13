@@ -166,7 +166,8 @@ def test_execute_attachments_creates_on_new_parent():
     fake_resp = MagicMock(content=b'bytes')
     fake_resp.raise_for_status.return_value = None
     with patch('services.file_migration.requests.get', return_value=fake_resp):
-        counts = fm.execute(MagicMock(), target, plan, mode='attachments')
+        counts = fm.execute(MagicMock(), target, plan,
+                            source_mode='attachments', dest_mode='attachments')
     assert counts['created'] == 1 and counts['linked'] == 1
     target.Attachment.create.assert_called_once()
     # ParentId of the created attachment is the NEW record
@@ -180,9 +181,133 @@ def test_execute_attachments_reuses_existing():
                       'size': 1000, 'content_type': 'application/jpeg'}}]
     target = MagicMock()
     target.query_all.return_value = {'records': [{'Id': '00PEXIST'}]}   # already there
-    counts = fm.execute(MagicMock(), target, plan, mode='attachments')
+    counts = fm.execute(MagicMock(), target, plan,
+                        source_mode='attachments', dest_mode='attachments')
     assert counts['reused'] == 1 and counts['created'] == 0
     target.Attachment.create.assert_not_called()
+
+
+# ── build_plan (identity + external-Id remap) ─────────────────────────────────
+
+def test_build_plan_identity_keeps_same_parent():
+    # Same-parent remap: scope by filter, new parent = old parent (in-place).
+    sf = MagicMock()
+
+    def q(soql):
+        if soql.startswith('SELECT Id FROM Accommodation__c'):
+            return {'records': [{'Id': 'a2JUU000002Jst00AS'}]}
+        if 'ContentDocumentLink' in soql:
+            return {'records': [{'ContentDocumentId': '069A',
+                                 'LinkedEntityId': 'a2JUU000002Jst00AS'}]}
+        if 'ContentVersion' in soql and 'ContentDocumentId IN' in soql:
+            return {'records': [{'Id': '068A', 'Title': 'p', 'ContentDocumentId': '069A',
+                                 'ContentSize': 10}]}
+        return {'records': []}
+
+    sf.query_all.side_effect = q
+    cfg = MigrationConfig(remap='identity', parent='Accommodation__c',
+                          by='filter', where='Id != null')
+    plan, resolved, unresolved, stats = fm.build_plan(sf, MagicMock(), cfg)
+    assert resolved == {'a2JUU000002Jst00AS': 'a2JUU000002Jst00AS'}
+    assert plan[0]['target_parents'] == ['a2JUU000002Jst00AS']
+    assert stats['parents_in_scope'] == 1
+
+
+def test_build_plan_ext_id_resolves_across_orgs():
+    source = MagicMock()
+
+    def sq(soql):
+        if soql.startswith('SELECT Id FROM Account WHERE IsPersonAccount'):
+            return {'records': [{'Id': '001SRC00000000AAA'}]}
+        if 'SELECT Id, SIS_ID__c FROM Account WHERE Id IN' in soql:
+            return {'records': [{'Id': '001SRC00000000AAA', 'SIS_ID__c': 'SIS-1'}]}
+        if 'ContentDocumentLink' in soql:
+            return {'records': [{'ContentDocumentId': '069A',
+                                 'LinkedEntityId': '001SRC00000000AAA'}]}
+        if 'ContentVersion' in soql and 'ContentDocumentId IN' in soql:
+            return {'records': [{'Id': '068A', 'Title': 'p', 'ContentDocumentId': '069A',
+                                 'ContentSize': 5}]}
+        return {'records': []}
+
+    source.query_all.side_effect = sq
+    target = MagicMock()
+
+    def tq(soql):
+        if 'SELECT Id, SIS_ID__c FROM Account WHERE SIS_ID__c IN' in soql:
+            return {'records': [{'Id': '001TGT00000000AAA', 'SIS_ID__c': 'SIS-1'}]}
+        return {'records': []}
+
+    target.query_all.side_effect = tq
+    cfg = MigrationConfig(remap='ext_id', parent='Account', ext_id='SIS_ID__c',
+                          by='filter', where='IsPersonAccount = true')
+    plan, resolved, unresolved, stats = fm.build_plan(source, target, cfg)
+    assert resolved == {'001SRC00000000AAA': '001TGT00000000AAA'}
+    assert plan[0]['target_parents'] == ['001TGT00000000AAA']
+
+
+# ── execute (cross-mode conversion: read one system, write the other) ─────────
+
+def test_execute_attachment_to_file_conversion():
+    # Read a legacy Attachment's bytes, write a modern File (ContentVersion + link).
+    plan = [{'doc_id': '00PATT', 'target_parents': ['a1NEW1234567890'],
+             'unresolved_parents': [], 'oversize': False,
+             'meta': {'id': '00PATT', 'title': 'scan.jpg', 'path': 'scan.jpg',
+                      'size': 100, 'content_type': 'application/jpeg'}}]
+    target = MagicMock()
+    target.query_all.side_effect = [
+        {'records': []},                                  # existing_target_doc → none
+        {'records': [{'ContentDocumentId': '069NEW'}]},   # doc id of the new CV
+    ]
+    target.ContentVersion.create.return_value = {'id': '068NEW'}
+    target.ContentDocumentLink.create.return_value = {'id': 'cdl'}
+    fake_resp = MagicMock(content=b'bytes')
+    fake_resp.raise_for_status.return_value = None
+    with patch('services.file_migration.requests.get', return_value=fake_resp) as g:
+        counts = fm.execute(MagicMock(), target, plan,
+                            source_mode='attachments', dest_mode='files')
+    # Read side used the Attachment Body endpoint; write side created a File.
+    assert '/Attachment/00PATT/Body' in g.call_args[0][0]
+    assert counts['created'] == 1 and counts['linked'] == 1
+    target.ContentVersion.create.assert_called_once()
+    target.Attachment.create.assert_not_called()
+
+
+def test_execute_file_to_attachment_conversion():
+    # Read a File's VersionData, write a legacy Attachment on the resolved parent.
+    plan = [{'doc_id': '069', 'target_parents': ['a1NEW1234567890'],
+             'unresolved_parents': [], 'oversize': False,
+             'meta': {'id': '068SRC', 'title': 'p.pdf', 'path': 'p.pdf', 'size': 50}}]
+    target = MagicMock()
+    target.query_all.return_value = {'records': []}          # no existing attachment
+    target.Attachment.create.return_value = {'id': '00PNEW'}
+    fake_resp = MagicMock(content=b'x')
+    fake_resp.raise_for_status.return_value = None
+    with patch('services.file_migration.requests.get', return_value=fake_resp) as g:
+        counts = fm.execute(MagicMock(), target, plan,
+                            source_mode='files', dest_mode='attachments')
+    assert '/ContentVersion/068SRC/VersionData' in g.call_args[0][0]
+    assert counts['created'] == 1
+    target.Attachment.create.assert_called_once()
+    target.ContentVersion.create.assert_not_called()
+
+
+def test_execute_files_passes_share_type_and_visibility():
+    plan = [_plan_row(size=100, targets=('a1NEW',))]
+    plan[0]['meta']['id'] = '068A'
+    target = MagicMock()
+    target.query_all.side_effect = [
+        {'records': []},
+        {'records': [{'ContentDocumentId': '069NEW'}]},
+    ]
+    target.ContentVersion.create.return_value = {'id': '068NEW'}
+    target.ContentDocumentLink.create.return_value = {'id': 'cdl'}
+    fake_resp = MagicMock(content=b'b')
+    fake_resp.raise_for_status.return_value = None
+    with patch('services.file_migration.requests.get', return_value=fake_resp):
+        fm.execute(MagicMock(), target, plan, share_type='C', visibility='InternalUsers')
+    payload = target.ContentDocumentLink.create.call_args[0][0]
+    assert payload['ShareType'] == 'C'
+    assert payload['Visibility'] == 'InternalUsers'
 
 
 # ── summarize / report_rows ───────────────────────────────────────────────────

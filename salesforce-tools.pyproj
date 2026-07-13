@@ -230,6 +230,7 @@
     <Content Include="templates\data_ops\backup.html" />
     <Content Include="templates\data_ops\bulk_jobs.html" />
     <Content Include="templates\data_ops\bulk_update.html" />
+    <Content Include="templates\data_ops\file_migration.html" />
     <Content Include="templates\data_ops\join_builder.html" />
     <Content Include="templates\data_ops\record_locks.html" />
     <Content Include="templates\deploy\index.html" />

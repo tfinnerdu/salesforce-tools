@@ -83,6 +83,11 @@ def bulk_jobs_page():
     return render_template('data_ops/bulk_jobs.html')
 
 
+@data_ops_bp.route('/file-migration')
+def file_migration_page():
+    return render_template('data_ops/file_migration.html')
+
+
 # ── Import API ────────────────────────────────────────────────────────────────
 
 @data_ops_bp.route('/import/fields', methods=['POST'])
@@ -125,49 +130,97 @@ def api_import_validate():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
-def _file_migration_cfg(tmp_path):
-    """Build a crosswalk-mode MigrationConfig from the multipart form."""
+def _build_migration_cfg(body, files, tmp_paths):
+    """Build a MigrationConfig from the multipart form for any remap method.
+
+    Uploads / pasted lists are written to temp files (paths appended to
+    tmp_paths for the caller to clean up) so the path-based engine is reused.
+    Returns (cfg, error) where error is (message, status) or None.
+    """
+    import os
+    import tempfile
     from services.file_migration import MigrationConfig, DEFAULT_MAX_MB
-    body = request.form
+
     try:
         max_mb = int(body.get('max_mb', DEFAULT_MAX_MB))
     except (TypeError, ValueError):
         max_mb = DEFAULT_MAX_MB
     mode = body.get('mode', 'files').strip()
-    return MigrationConfig(
-        id_map=tmp_path,
-        map_old_col=body.get('map_old_col', 'old_id').strip() or 'old_id',
-        map_new_col=body.get('map_new_col', 'new_id').strip() or 'new_id',
+    dest = body.get('dest', '').strip()
+    remap = body.get('remap_method', 'crosswalk').strip()
+    common = dict(
         max_mb=max_mb,
         mode=mode if mode in ('files', 'attachments') else 'files',
+        dest=dest if dest in ('files', 'attachments') else '',
+        remap=remap,
+        share_type=body.get('share_type', 'V').strip() or 'V',
+        visibility=body.get('visibility', 'AllUsers').strip() or 'AllUsers',
     )
+
+    def _scope():
+        """Scope by SOQL filter (where) or a pasted Id list (→ temp file)."""
+        by = body.get('by', 'filter').strip()
+        ids_file = ''
+        if by == 'list':
+            ids_text = body.get('ids', '').strip()
+            if not ids_text:
+                return None, ('a list of Ids / external-Id values is required', 400)
+            fd, ids_file = tempfile.mkstemp(suffix='.txt')
+            tmp_paths.append(ids_file)
+            with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+                fh.write(ids_text)
+        return dict(by=by, where=body.get('where', '').strip(), ids_file=ids_file), None
+
+    if remap == 'ext_id':
+        parent = body.get('parent', '').strip()
+        ext_id = body.get('ext_id', '').strip()
+        if not parent or not ext_id:
+            return None, ('parent and ext_id are required for external-Id remap', 400)
+        scope, err = _scope()
+        if err:
+            return None, err
+        return MigrationConfig(parent=parent, ext_id=ext_id, **scope, **common), None
+
+    if remap == 'identity':
+        scope, err = _scope()
+        if err:
+            return None, err
+        parent = body.get('parent', '').strip()
+        if scope['by'] == 'filter' and not parent:
+            return None, ('a parent object is required for a filter scope', 400)
+        return MigrationConfig(parent=parent, **scope, **common), None
+
+    # crosswalk (default)
+    crosswalk = files.get('crosswalk_csv')
+    if not crosswalk:
+        return None, ('a crosswalk CSV is required', 400)
+    fd, cw = tempfile.mkstemp(suffix='.csv')
+    tmp_paths.append(cw)
+    with os.fdopen(fd, 'wb') as fh:
+        fh.write(crosswalk.read())
+    return MigrationConfig(id_map=cw,
+                           map_old_col=body.get('map_old_col', 'old_id').strip() or 'old_id',
+                           map_new_col=body.get('map_new_col', 'new_id').strip() or 'new_id',
+                           **common), None
 
 
 def _run_file_migration(commit):
-    """Shared handler for the file-migration plan (dry-run) / run (commit) routes.
-
-    Crosswalk-only (the UI slice): the uploaded CSV carries old→new parent Ids.
-    The upload is written to a temp file so the shared engine (which reads a
-    path) is reused unchanged, then removed.
-    """
+    """Shared handler for the file-migration plan (dry-run) / run (commit) routes."""
     import os
-    import tempfile
     from services import file_migration
     from sf_provider import get_sf
 
     body = request.form
     source = body.get('source', '').strip()
     target = body.get('target', '').strip()
-    crosswalk = request.files.get('crosswalk_csv')
-    if not source or not target or not crosswalk:
-        return jsonify({'success': False,
-                        'error': 'source, target and crosswalk_csv are required'}), 400
+    if not source or not target:
+        return jsonify({'success': False, 'error': 'source and target are required'}), 400
 
-    fd, tmp_path = tempfile.mkstemp(suffix='.csv')
+    tmp_paths = []
     try:
-        with os.fdopen(fd, 'wb') as fh:
-            fh.write(crosswalk.read())
-        cfg = _file_migration_cfg(tmp_path)
+        cfg, err = _build_migration_cfg(body, request.files, tmp_paths)
+        if err:
+            return jsonify({'success': False, 'error': err[0]}), err[1]
         source_sf = get_sf(source)
         target_sf = get_sf(target)
         plan, resolved, unresolved, stats = file_migration.build_plan(source_sf, target_sf, cfg)
@@ -179,14 +232,17 @@ def _run_file_migration(commit):
             'committed': False,
         }
         if commit:
-            data['counts'] = file_migration.execute(source_sf, target_sf, plan, cfg.mode)
+            data['counts'] = file_migration.execute(
+                source_sf, target_sf, plan, cfg.mode, cfg.dest or cfg.mode,
+                cfg.share_type, cfg.visibility)
             data['committed'] = True
         return jsonify({'success': True, 'data': data})
     finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        for p in tmp_paths:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 
 @data_ops_bp.route('/file-migration/plan', methods=['POST'])

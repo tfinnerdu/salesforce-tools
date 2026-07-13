@@ -1269,35 +1269,90 @@ MC.backup = {
 };
 
 
-// ── File migration (org → org, ContentVersion) — Data Ops Import card ──────────
+// ── File migration (org → org / in-place) — dedicated Data Ops tab ─────────────
+// Reads Files or Attachments from a source org and writes them to a target org
+// (or converts in place), relinking each to the migrated parent by one of three
+// methods: a crosswalk CSV, an external-Id match, or the same parent (identity).
 // Two-phase: a clean dry-run unlocks the (MC.confirm-gated) Migrate button; any
 // input change re-locks it, so you can never commit a stale plan.
 MC.fileMigration = {
   _dryRunOk: false,
   _snapshot: '',
-  _fields: ['fmMode', 'fmSource', 'fmTarget', 'fmOldCol', 'fmNewCol', 'fmMaxMb', 'fmCsv'],
+  // Every value input whose change should re-lock Migrate (radios handled below).
+  _watchIds: ['fmMode', 'fmSource', 'fmTarget', 'fmDest', 'fmOldCol', 'fmNewCol',
+              'fmMaxMb', 'fmCsv', 'fmParent', 'fmExtId', 'fmParentIdentity',
+              'fmWhere', 'fmIds', 'fmShareType', 'fmVisibility'],
 
   init() {
     const src = document.getElementById('fmSource');
     const tgt = document.getElementById('fmTarget');
-    if (!src || !tgt) return;   // card not on this page
+    if (!src || !tgt) return;   // page not loaded
     // Preselect source = active org, target = first different org.
     src.value = MC.activeOrg();
     const other = Array.from(tgt.options).map(o => o.value).find(v => v !== src.value);
     if (other) tgt.value = other;
+
     document.getElementById('btnFmDryRun').addEventListener('click', () => this.dryRun());
     document.getElementById('btnFmMigrate').addEventListener('click', () => this.migrate());
-    // Re-lock Migrate the instant any input changes (input + change covers text,
-    // number, select and file). The migrate() snapshot check is the backstop.
-    this._fields.forEach(id => {
+
+    // Conditional UI: remap method, scope-by, and write-as (dest) all reshape the
+    // form; each also re-locks Migrate.
+    document.querySelectorAll('input[name="fmRemap"]').forEach(r =>
+      r.addEventListener('change', () => this._syncRemap()));
+    document.querySelectorAll('input[name="fmBy"]').forEach(r =>
+      r.addEventListener('change', () => { this._syncScopeBy(); this._lock(); }));
+    document.getElementById('fmDest').addEventListener('change', () => this._syncDest());
+    document.getElementById('fmMode').addEventListener('change', () => this._syncDest());
+
+    // Re-lock Migrate the instant any input changes. migrate()'s snapshot is the backstop.
+    this._watchIds.forEach(id => {
       const el = document.getElementById(id);
+      if (!el) return;
       el.addEventListener('change', () => this._lock());
       el.addEventListener('input', () => this._lock());
     });
+
+    this._syncRemap();
+    this._syncDest();
+  },
+
+  _v(id) { return (document.getElementById(id)?.value ?? '').toString(); },
+  _remap() { return document.querySelector('input[name="fmRemap"]:checked')?.value || 'crosswalk'; },
+  _by() { return document.querySelector('input[name="fmBy"]:checked')?.value || 'filter'; },
+
+  _syncRemap() {
+    const remap = this._remap();
+    document.getElementById('fmPanelCrosswalk').classList.toggle('d-none', remap !== 'crosswalk');
+    document.getElementById('fmPanelExtId').classList.toggle('d-none', remap !== 'ext_id');
+    document.getElementById('fmPanelIdentity').classList.toggle('d-none', remap !== 'identity');
+    // Scope (filter/list) applies to ext_id + identity; the crosswalk carries its own.
+    document.getElementById('fmScope').classList.toggle('d-none', remap === 'crosswalk');
+    this._syncScopeBy();
+    this._lock();
+  },
+
+  _syncScopeBy() {
+    const by = this._by();
+    document.getElementById('fmScopeFilter').classList.toggle('d-none', by !== 'filter');
+    document.getElementById('fmScopeList').classList.toggle('d-none', by !== 'list');
+  },
+
+  _syncDest() {
+    // ShareType / Visibility only matter when the write side is Files.
+    const effDest = this._v('fmDest') || this._v('fmMode');
+    const writingAttachments = effDest === 'attachments';
+    ['fmShareType', 'fmVisibility'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = writingAttachments;
+    });
+    document.getElementById('fmShareTypeNote').classList.toggle('d-none', !writingAttachments);
+    this._lock();
   },
 
   _snapshotInputs() {
-    return this._fields.map(id => document.getElementById(id).value).join('|');
+    const parts = this._watchIds.map(id => this._v(id));
+    parts.push(this._remap(), this._by());
+    return parts.join('|');
   },
 
   _lock() {
@@ -1308,17 +1363,56 @@ MC.fileMigration = {
     if (hint) hint.textContent = 'Run a dry-run first — a clean preview unlocks Migrate.';
   },
 
+  _appendScope(fd) {
+    const by = this._by();
+    fd.append('by', by);
+    if (by === 'list') fd.append('ids', this._v('fmIds').trim());
+    else fd.append('where', this._v('fmWhere').trim());
+  },
+
   _formData() {
     const fd = new FormData();
-    fd.append('mode', document.getElementById('fmMode').value);
-    fd.append('source', document.getElementById('fmSource').value);
-    fd.append('target', document.getElementById('fmTarget').value);
-    fd.append('map_old_col', document.getElementById('fmOldCol').value.trim());
-    fd.append('map_new_col', document.getElementById('fmNewCol').value.trim());
-    fd.append('max_mb', document.getElementById('fmMaxMb').value || '35');
-    const file = document.getElementById('fmCsv').files[0];
-    if (file) fd.append('crosswalk_csv', file);
+    const remap = this._remap();
+    fd.append('source', this._v('fmSource'));
+    fd.append('target', this._v('fmTarget'));
+    fd.append('mode', this._v('fmMode'));
+    fd.append('dest', this._v('fmDest'));
+    fd.append('remap_method', remap);
+    fd.append('max_mb', this._v('fmMaxMb') || '35');
+    fd.append('share_type', this._v('fmShareType'));
+    fd.append('visibility', this._v('fmVisibility'));
+    if (remap === 'crosswalk') {
+      const file = document.getElementById('fmCsv').files[0];
+      if (file) fd.append('crosswalk_csv', file);
+      fd.append('map_old_col', this._v('fmOldCol').trim());
+      fd.append('map_new_col', this._v('fmNewCol').trim());
+    } else if (remap === 'ext_id') {
+      fd.append('parent', this._v('fmParent').trim());
+      fd.append('ext_id', this._v('fmExtId').trim());
+      this._appendScope(fd);
+    } else if (remap === 'identity') {
+      fd.append('parent', this._v('fmParentIdentity').trim());
+      this._appendScope(fd);
+    }
     return fd;
+  },
+
+  // Client-side guard mirroring the route's required fields, for a friendlier error.
+  _validate() {
+    const remap = this._remap();
+    if (remap === 'crosswalk' && !document.getElementById('fmCsv').files[0]) {
+      return 'Choose a crosswalk CSV first.';
+    }
+    if (remap === 'ext_id' && (!this._v('fmParent').trim() || !this._v('fmExtId').trim())) {
+      return 'Parent object and external-Id field are required for external-Id remap.';
+    }
+    if (remap === 'identity' && this._by() === 'filter' && !this._v('fmParentIdentity').trim()) {
+      return 'A parent object is required when scoping by filter.';
+    }
+    if (this._by() === 'list' && remap !== 'crosswalk' && !this._v('fmIds').trim()) {
+      return 'Paste at least one Id / external-Id value, or scope by filter.';
+    }
+    return null;
   },
 
   async _post(url) {
@@ -1329,14 +1423,8 @@ MC.fileMigration = {
   },
 
   async dryRun() {
-    if (!document.getElementById('fmCsv').files[0]) {
-      MC.showToast('Choose a crosswalk CSV first.', 'warning');
-      return;
-    }
-    if (document.getElementById('fmSource').value === document.getElementById('fmTarget').value) {
-      MC.showToast('Source and target orgs must differ.', 'warning');
-      return;
-    }
+    const err = this._validate();
+    if (err) { MC.showToast(err, 'warning'); return; }
     try {
       MC.showSpinner();
       const data = await this._post('/data-ops/file-migration/plan');
@@ -1347,7 +1435,7 @@ MC.fileMigration = {
         this._dryRunOk = true;
         this._snapshot = this._snapshotInputs();
         btn.disabled = false;
-        hint.textContent = `Ready — Migrate will move ${data.summary.migrate} file(s).`;
+        hint.textContent = `Ready — Migrate will move ${data.summary.migrate} item(s).`;
       } else {
         this._lock();
         hint.textContent = 'Nothing to migrate in this preview.';
@@ -1385,14 +1473,15 @@ MC.fileMigration = {
     const badge = (label, val, cls) => `<span class="badge bg-${cls} me-1">${label}: ${MC._escHtml(String(val))}</span>`;
     const filesFound = s.files_found ?? 0;
     let html = badge('parents in scope', s.parents_in_scope ?? 0, 'info')
-      + badge('files found', filesFound, filesFound ? 'info' : 'warning')
+      + badge('found', filesFound, filesFound ? 'info' : 'warning')
       + badge('migrate', `${s.migrate} (${s.migrate_mb} MB)`, 'success')
       + badge('no parent', s.no_parent, s.no_parent ? 'warning' : 'secondary')
       + badge('too large', s.oversize, s.oversize ? 'warning' : 'secondary')
       + badge('unresolved parents', s.unresolved_parents, s.unresolved_parents ? 'warning' : 'secondary');
-    // Actionable hint when the crosswalk resolved parents but no files came back.
+    // Actionable hint when parents resolved but nothing came back from the source.
     if ((s.parents_in_scope ?? 0) > 0 && filesFound === 0) {
-      html += `<div class="mt-2 alert alert-warning py-1 mb-0 small">Found ${s.parents_in_scope} parent record(s) in the crosswalk but <strong>no files linked to them in the source org</strong>. Check: are the files really on this object in the <em>source</em> org, and does the integration user have <strong>Query All Files</strong> permission there?</div>`;
+      const what = this._v('fmMode') === 'attachments' ? 'attachments' : 'files';
+      html += `<div class="mt-2 alert alert-warning py-1 mb-0 small">Found ${s.parents_in_scope} parent record(s) in scope but <strong>no ${what} linked to them in the source org</strong>. Check: are the ${what} really on this object in the <em>source</em> org, and does the integration user have <strong>Query All Files</strong> / <strong>View All Data</strong> there?</div>`;
     }
     if (committed && data.counts) {
       const c = data.counts;

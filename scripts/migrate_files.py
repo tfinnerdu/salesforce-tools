@@ -2,10 +2,13 @@
 """Org-to-org Salesforce file (ContentVersion) migrator — CLI wrapper.
 
 Thin command-line front end over ``services.file_migration`` (the shared engine,
-also used by the Data Ops "File migration" card). Streams files from a source
-org to a target org **without staging them locally** and relinks each file to
-the migrated parent record — from a direct old→new crosswalk CSV (``--id-map``)
-or by resolving an external-Id field (``--parent`` + ``--ext-id``).
+also used by the Data Ops "File Migration" tab). Streams Files or legacy
+Attachments from a source org to a target org **without staging them locally**
+and relinks each item to the migrated parent record — from a direct old→new
+crosswalk CSV (``--id-map``), by resolving an external-Id field (``--parent`` +
+``--ext-id``), or keeping the same parent for an in-place conversion
+(``--remap identity``). The read (``--mode``) and write (``--dest``) sides are
+independent, so an Attachment can land as a File and vice-versa.
 
 Dry-run by default; writes only with ``--commit``. See ``scripts/README.md``.
 
@@ -19,6 +22,11 @@ Examples
     # External-Id: all files on Person Accounts, matched by SIS_ID__c
     python scripts/migrate_files.py --source eda --target prod \
         --parent Account --ext-id SIS_ID__c --by filter --where "IsPersonAccount = true"
+
+    # In-place: convert legacy Attachments to modern Files within one org
+    python scripts/migrate_files.py --source prod --target prod \
+        --remap identity --mode attachments --dest files \
+        --parent Accommodation__c --by filter --where "Id != null"
 
     # Add --commit to actually write to the target org
     python scripts/migrate_files.py ... --commit
@@ -76,7 +84,15 @@ def main(argv=None):
     ap.add_argument('--map-old-col', default='old_id', help='crosswalk column with the source Id')
     ap.add_argument('--map-new-col', default='new_id', help='crosswalk column with the target Id')
     ap.add_argument('--mode', choices=['files', 'attachments'], default='files',
-                    help="'files' = modern Files (ContentVersion); 'attachments' = legacy Attachment")
+                    help="what to READ: 'files' = modern Files (ContentVersion); "
+                    "'attachments' = legacy Attachment")
+    ap.add_argument('--dest', choices=['files', 'attachments'], default='',
+                    help="what to WRITE (default: same as --mode). Set to convert one to the "
+                    "other, e.g. --mode attachments --dest files")
+    ap.add_argument('--remap', choices=['crosswalk', 'ext_id', 'identity'], default='',
+                    help="how parents map old→new: 'crosswalk' (needs --id-map), 'ext_id' "
+                    "(needs --parent/--ext-id), or 'identity' (same parent — in-place "
+                    "conversion). Default: infer crosswalk if --id-map else ext_id.")
     ap.add_argument('--max-mb', type=int, default=DEFAULT_MAX_MB,
                     help=f'flag files larger than this many MB (default {DEFAULT_MAX_MB})')
     ap.add_argument('--report', default='file_migration_report.csv', help='CSV report path')
@@ -84,21 +100,31 @@ def main(argv=None):
                     help='actually write to the target org (default is dry-run)')
     cfg = ap.parse_args(argv)
 
-    if cfg.id_map:
+    remap = cfg.remap or ('crosswalk' if cfg.id_map else 'ext_id')
+    if remap == 'crosswalk':
+        if not cfg.id_map:
+            ap.error('crosswalk remap requires --id-map')
         if not os.path.exists(cfg.id_map):
             ap.error(f'--id-map file not found: {cfg.id_map}')
-    else:
+    elif remap == 'ext_id':
         if not cfg.parent or not cfg.ext_id:
-            ap.error('--parent and --ext-id are required unless --id-map is used')
+            ap.error('ext_id remap requires --parent and --ext-id')
+        if cfg.by == 'list' and not cfg.ids_file:
+            ap.error('--by list requires --ids-file')
+    else:  # identity
+        if cfg.by == 'filter' and not cfg.parent:
+            ap.error('identity remap with --by filter requires --parent')
         if cfg.by == 'list' and not cfg.ids_file:
             ap.error('--by list requires --ids-file')
 
     source_sf = get_sf(cfg.source)
     target_sf = get_sf(cfg.target)
 
-    remap = (f'crosswalk {cfg.id_map}' if cfg.id_map
-             else f'parent {cfg.parent} by ext-Id {cfg.ext_id}')
-    logger.info('Planning migration: %s → %s  (%s)', cfg.source, cfg.target, remap)
+    desc = {'crosswalk': f'crosswalk {cfg.id_map}',
+            'ext_id': f'parent {cfg.parent} by ext-Id {cfg.ext_id}',
+            'identity': f'same parent ({cfg.parent or "by list"})'}[remap]
+    logger.info('Planning migration: %s → %s  (%s; read %s, write %s)',
+                cfg.source, cfg.target, desc, cfg.mode, cfg.dest or cfg.mode)
     plan, resolved, unresolved, stats = build_plan(source_sf, target_sf, cfg)
     write_report(cfg.report, plan)
 
@@ -116,7 +142,7 @@ def main(argv=None):
         return 0
 
     logger.info('\nCOMMIT — writing to %s …', cfg.target)
-    counts = execute(source_sf, target_sf, plan, cfg.mode)
+    counts = execute(source_sf, target_sf, plan, cfg.mode, cfg.dest or cfg.mode)
     logger.info('Done. created=%(created)d reused=%(reused)d linked=%(linked)d skipped=%(skipped)d',
                 counts)
     return 0

@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+{% block title %}File Migration - Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <nav class="sub-nav mb-3">
+    <div class="container-fluid">
+      <ul class="nav nav-pills gap-1">
+        <li class="nav-item"><a class="nav-link" href="/data-ops/import">Import</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/export">Export</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/modify">Modify</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/tune">Tune</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/match">Match</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/convert">Convert</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/delete">Delete</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/reassign">Reassign</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/backup">Backup</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-update">Bulk Update</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/join">Join Builder</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/record-locks">Record Locks</a></li>
+        <li class="nav-item"><a class="nav-link" href="/data-ops/bulk-jobs">Bulk Jobs</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/data-ops/file-migration">File Migration</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="mc-page-header d-flex align-items-center gap-2 mb-3">
+    <h4 class="mc-page-title mb-0">File Migration
+      <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+            data-bs-title="File Migration"
+            data-bs-content="Copy Salesforce Files or legacy Attachments from one org to another (or convert one to the other in place), streaming bytes source→target with no local staging, and relink each item to the migrated parent record. Dry-run first; a clean preview unlocks Migrate.">ⓘ</span>
+    </h4>
+    <span class="badge mc-org-badge">{{ session.get('active_org','dev')|upper }}</span>
+  </div>
+
+  <div class="row g-3">
+    <!-- ── Source ─────────────────────────────────────────────────────── -->
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Source <span class="text-muted fw-normal small ms-1">— where the files live now</span>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="fmSource" class="form-label small fw-semibold mb-1">Source org</label>
+            <select id="fmSource" class="form-select form-select-sm">
+              {% for o in nav_orgs %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-1">
+            <label for="fmMode" class="form-label small fw-semibold mb-1">What to read</label>
+            <select id="fmMode" class="form-select form-select-sm">
+              <option value="files">Files (ContentVersion / ContentDocument)</option>
+              <option value="attachments">Attachments (legacy — Notes &amp; Attachments)</option>
+            </select>
+            <div class="form-text">
+              Reading either needs the integration user to have
+              <strong>Query All Files</strong> / <strong>View All Data</strong> in the source org.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Destination ────────────────────────────────────────────────── -->
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Destination <span class="text-muted fw-normal small ms-1">— where they should land</span>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="fmTarget" class="form-label small fw-semibold mb-1">Target org</label>
+            <select id="fmTarget" class="form-select form-select-sm">
+              {% for o in nav_orgs %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+            </select>
+            <div class="form-text">Set the same as source for an in-place conversion (see “same parent” below).</div>
+          </div>
+          <div class="mb-1">
+            <label for="fmDest" class="form-label small fw-semibold mb-1">Write as</label>
+            <select id="fmDest" class="form-select form-select-sm">
+              <option value="">Same as source</option>
+              <option value="files">Files (ContentVersion)</option>
+              <option value="attachments">Attachments (legacy)</option>
+            </select>
+            <div class="form-text">
+              Independent of what you read — e.g. read legacy Attachments and write modern Files.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Parent mapping ─────────────────────────────────────────────── -->
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">
+          Parent mapping
+          <span class="text-muted fw-normal small ms-1">— which target record each file re-attaches to</span>
+        </div>
+        <div class="card-body">
+          <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Remap method">
+            <input type="radio" class="btn-check" name="fmRemap" id="fmRemapCrosswalk" value="crosswalk" checked>
+            <label class="btn btn-outline-secondary" for="fmRemapCrosswalk">Crosswalk CSV</label>
+            <input type="radio" class="btn-check" name="fmRemap" id="fmRemapExtId" value="ext_id">
+            <label class="btn btn-outline-secondary" for="fmRemapExtId">External Id</label>
+            <input type="radio" class="btn-check" name="fmRemap" id="fmRemapIdentity" value="identity">
+            <label class="btn btn-outline-secondary" for="fmRemapIdentity">Same parent</label>
+          </div>
+
+          <!-- Crosswalk -->
+          <div id="fmPanelCrosswalk" class="fm-remap-panel">
+            <p class="small text-muted mb-2">
+              You already have old→new parent Ids (e.g. a DemandTools multi-org export).
+              The CSV drives both scope and remap — no external-Id lookups.
+            </p>
+            <div class="row g-2 align-items-end">
+              <div class="col-sm-6 col-md-5">
+                <label for="fmCsv" class="form-label small fw-semibold mb-1">Crosswalk CSV (old→new Ids)</label>
+                <input id="fmCsv" type="file" accept=".csv" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-3 col-md-3">
+                <label for="fmOldCol" class="form-label small fw-semibold mb-1">Old-Id column</label>
+                <input id="fmOldCol" type="text" class="form-control form-control-sm" value="old_id">
+              </div>
+              <div class="col-sm-3 col-md-3">
+                <label for="fmNewCol" class="form-label small fw-semibold mb-1">New-Id column</label>
+                <input id="fmNewCol" type="text" class="form-control form-control-sm" value="new_id">
+              </div>
+            </div>
+            <div class="form-text mt-1">
+              Name the columns to match your spreadsheet
+              (e.g. <code>Accommodation__c</code> / <code>NEW_Accommodation__c</code>).
+            </div>
+          </div>
+
+          <!-- External Id -->
+          <div id="fmPanelExtId" class="fm-remap-panel d-none">
+            <p class="small text-muted mb-2">
+              No Id list, but the parent carries a durable business key that's the same in both orgs
+              (e.g. <code>SIS_ID__c</code>). Matched across orgs and live-verified in the target.
+            </p>
+            <div class="row g-2 align-items-end">
+              <div class="col-sm-6 col-md-4">
+                <label for="fmParent" class="form-label small fw-semibold mb-1">Parent object</label>
+                <input id="fmParent" data-mc-objpick="queryable" type="text" class="form-control form-control-sm"
+                       placeholder="e.g. Account">
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <label for="fmExtId" class="form-label small fw-semibold mb-1">External-Id field</label>
+                <input id="fmExtId" type="text" class="form-control form-control-sm" placeholder="e.g. SIS_ID__c">
+              </div>
+            </div>
+          </div>
+
+          <!-- Same parent (identity) -->
+          <div id="fmPanelIdentity" class="fm-remap-panel d-none">
+            <p class="small text-muted mb-2">
+              Keep the same parent record Id — for converting Attachments↔Files
+              <strong>in the same org</strong>, or a same-Id copy. New parent = old parent.
+            </p>
+            <div class="row g-2 align-items-end">
+              <div class="col-sm-6 col-md-4">
+                <label for="fmParentIdentity" class="form-label small fw-semibold mb-1">Parent object</label>
+                <input id="fmParentIdentity" data-mc-objpick="queryable" type="text" class="form-control form-control-sm"
+                       placeholder="e.g. Accommodation__c">
+                <div class="form-text">Required when scoping by filter.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scope (ext_id + identity only) -->
+          <div id="fmScope" class="mt-3 pt-3 border-top d-none">
+            <label class="form-label small fw-semibold mb-1">Scope — which parents</label>
+            <div class="btn-group btn-group-sm mb-2 d-block" role="group" aria-label="Scope by">
+              <input type="radio" class="btn-check" name="fmBy" id="fmByFilter" value="filter" checked>
+              <label class="btn btn-outline-secondary" for="fmByFilter">By SOQL filter</label>
+              <input type="radio" class="btn-check" name="fmBy" id="fmByList" value="list">
+              <label class="btn btn-outline-secondary" for="fmByList">By Id / value list</label>
+            </div>
+            <div id="fmScopeFilter">
+              <label for="fmWhere" class="form-label small mb-1">WHERE clause <span class="text-muted">(on the parent object)</span></label>
+              <input id="fmWhere" type="text" class="form-control form-control-sm font-monospace"
+                     placeholder="e.g. IsPersonAccount = true">
+              <div class="form-text">Leave blank to scope every record of the parent object.</div>
+            </div>
+            <div id="fmScopeList" class="d-none">
+              <label for="fmIds" class="form-label small mb-1">Parent record Ids or external-Id values <span class="text-muted">(one per line)</span></label>
+              <textarea id="fmIds" rows="4" class="form-control form-control-sm font-monospace"
+                        placeholder="a2JUU000002JstB2AS&#10;a2JUU000002JstC2AS"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Options ────────────────────────────────────────────────────── -->
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold" style="color:var(--doane-slate)">Options</div>
+        <div class="card-body">
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-4 col-md-3" id="fmShareTypeWrap">
+              <label for="fmShareType" class="form-label small fw-semibold mb-1">ShareType
+                <span class="mc-info-icon" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
+                      data-bs-content="ContentDocumentLink share level for Files: V=Viewer, C=Collaborator, I=Inferred. Matches the Data Loader guide default (V).">ⓘ</span>
+              </label>
+              <select id="fmShareType" class="form-select form-select-sm">
+                <option value="V">V — Viewer</option>
+                <option value="C">C — Collaborator</option>
+                <option value="I">I — Inferred</option>
+              </select>
+            </div>
+            <div class="col-sm-4 col-md-3" id="fmVisibilityWrap">
+              <label for="fmVisibility" class="form-label small fw-semibold mb-1">Visibility</label>
+              <select id="fmVisibility" class="form-select form-select-sm">
+                <option value="AllUsers">AllUsers</option>
+                <option value="InternalUsers">InternalUsers</option>
+                <option value="SharedUsers">SharedUsers</option>
+              </select>
+            </div>
+            <div class="col-sm-4 col-md-2">
+              <label for="fmMaxMb" class="form-label small fw-semibold mb-1">Max MB</label>
+              <input id="fmMaxMb" type="number" class="form-control form-control-sm" value="35" min="1">
+              <div class="form-text">Files over this are flagged &amp; skipped.</div>
+            </div>
+          </div>
+          <div id="fmShareTypeNote" class="form-text mt-2 d-none">
+            ShareType / Visibility apply only when writing <strong>Files</strong>; ignored for Attachments.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-3">
+    <button id="btnFmDryRun" class="btn btn-outline-secondary btn-sm">&#9654; Dry run (preview)</button>
+    <button id="btnFmMigrate" class="btn btn-doane btn-sm" disabled
+            data-mc-confirm="Migrate these files to the target org now? This creates records and links in the target."
+            data-mc-confirm-title="Run file migration"
+            data-mc-confirm-btn="Migrate"
+            data-mc-confirm-ack="true">&#9654; Migrate</button>
+    <span id="fmMigrateHint" class="small text-muted align-self-center">Run a dry-run first — a clean preview unlocks Migrate.</span>
+  </div>
+
+  <div id="fmResult" class="mt-3 d-none">
+    <div id="fmSummary" class="mb-2"></div>
+    <div class="table-responsive" style="max-height:360px;overflow:auto">
+      <table class="table table-sm table-striped small mb-0">
+        <thead><tr><th>Source Id</th><th>Title</th><th class="text-end">Size</th>
+                   <th class="text-end">Parents</th><th>Action</th></tr></thead>
+        <tbody id="fmRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-data-ops-snippet.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MC.fileMigration.init();
+  });
+</script>
+{% endblock %}

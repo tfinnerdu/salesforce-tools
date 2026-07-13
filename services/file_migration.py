@@ -46,8 +46,19 @@ class MigrationConfig:
     where: str = ''
     ids_file: str = ''
     max_mb: int = DEFAULT_MAX_MB
-    # 'files' = modern Files (ContentVersion); 'attachments' = legacy Attachment.
+    # What to READ from the source: 'files' (ContentVersion) or 'attachments'
+    # (legacy Attachment).
     mode: str = 'files'
+    # What to WRITE to the target ('' = same as source). Independent of `mode`,
+    # so an Attachment can land as a File (attachments→files) or vice-versa.
+    dest: str = ''
+    # How parents map old→new: '' infers crosswalk (when id_map set) else ext_id.
+    # 'identity' keeps the same parent Id — for in-place conversion in one org.
+    remap: str = ''
+    # ContentDocumentLink options (files mode). ShareType V=Viewer, C=Collaborator,
+    # I=Inferred; Visibility AllUsers / InternalUsers / SharedUsers.
+    share_type: str = 'V'
+    visibility: str = 'AllUsers'
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────────────
@@ -302,15 +313,15 @@ def insert_content_version(target_sf, file_meta, data):
     return rows[0]['ContentDocumentId']
 
 
-def create_link(target_sf, doc_id, target_parent_id):
+def create_link(target_sf, doc_id, target_parent_id, share_type='V', visibility='AllUsers'):
     """Link a document to a parent; return True if created, False if it already
     existed (a re-run over an already-linked file — not an error)."""
     try:
         target_sf.ContentDocumentLink.create({
             'ContentDocumentId': doc_id,
             'LinkedEntityId': target_parent_id,
-            'ShareType': 'V',
-            'Visibility': 'AllUsers',
+            'ShareType': share_type,
+            'Visibility': visibility,
         })
         return True
     except Exception as exc:
@@ -323,13 +334,15 @@ def create_link(target_sf, doc_id, target_parent_id):
 # ── Orchestration ─────────────────────────────────────────────────────────────
 
 def build_plan(source_sf, target_sf, cfg):
-    """Read + resolve everything (no writes); return (plan, resolved, unresolved)."""
-    if cfg.id_map:
-        # Crosswalk mode: the CSV carries old→new parent Ids, so scope (its keys)
-        # and remap come straight from it — no external-Id lookups. Validate Ids
-        # up front: a non-Id old value (usually a wrong column mapping) otherwise
-        # makes Salesforce reject the whole source query with a cryptic
-        # "invalid parameter value". Query only valid source Ids; flag bad targets.
+    """Read + resolve everything (no writes); return (plan, resolved, unresolved, stats)."""
+    remap = cfg.remap or ('crosswalk' if cfg.id_map else 'ext_id')
+
+    if remap == 'crosswalk':
+        # The CSV carries old→new parent Ids, so scope (its keys) and remap come
+        # straight from it — no external-Id lookups. Validate Ids up front: a
+        # non-Id old value (usually a wrong column mapping) otherwise makes
+        # Salesforce reject the whole source query with a cryptic "invalid
+        # parameter value". Query only valid source Ids; flag bad targets.
         full_map = load_id_map(cfg.id_map, cfg.map_old_col, cfg.map_new_col)
         resolved, unresolved = {}, {}
         for old, new in full_map.items():
@@ -350,7 +363,14 @@ def build_plan(source_sf, target_sf, cfg):
         if skipped:
             logger.warning('Crosswalk: skipped %d row(s) whose old value is not a Salesforce Id.', skipped)
         logger.info('Scope: %d parent Id(s) from crosswalk.', len(parent_ids))
-    else:
+    elif remap == 'identity':
+        # Same-parent: the files stay on the same record (in-place conversion or
+        # same-Id copy). Scope by filter or a pasted Id list; new = old.
+        parent_ids = scope_parent_ids(source_sf, cfg)
+        resolved = {p: p for p in parent_ids}
+        unresolved = {}
+        logger.info('Scope: %d parent record(s) (identity remap).', len(parent_ids))
+    else:  # ext_id
         resolved = None
         unresolved = {}
         parent_ids = scope_parent_ids(source_sf, cfg)
@@ -453,14 +473,26 @@ def report_rows(plan):
     return out
 
 
-def execute(source_sf, target_sf, plan, mode='files'):
+def _download_source_bytes(source_sf, source_mode, item_id):
+    """Stream a source item's bytes — VersionData (files) or Attachment Body."""
+    if source_mode == 'attachments':
+        return download_attachment_body(source_sf, item_id)
+    return download_version_data(source_sf, item_id)
+
+
+def execute(source_sf, target_sf, plan, source_mode='files', dest_mode='files',
+            share_type='V', visibility='AllUsers'):
     """Perform the migration for a plan (idempotent). Returns counts.
 
-    Skip rows that are oversize or have no resolved parent. In 'files' mode:
-    reuse the target ContentDocument if this source file was already migrated
-    (stamp match), else stream + insert, then link to every resolved parent. In
-    'attachments' mode: one legacy Attachment per row, created directly on the
-    resolved parent (skipped if the parent already has one of that name).
+    Read side (``source_mode``) and write side (``dest_mode``) are independent,
+    so a legacy Attachment can land as a modern File (``attachments`` →
+    ``files``), or vice-versa. Rows that are oversize or have no resolved parent
+    are skipped.
+
+    - ``dest_mode='files'``  → insert a ContentVersion (reused if already stamped
+      with this source Id) and link it to every resolved parent.
+    - ``dest_mode='attachments'`` → create one legacy Attachment on the resolved
+      parent (skipped if the parent already has one of that name).
     """
     created = linked = skipped = reused = 0
     for row in plan:
@@ -469,12 +501,12 @@ def execute(source_sf, target_sf, plan, mode='files'):
             skipped += 1
             continue
 
-        if mode == 'attachments':
+        if dest_mode == 'attachments':
             new_parent = targets[0]
             if existing_target_attachment(target_sf, new_parent, meta['title']):
                 reused += 1
                 continue
-            data = download_attachment_body(source_sf, meta['id'])
+            data = _download_source_bytes(source_sf, source_mode, meta['id'])
             insert_attachment(target_sf, meta, data, new_parent)
             created += 1
             linked += 1
@@ -484,10 +516,10 @@ def execute(source_sf, target_sf, plan, mode='files'):
         if doc_id:
             reused += 1
         else:
-            data = download_version_data(source_sf, meta['id'])
+            data = _download_source_bytes(source_sf, source_mode, meta['id'])
             doc_id = insert_content_version(target_sf, meta, data)
             created += 1
         for tid in targets:
-            if create_link(target_sf, doc_id, tid):
+            if create_link(target_sf, doc_id, tid, share_type, visibility):
                 linked += 1
     return {'created': created, 'reused': reused, 'linked': linked, 'skipped': skipped}
