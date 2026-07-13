@@ -39,8 +39,9 @@ _TYPE_MAP = {
 }
 
 # describe types the field builder can't reproduce — reported with this reason.
+# 'reference' is handled specially (plain lookups ARE reproduced; only
+# master-detail / polymorphic are skipped — see _field_spec).
 _UNSUPPORTED_REASON = {
-    'reference': 'relationship (lookup / master-detail)',
     'currency': 'currency field (unsupported type)',
     'percent': 'percent field (unsupported type)',
     'multipicklist': 'multi-select picklist (unsupported type)',
@@ -72,6 +73,26 @@ def _field_spec(f: dict, object_name: str):
         return None, 'formula / roll-up field'
 
     dtype = f.get('type') or ''
+
+    if dtype == 'reference':
+        # Plain lookups reproduce (they reference by object API name); master-detail
+        # and polymorphic lookups don't clone 1:1, so they're reported.
+        if f.get('relationshipOrder') is not None:
+            return None, 'master-detail relationship (rebuild by hand — deploy order + data rules)'
+        refs = [r for r in (f.get('referenceTo') or []) if r]
+        if len(refs) != 1:
+            return None, 'polymorphic relationship (unsupported)'
+        spec = {
+            'object': object_name, 'api_name': name, 'label': f.get('label') or name,
+            'type': 'Lookup', 'referenceTo': refs[0],
+            'relationshipName': f.get('relationshipName') or name[:-3],
+            'relationshipLabel': f.get('relationshipName') or f.get('label') or name,
+            'deleteConstraint': 'Restrict' if f.get('restrictedDelete') else 'SetNull',
+        }
+        if not f.get('nillable', True):
+            spec['required'] = True
+        return spec, None
+
     if dtype in _UNSUPPORTED_REASON:
         return None, _UNSUPPORTED_REASON[dtype]
 

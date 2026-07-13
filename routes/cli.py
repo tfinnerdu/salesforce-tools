@@ -95,6 +95,8 @@ def _validate_fields(fields) -> list:
             raise ValueError(f'{where}: unsupported type "{ftype}"')
         if ftype == 'Picklist' and not (f.get('picklist') or {}).get('values'):
             raise ValueError(f'{where}: a Picklist needs at least one value')
+        if ftype == 'Lookup' and not (f.get('referenceTo') or '').strip():
+            raise ValueError(f'{where}: a Lookup needs a related object (referenceTo)')
         clean.append(f)
     return clean
 

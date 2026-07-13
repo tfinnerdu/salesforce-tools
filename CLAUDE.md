@@ -180,8 +180,10 @@ app never deploys. `cli_script` is pure/deterministic; its generated
 `field-meta.xml` / `permissionset-meta.xml` reproduce the real Conductor EDA→EDF
 artifacts byte-for-byte (pinned in `tests/characterization/test_cli_artifacts_characterization.py`).
 Supports create + flip (with auto backup/verify snippets) for Text, Picklist,
-Checkbox, Number, Date/DateTime, Email, Phone, Url, and (Long)TextArea. Stateless
-— nothing is persisted. Describe-driven pickers demo under `SHOW_MOCK`.
+Checkbox, Number, Date/DateTime, Email, Phone, Url, (Long)TextArea, and Lookup
+(a plain relationship — pick the related object + delete constraint; it references
+by object API name so it clones cross-org as long as the target object exists).
+Stateless — nothing is persisted. Describe-driven pickers demo under `SHOW_MOCK`.
 
 **Visibility clone (`cli_fls.py`).** Field-level security is separate metadata,
 so a created field isn't visible to anyone. The Visibility section reads a
@@ -197,10 +199,11 @@ whole *source* object and generate a deployable package of its custom fields:
 `POST /cli/clone-object/plan` (preview — fields, per-field skip reasons, optional
 shell) and `POST /cli/clone-object/package` (the force-app zip). It maps each
 describe field to the same field spec the builder uses, so `cli_script`'s
-byte-for-byte generators produce the artifacts. Fields it can't reproduce 1:1 —
-relationships (there's no Lookup type in the builder), formula/roll-up,
-auto-number, and unsupported types (currency, percent, multipicklist, rich text)
-— are **listed as skipped**, never dropped silently. An opt-in best-effort
+byte-for-byte generators produce the artifacts. Plain **Lookup** relationships
+are cloned (they reference by object API name). Fields it can't reproduce 1:1 —
+master-detail and polymorphic relationships, formula/roll-up, auto-number, and
+unsupported types (currency, percent, multipicklist, rich text) — are **listed
+as skipped**, never dropped silently. An opt-in best-effort
 `CustomObject` shell (Text name field, `sharingModel` defaulted since describe
 omits it) creates the object if it doesn't exist yet; deploy is upsert. Reuses
 `build_package_zip` (now with `object_shells`) + an optional access permission set.

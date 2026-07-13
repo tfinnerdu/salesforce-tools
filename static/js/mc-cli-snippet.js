@@ -494,8 +494,23 @@ MC.cli = {
         <div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="propRestricted" checked>
           <label class="form-check-label small" for="propRestricted">Restricted (reject values not in the set)</label></div>
       </div>`;
+    } else if (type === 'Lookup') {
+      html = `<div class="col-md-4">
+          <label class="form-label fw-semibold small mb-1 d-block">Related object <span class="text-muted fw-normal">(must exist in the target)</span></label>
+          <input type="text" id="propReferenceTo" data-mc-objpick="queryable" class="form-control form-control-sm" placeholder="e.g. Account" autocomplete="off">
+        </div>
+        <div class="col-auto">
+          <label class="form-label fw-semibold small mb-1 d-block">On parent delete</label>
+          <select id="propDeleteConstraint" class="form-select form-select-sm">
+            <option value="SetNull">Clear the field (SetNull)</option>
+            <option value="Restrict">Prevent deletion (Restrict)</option>
+          </select>
+        </div>`;
     }
     host.innerHTML = html;
+    // Props are re-rendered dynamically, so autowire can't reach them — attach
+    // the shared object picker to the Lookup target input by hand.
+    if (type === 'Lookup') MC.objectPicker?.attach('propReferenceTo', { capability: 'queryable' });
   },
 
   _parsePicklist(text) {
@@ -550,6 +565,9 @@ MC.cli = {
       spec.defaultValue = chk('propDefaultValue');
     } else if (type === 'Picklist') {
       spec.picklist = { restricted: chk('propRestricted'), sorted: false, values: this._parsePicklist(g('propPicklist').value) };
+    } else if (type === 'Lookup') {
+      spec.referenceTo = g('propReferenceTo').value.trim();
+      spec.deleteConstraint = g('propDeleteConstraint').value;
     }
     return spec;
   },
@@ -561,6 +579,9 @@ MC.cli = {
     if (!spec.api_name.endsWith('__c')) { MC.showToast('Custom field API name must end with "__c"', 'warning'); return; }
     if (spec.type === 'Picklist' && !(spec.picklist.values || []).length) {
       MC.showToast('Add at least one picklist value', 'warning'); return;
+    }
+    if (spec.type === 'Lookup' && !spec.referenceTo) {
+      MC.showToast('A Lookup needs a related object', 'warning'); return;
     }
     // Duplicate check — ignore the row currently being edited.
     const dup = this.fields.findIndex(f => f.object === spec.object && f.api_name === spec.api_name);
@@ -625,6 +646,8 @@ MC.cli = {
     set('propUnique', f.unique);
     set('propCaseSensitive', f.caseSensitive);
     set('propDefaultValue', f.defaultValue);
+    set('propReferenceTo', f.referenceTo);
+    set('propDeleteConstraint', f.deleteConstraint || 'SetNull');
     if (f.picklist) {
       set('propRestricted', f.picklist.restricted);
       if (g('propPicklist')) {
@@ -646,6 +669,7 @@ MC.cli = {
     if (f.type === 'Number') bits.push(`${f.precision},${f.scale}`);
     if (f.type === 'Picklist') bits.push(`${(f.picklist.values || []).length} values`);
     if (f.type === 'Checkbox') bits.push(f.defaultValue ? 'default ✓' : 'default ✗');
+    if (f.type === 'Lookup') bits.push(`→ ${f.referenceTo || '?'}`);
     return bits.join(' · ') || '—';
   },
 

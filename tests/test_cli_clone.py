@@ -29,8 +29,13 @@ _DESCRIBE = {
          'externalId': True, 'unique': True},
         {'name': 'Bio__c', 'label': 'Bio', 'type': 'textarea', 'length': 5000},        # LongTextArea
         {'name': 'Active__c', 'label': 'Active', 'type': 'boolean', 'defaultValue': True},  # Checkbox
+        {'name': 'Contact__c', 'label': 'Contact', 'type': 'reference',                 # plain Lookup
+         'referenceTo': ['Contact'], 'relationshipName': 'Accommodations', 'nillable': True},
         # ── skip cases ──
-        {'name': 'Account__c', 'label': 'Account', 'type': 'reference'},                # relationship
+        {'name': 'Parent__c', 'label': 'Parent', 'type': 'reference',                   # master-detail
+         'referenceTo': ['Program__c'], 'relationshipOrder': 0},
+        {'name': 'Poly__c', 'label': 'Poly', 'type': 'reference',                       # polymorphic
+         'referenceTo': ['Account', 'Contact']},
         {'name': 'Total__c', 'label': 'Total', 'type': 'double', 'calculated': True},   # formula/rollup
         {'name': 'Auto__c', 'label': 'Auto', 'type': 'string', 'autoNumber': True},     # auto-number
         {'name': 'Cost__c', 'label': 'Cost', 'type': 'currency'},                       # unsupported type
@@ -54,18 +59,27 @@ def _plan(**kw):
 
 def test_plan_counts():
     p = _plan()
-    assert p['counts']['custom_fields'] == 6      # Notes, Status, Score, SIS_ID, Bio, Active
-    assert p['counts']['skipped'] == 5            # Account, Total, Auto, Cost, Rich
+    assert p['counts']['custom_fields'] == 7      # Notes, Status, Score, SIS_ID, Bio, Active, Contact
+    assert p['counts']['skipped'] == 6            # Parent(MD), Poly, Total, Auto, Cost, Rich
     assert p['counts']['standard_fields'] == 1    # Name
 
 
 def test_plan_skips_report_reasons():
     reasons = {s['api_name']: s['reason'] for s in _plan()['skipped']}
-    assert 'relationship' in reasons['Account__c']
+    assert 'master-detail' in reasons['Parent__c']
+    assert 'polymorphic' in reasons['Poly__c']
     assert 'formula' in reasons['Total__c'] or 'roll-up' in reasons['Total__c']
     assert 'auto-number' in reasons['Auto__c']
     assert 'unsupported' in reasons['Cost__c']
     assert 'rich text' in reasons['Rich__c']
+
+
+def test_plan_clones_plain_lookup():
+    lk = next(f for f in _plan()['fields'] if f['api_name'] == 'Contact__c')
+    assert lk['type'] == 'Lookup'
+    assert lk['referenceTo'] == 'Contact'
+    assert lk['relationshipName'] == 'Accommodations'
+    assert lk['deleteConstraint'] == 'SetNull'
 
 
 def test_plan_field_specs():
@@ -115,6 +129,32 @@ def test_plan_requires_object():
         _plan(object='  ')
 
 
+# ── cli_script: Lookup field XML ──────────────────────────────────────────────
+
+def test_lookup_field_meta_xml():
+    xml = cli_script.field_meta_xml({
+        'object': 'Accommodation__c', 'api_name': 'Contact__c', 'label': 'Contact',
+        'type': 'Lookup', 'referenceTo': 'Contact', 'relationshipName': 'Accommodations',
+        'deleteConstraint': 'Restrict'})
+    assert '<type>Lookup</type>' in xml
+    assert '<referenceTo>Contact</referenceTo>' in xml
+    assert '<relationshipName>Accommodations</relationshipName>' in xml
+    assert '<deleteConstraint>Restrict</deleteConstraint>' in xml
+
+
+def test_lookup_relationship_name_defaults_from_api():
+    xml = cli_script.field_meta_xml({
+        'object': 'Accommodation__c', 'api_name': 'Contact__c', 'label': 'Contact',
+        'type': 'Lookup', 'referenceTo': 'Contact'})
+    assert '<relationshipName>Contact</relationshipName>' in xml   # __c stripped
+    assert '<deleteConstraint>SetNull</deleteConstraint>' in xml   # default
+
+
+def test_lookup_requires_reference_to():
+    with pytest.raises(ValueError):
+        cli_script.field_meta_xml({'api_name': 'X__c', 'label': 'X', 'type': 'Lookup'})
+
+
 # ── cli_script: object shell XML + zip ────────────────────────────────────────
 
 def test_object_meta_xml():
@@ -159,7 +199,7 @@ def test_route_plan(client):
                            content_type='application/json')
     assert resp.status_code == 200
     data = resp.get_json()['data']
-    assert data['counts']['custom_fields'] == 6
+    assert data['counts']['custom_fields'] == 7
     assert data['shell'] is None
 
 

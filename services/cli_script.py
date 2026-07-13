@@ -35,12 +35,15 @@ DEFAULT_API_VERSION = '62.0'
 # Conductor artifacts use, so generated XML matches hand-authored XML.
 SUPPORTED_TYPES = (
     'Text', 'TextArea', 'LongTextArea', 'Picklist', 'Checkbox',
-    'Number', 'Date', 'DateTime', 'Email', 'Phone', 'Url',
+    'Number', 'Date', 'DateTime', 'Email', 'Phone', 'Url', 'Lookup',
 )
 # Types that accept <externalId>/<unique>.
 _EXTID_TYPES = {'Text', 'Number', 'Email'}
 # Types that accept <required> (Checkbox is always-valued; long text can't be required).
-_REQUIRED_TYPES = {'Text', 'TextArea', 'Picklist', 'Number', 'Date', 'DateTime', 'Email', 'Phone', 'Url'}
+_REQUIRED_TYPES = {'Text', 'TextArea', 'Picklist', 'Number', 'Date', 'DateTime',
+                   'Email', 'Phone', 'Url', 'Lookup'}
+# Lookup <deleteConstraint> options (Cascade is master-detail only, not offered here).
+_DELETE_CONSTRAINTS = {'SetNull', 'Restrict'}
 
 
 # ── XML: custom field ────────────────────────────────────────────────────────
@@ -106,6 +109,18 @@ def field_meta_xml(spec: dict) -> str:
         body.append(_tag('externalId', True))
     body.append(_tag('label', spec.get('label') or api_name))
 
+    if ftype == 'Lookup':
+        # A Lookup references its target by object API name (not record Id), so
+        # it clones cross-org as long as that object exists in the target.
+        ref = (spec.get('referenceTo') or '').strip()
+        if not ref:
+            raise ValueError('Lookup field spec requires referenceTo (the related object)')
+        rel_name = spec.get('relationshipName') or _relationship_name(api_name)
+        body.append(_tag('referenceTo', ref))
+        body.append(_tag('relationshipLabel', spec.get('relationshipLabel')
+                         or spec.get('label') or api_name))
+        body.append(_tag('relationshipName', rel_name))
+
     if ftype in ('Text', 'TextArea', 'LongTextArea'):
         # length: Text default 255, LongTextArea default 32768.
         default_len = 32768 if ftype == 'LongTextArea' else 255
@@ -119,6 +134,9 @@ def field_meta_xml(spec: dict) -> str:
     body.append(_tag('trackTrending', False))
     body.append(_tag('type', ftype))
 
+    if ftype == 'Lookup':
+        dc = spec.get('deleteConstraint') or 'SetNull'
+        body.append(_tag('deleteConstraint', dc if dc in _DELETE_CONSTRAINTS else 'SetNull'))
     if ftype in _EXTID_TYPES and spec.get('unique'):
         body.append(_tag('unique', True))
     # caseSensitive is only valid on a unique Text field.
@@ -132,6 +150,12 @@ def field_meta_xml(spec: dict) -> str:
         body.append(_value_set_block(spec.get('picklist') or {}))
 
     return '\n'.join([XML_HEADER, CF_OPEN, *body, '</CustomField>']) + '\n'
+
+
+def _relationship_name(api_name: str) -> str:
+    """Child-relationship API name for a Lookup — the field name minus its __c."""
+    base = api_name[:-3] if api_name.endswith('__c') else api_name
+    return base or 'Related'
 
 
 # ── XML: custom object shell ─────────────────────────────────────────────────
