@@ -79,6 +79,14 @@ def test_load_id_map_skips_blank_pairs(tmp_path):
     assert load_id_map(str(p)) == {'001OLD_A': '001NEW_A'}
 
 
+def test_load_id_map_windows_1252_encoding(tmp_path):
+    # Excel export: a curly apostrophe (0x92 in cp1252) in a text column would
+    # break a strict UTF-8 read — the Id columns must still load.
+    p = tmp_path / 'excel.csv'
+    p.write_bytes(b'old_id,new_id,Title\r\na1OLD,a1NEW,O\x92Brien File\r\n')
+    assert load_id_map(str(p)) == {'a1OLD': 'a1NEW'}
+
+
 def test_load_id_map_headerless_two_columns(tmp_path):
     # No recognizable header → first two columns are old,new.
     p = tmp_path / 'map.csv'

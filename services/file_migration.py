@@ -62,6 +62,23 @@ def soql_in_list(values):
     return ', '.join("'" + escape_soql(v) + "'" for v in values)
 
 
+def _read_csv_rows(path):
+    """Read a CSV tolerant of Excel/Windows encodings.
+
+    Excel exports are usually Windows-1252, not UTF-8, so a curly quote /
+    en-dash (byte 0x92 / 0x96) in any column breaks a strict UTF-8 read. Try
+    UTF-8 (with BOM) first, then cp1252, then latin-1 which decodes any byte —
+    the Id columns are ASCII either way, so this never corrupts them.
+    """
+    for enc in ('utf-8-sig', 'cp1252', 'latin-1'):
+        try:
+            with open(path, newline='', encoding=enc) as fh:
+                return list(csv.reader(fh))
+        except UnicodeDecodeError:
+            continue
+    return []
+
+
 def load_id_map(path, old_col='old_id', new_col='new_id'):
     """Load an old-parent-Id → new-parent-Id crosswalk from a CSV.
 
@@ -69,9 +86,9 @@ def load_id_map(path, old_col='old_id', new_col='new_id'):
     to the first two columns — so you can point it straight at an existing
     migration spreadsheet (e.g. ``Accommodation__c`` / ``NEW_Accommodation__c``).
     Rows with a blank old or new value are skipped; last value wins on duplicates.
+    Tolerant of Excel/Windows-1252 encoding (see _read_csv_rows).
     """
-    with open(path, newline='', encoding='utf-8-sig') as fh:
-        rows = list(csv.reader(fh))
+    rows = _read_csv_rows(path)
     if not rows:
         return {}
     header = rows[0]
