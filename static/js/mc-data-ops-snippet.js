@@ -1382,10 +1382,17 @@ MC.fileMigration = {
   _render(data, committed) {
     const s = data.summary;
     const badge = (label, val, cls) => `<span class="badge bg-${cls} me-1">${label}: ${MC._escHtml(String(val))}</span>`;
-    let html = badge('migrate', `${s.migrate} (${s.migrate_mb} MB)`, 'success')
+    const filesFound = s.files_found ?? 0;
+    let html = badge('parents in scope', s.parents_in_scope ?? 0, 'info')
+      + badge('files found', filesFound, filesFound ? 'info' : 'warning')
+      + badge('migrate', `${s.migrate} (${s.migrate_mb} MB)`, 'success')
       + badge('no parent', s.no_parent, s.no_parent ? 'warning' : 'secondary')
       + badge('too large', s.oversize, s.oversize ? 'warning' : 'secondary')
       + badge('unresolved parents', s.unresolved_parents, s.unresolved_parents ? 'warning' : 'secondary');
+    // Actionable hint when the crosswalk resolved parents but no files came back.
+    if ((s.parents_in_scope ?? 0) > 0 && filesFound === 0) {
+      html += `<div class="mt-2 alert alert-warning py-1 mb-0 small">Found ${s.parents_in_scope} parent record(s) in the crosswalk but <strong>no files linked to them in the source org</strong>. Check: are the files really on this object in the <em>source</em> org, and does the integration user have <strong>Query All Files</strong> permission there?</div>`;
+    }
     if (committed && data.counts) {
       const c = data.counts;
       html += `<div class="mt-2 alert alert-success py-1 mb-0">Committed — created ${c.created}, reused ${c.reused}, linked ${c.linked}, skipped ${c.skipped}.</div>`;

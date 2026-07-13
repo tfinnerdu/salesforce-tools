@@ -168,8 +168,9 @@ def _run_file_migration(commit):
         cfg = _file_migration_cfg(tmp_path)
         source_sf = get_sf(source)
         target_sf = get_sf(target)
-        plan, resolved, unresolved = file_migration.build_plan(source_sf, target_sf, cfg)
+        plan, resolved, unresolved, stats = file_migration.build_plan(source_sf, target_sf, cfg)
         summary = file_migration.summarize(plan, unresolved, cfg.max_mb)
+        summary.update(stats)   # parents_in_scope / links_found / files_found
         data = {
             'summary': summary,
             'rows': file_migration.report_rows(plan)[:500],  # preview cap

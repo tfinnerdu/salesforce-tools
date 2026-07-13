@@ -97,11 +97,13 @@ def main(argv=None):
     remap = (f'crosswalk {cfg.id_map}' if cfg.id_map
              else f'parent {cfg.parent} by ext-Id {cfg.ext_id}')
     logger.info('Planning migration: %s → %s  (%s)', cfg.source, cfg.target, remap)
-    plan, resolved, unresolved = build_plan(source_sf, target_sf, cfg)
+    plan, resolved, unresolved, stats = build_plan(source_sf, target_sf, cfg)
     write_report(cfg.report, plan)
 
     s = summarize(plan, unresolved, cfg.max_mb)
     logger.info('\n=== PLAN SUMMARY ===')
+    logger.info('  parents in scope: %d,  files found: %d',
+                stats['parents_in_scope'], stats['files_found'])
     logger.info('  migrate      : %d file(s), %.1f MB', s['migrate'], s['migrate_mb'])
     logger.info('  skip (no parent resolved): %d', s['no_parent'])
     logger.info('  skip (too large > %d MB) : %d', cfg.max_mb, s['oversize'])

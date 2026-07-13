@@ -306,13 +306,15 @@ def build_plan(source_sf, target_sf, cfg):
         logger.info('Scope: %d source parent record(s).', len(parent_ids))
 
     if not parent_ids:
-        return [], {}, {}
+        return [], {}, {}, {'parents_in_scope': 0, 'links_found': 0, 'files_found': 0}
 
     links, files = gather_files(source_sf, parent_ids)
     if resolved is None:
         resolved, unresolved = resolve_parents(source_sf, target_sf, cfg, parent_ids)
     logger.info('Files: %d unique across %d link(s). Parents resolved: %d, unresolved: %d.',
                 len(files), len(links), len(resolved), len(unresolved))
+    stats = {'parents_in_scope': len(parent_ids), 'links_found': len(links),
+             'files_found': len(files)}
 
     by_doc = {}
     for lk in links:
@@ -333,7 +335,7 @@ def build_plan(source_sf, target_sf, cfg):
             'unresolved_parents': skipped,
             'oversize': meta['size'] > max_bytes,
         })
-    return plan, resolved, unresolved
+    return plan, resolved, unresolved, stats
 
 
 def summarize(plan, unresolved, max_mb=DEFAULT_MAX_MB):

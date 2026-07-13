@@ -30,7 +30,9 @@ def _multipart(extra=None):
 
 def _patch(monkeypatch, counts=None):
     monkeypatch.setattr(sf_provider, 'get_sf', lambda org: MagicMock())
-    monkeypatch.setattr(fm, 'build_plan', lambda s, t, c: (_FAKE_PLAN, {}, {}))
+    monkeypatch.setattr(fm, 'build_plan', lambda s, t, c: (
+        _FAKE_PLAN, {}, {},
+        {'parents_in_scope': 1, 'links_found': 1, 'files_found': 1}))
     if counts is not None:
         monkeypatch.setattr(fm, 'execute', lambda s, t, p: counts)
 
@@ -45,6 +47,8 @@ def test_plan_dry_run_envelope(client, monkeypatch):
     data = body['data']
     assert data['committed'] is False
     assert data['summary']['migrate'] == 1
+    assert data['summary']['parents_in_scope'] == 1   # scope diagnostics surfaced
+    assert data['summary']['files_found'] == 1
     assert data['rows'][0]['action'] == 'MIGRATE'
     assert 'counts' not in data           # dry-run never executes
 
