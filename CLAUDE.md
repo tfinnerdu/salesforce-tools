@@ -248,10 +248,11 @@ org (`ObjectPermissions`/`FieldPermissions` grouped by parent; a profile-owned
 permission set is attributed to its `Parent.Profile.Name`) and reproduces those
 exact object + field grants onto the **same-named** profiles / permission sets
 that already exist in the **target** (a per-run target-org picker). Names the
-target doesn't have are **reported, never invented**. License-locked standard /
-integration profiles (`B2BMA Integration User`, `*Integration User`, Chatter /
-Analytics / Site.com — `cli_access_mirror.LOCKED_PROFILES`) can't deploy cleanly,
-so they're reported as `skipped_locked`, never emitted. Field grants are scoped
+target doesn't have are **reported, never invented**. `B2BMA Integration User`
+(its B2B Marketing Analytics license locks a managed field, so it rejects even an
+additive deploy — `cli_access_mirror.LOCKED_PROFILES`, kept deliberately narrow
+since most integration/standard profiles DO deploy additively) is reported as
+`skipped_locked`, never emitted. Field grants are scoped
 to the fields the deploy will actually create (cloned now ∪ already present) so a
 mirrored file never references a missing field (which would fail the whole
 deploy). Both profiles and permission sets are emitted

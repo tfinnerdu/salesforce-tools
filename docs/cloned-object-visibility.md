@@ -109,12 +109,12 @@ POST /cli/access-mirror/plan
 **Two things the mirror/clone skip automatically** (so you don't hand-edit the
 manifest, as you would have before):
 
-- **License-locked profiles.** Standard/integration profiles like `B2BMA
-  Integration User` (or anything ending `Integration User`, plus Chatter /
-  Analytics / Site.com profiles) can't take an additive deploy — the platform
-  re-validates their license-locked permissions and rejects it ("You may not turn
-  off permission Read … for this License Type"). They're reported as *skipped*,
-  never emitted.
+- **`B2BMA Integration User`.** Its B2B Marketing Analytics license locks a
+  managed field, so it rejects even an additive deploy ("You may not turn off
+  permission Read … for this License Type"). It's reported as *skipped*, never
+  emitted. The skip list is deliberately narrow — most integration/standard
+  profiles (Analytics Cloud, CPQ, Sales Insights, SalesforceIQ, Salesforce API
+  Only, …) *do* deploy additively and are mirrored normally.
 - **Lookups to an object the target doesn't have.** A cloned lookup whose target
   object isn't in the deploy org — classically an EDA/HEDA `hed__Term__c` that Ed
   Cloud doesn't have — is skipped (the field would fail with "referenceTo … does

@@ -197,10 +197,14 @@ def test_locked_profile_is_skipped_not_matched():
     assert plan['counts']['skipped_locked'] == 1
 
 
-def test_locked_profile_heuristic_matches_integration_user_suffix():
-    assert mirror._is_locked_profile('Marketing Cloud Integration User')
+def test_locked_profile_list_is_narrow():
+    # Only the proven offender (B2BMA) is skipped; other integration/standard
+    # profiles deploy additively, so they must NOT be dropped by name.
     assert mirror._is_locked_profile('B2BMA Integration User')
-    assert not mirror._is_locked_profile('Conductor Integration')   # custom, deployable
+    assert not mirror._is_locked_profile('CPQ Integration User')          # deploys fine
+    assert not mirror._is_locked_profile('Analytics Cloud Integration User')
+    assert not mirror._is_locked_profile('Salesforce API Only System Integrations')
+    assert not mirror._is_locked_profile('Conductor Integration')         # custom
     assert not mirror._is_locked_profile('System Administrator')
 
 

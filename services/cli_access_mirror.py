@@ -31,24 +31,23 @@ def _soql_escape(value: str) -> str:
     return (value or '').replace('\\', '\\\\').replace("'", "\\'")
 
 
-# Standard profiles whose permissions are license-locked: deploying them — even a
-# minimal, additive file — trips validation on unrelated managed/standard fields
-# ("You may not turn off permission Read X for this License Type"). They're never
-# a real user population to mirror onto, so the plan reports them as skipped
-# rather than emitting an undeployable Profile file. The endswith('Integration
-# User') catch covers managed-package integration profiles (e.g. B2BMA) generically.
+# Profiles that reliably reject even a minimal, additive deploy because a
+# license-locked field permission conflicts during validation ("You may not turn
+# off permission Read X for this License Type"). Kept deliberately NARROW and
+# evidence-based: most integration/standard profiles (Analytics Cloud, CPQ, Sales
+# Insights, SalesforceIQ, Salesforce API Only, …) DO deploy additively, so
+# skipping them by name would wrongly drop grants the user wants. B2BMA
+# Integration User is the notorious exception (its B2B Marketing Analytics license
+# locks a managed field), so it's the only default. Add a name here only after a
+# real deploy proves it can't take an additive profile change. Reported as
+# `skipped_locked`, never silently dropped.
 LOCKED_PROFILES = frozenset({
-    'Analytics Cloud Integration User', 'Analytics Cloud Security User',
-    'Authenticated Website', 'Automated Process', 'B2BMA Integration User',
-    'Chatter External User', 'Chatter Free User', 'Chatter Moderator User',
-    'Cloud Integration User', 'Einstein Agent User', 'External Identity User',
-    'Salesforce API Only System Integrations', 'Site.com Only User',
-    'Work.com Only User',
+    'B2BMA Integration User',
 })
 
 
 def _is_locked_profile(name: str) -> bool:
-    return name in LOCKED_PROFILES or name.endswith('Integration User')
+    return name in LOCKED_PROFILES
 
 
 def _parent_of(rec: dict):
