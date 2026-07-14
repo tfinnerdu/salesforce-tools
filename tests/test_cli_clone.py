@@ -82,6 +82,37 @@ def test_plan_clones_plain_lookup():
     assert lk['deleteConstraint'] == 'SetNull'
 
 
+def test_plan_skips_lookup_whose_target_object_is_absent():
+    # Contact__c -> Contact is fine; a lookup to an object not in the target set
+    # (e.g. a managed hed__Term__c absent from Ed Cloud) is skipped, not emitted.
+    p = _plan(target_objects={'Contact'})   # Contact present, others absent
+    names = {f['api_name'] for f in p['fields']}
+    assert 'Contact__c' in names                     # target has Contact
+    skip = {s['api_name']: s['reason'] for s in p['skipped']}
+    # Every OTHER lookup's target is absent, so it's reported (none in this fixture
+    # besides Contact/master-detail/poly, but the check must not drop Contact).
+    assert 'Contact__c' not in skip
+
+
+def test_plan_skips_lookup_target_absent_reason():
+    desc = {'label': 'X', 'custom': True, 'fields': [
+        {'name': 'Term__c', 'label': 'Term', 'type': 'reference',
+         'referenceTo': ['hed__Term__c'], 'relationshipName': 'Terms'}]}
+    p = _plan(object='X__c', describe=desc, target_objects={'Account', 'Contact'})
+    assert p['fields'] == []
+    assert 'not in the target org' in p['skipped'][0]['reason']
+    assert 'hed__Term__c' in p['skipped'][0]['reason']
+
+
+def test_plan_lookup_kept_when_no_target_context():
+    # target_objects=None (unknown target) => don't apply the resolution check.
+    desc = {'label': 'X', 'custom': True, 'fields': [
+        {'name': 'Term__c', 'label': 'Term', 'type': 'reference',
+         'referenceTo': ['hed__Term__c'], 'relationshipName': 'Terms'}]}
+    p = _plan(object='X__c', describe=desc)   # no target_objects
+    assert any(f['api_name'] == 'Term__c' for f in p['fields'])
+
+
 def test_plan_field_specs():
     by_name = {f['api_name']: f for f in _plan()['fields']}
     assert by_name['Notes__c']['type'] == 'Text'
@@ -297,7 +328,7 @@ def test_human_permset_no_object_access_when_off(client):
 def test_route_plan_honors_source_org(client, monkeypatch):
     captured = {}
 
-    def fake_plan(org, obj, include_shell=False):
+    def fake_plan(org, obj, include_shell=False, target_objects=None):
         captured['org'] = org
         return {'object': obj, 'label': obj, 'is_custom': True, 'fields': [],
                 'skipped': [], 'shell': None,

@@ -992,16 +992,25 @@ MC.cliClone = {
       return;
     }
     const c = m.counts;
+    const locked = c.skipped_locked || 0;
     document.getElementById('cliCloneMirrorSummary').innerHTML =
       `<span class="badge bg-success me-1">${c.matched} matched</span>`
       + `<span class="badge bg-secondary me-1">${c.unmatched} not in target</span>`
+      + (locked ? `<span class="badge bg-warning text-dark me-1">${locked} locked profile(s) skipped</span>` : '')
       + `<span class="text-muted">(${c.matched_profiles} profile(s), ${c.matched_permsets} permission set(s))</span>`;
-    // A profile/permset referencing a field the target lacks would fail the whole
-    // deploy, so field grants are scoped. Flag when scoping couldn't run.
+    // Two things worth flagging before deploy: unscoped field grants, and
+    // license-locked profiles that were auto-skipped (they can't deploy cleanly).
+    const warns = [];
     if (m.scoped === false) {
+      warns.push('Field grants are not scoped to the target’s fields (no field context) — review before deploying.');
+    }
+    if (locked) {
+      const names = (m.skipped_locked || []).map(x => x.name).join(', ');
+      warns.push('Skipped license-locked/integration profiles (can’t deploy cleanly): ' + MC._escHtml(names) + '.');
+    }
+    if (warns.length) {
       warn.classList.remove('d-none');
-      warn.textContent = 'Field grants are not scoped to the target’s fields '
-        + '(no field context) — review before deploying.';
+      warn.innerHTML = warns.join('<br>');
     } else { warn.classList.add('d-none'); }
     document.getElementById('cliCloneMirrorMatched').innerHTML = (m.matched || []).map(x => {
       const obj = x.object_perms ? (x.object_perms.edit ? 'read/edit' : 'read') : '—';

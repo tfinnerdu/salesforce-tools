@@ -479,6 +479,16 @@ def _target_org(payload) -> str:
     return tgt
 
 
+def _target_object_names(target_org: str):
+    """The target org's sObject API-name set, for the Lookup-resolution check, or
+    None if it can't be read — callers then fail *open* (don't drop lookups)."""
+    try:
+        return cli_access_mirror.target_object_names(cli_access_mirror.get_sf(target_org))
+    except Exception:
+        logger.exception('cli target object-name fetch failed for %s', target_org)
+        return None
+
+
 # ── Access mirror: reproduce a source org's access by name in the target ──────
 
 @cli_bp.route('/access-mirror/plan', methods=['POST'])
@@ -508,27 +518,29 @@ def api_clone_object_plan():
     payload = request.get_json(silent=True) or {}
     obj = (payload.get('object') or '').strip()
     include_shell = bool(payload.get('include_shell'))
+    mirror_access = bool(payload.get('mirror_access'))
     if not obj:
         return error_response('object is required', 'INVALID_INPUT', 400)
     try:
         source = _source_org(payload)
+        target = _target_org(payload) if mirror_access else None
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
+    # With a known target, skip cloning Lookups whose referenceTo object isn't there.
+    target_objects = _target_object_names(target) if target else None
     try:
-        plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell)
+        plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell,
+                                          target_objects=target_objects)
     except Exception as exc:
         logger.exception('cli clone plan failed for %s', obj)
         return error_response(str(exc), 'SF_DESCRIBE_FAILED', 502)
 
     # Preview the name-matched access mirror alongside the field plan when asked,
     # scoped to the fields this clone will actually deploy.
-    if payload.get('mirror_access'):
+    if mirror_access:
         try:
-            target = _target_org(payload)
             cloned_fields = [f'{obj}.{f["api_name"]}' for f in plan['fields']]
             plan['mirror'] = cli_access_mirror.mirror_plan(source, target, obj, cloned_fields)
-        except ValueError as exc:
-            return error_response(str(exc), 'INVALID_INPUT', 400)
         except Exception:
             logger.exception('cli access-mirror preview failed for %s', obj)
             plan['mirror_error'] = 'Could not read access from the source/target org.'
@@ -559,8 +571,11 @@ def api_clone_object_package():
         target = _target_org(payload) if mirror_access else None
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
+    # With a known target, skip cloning Lookups whose referenceTo object isn't there.
+    target_objects = _target_object_names(target) if target else None
     try:
-        plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell)
+        plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell,
+                                          target_objects=target_objects)
         fields = plan['fields']
         object_shells = [plan['shell']] if plan['shell'] else None
         tabs = _tabs_from_objects([obj]) if include_tab else None

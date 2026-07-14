@@ -222,7 +222,11 @@ byte-for-byte generators produce the artifacts. Plain **Lookup** relationships
 are cloned (they reference by object API name). Fields it can't reproduce 1:1 —
 master-detail and polymorphic relationships, formula/roll-up, auto-number, and
 unsupported types (currency, percent, multipicklist, rich text) — are **listed
-as skipped**, never dropped silently. An opt-in best-effort
+as skipped**, never dropped silently. When a target org is known (the mirror
+flow passes one), a plain **Lookup whose referenceTo object isn't in the target**
+(e.g. a managed `hed__Term__c` absent from Ed Cloud) is also skipped —
+`plan_from_object(..., target_objects=…)` — so the package never carries a field
+whose `referenceTo` would fail to resolve. An opt-in best-effort
 `CustomObject` shell (Text name field, `sharingModel` defaulted since describe
 omits it) creates the object if it doesn't exist yet; deploy is upsert. Reuses
 `build_package_zip` (now with `object_shells`) + an optional access permission set.
@@ -244,8 +248,11 @@ org (`ObjectPermissions`/`FieldPermissions` grouped by parent; a profile-owned
 permission set is attributed to its `Parent.Profile.Name`) and reproduces those
 exact object + field grants onto the **same-named** profiles / permission sets
 that already exist in the **target** (a per-run target-org picker). Names the
-target doesn't have are **reported, never invented**. Field grants are scoped to
-the fields the deploy will actually create (cloned now ∪ already present) so a
+target doesn't have are **reported, never invented**. License-locked standard /
+integration profiles (`B2BMA Integration User`, `*Integration User`, Chatter /
+Analytics / Site.com — `cli_access_mirror.LOCKED_PROFILES`) can't deploy cleanly,
+so they're reported as `skipped_locked`, never emitted. Field grants are scoped
+to the fields the deploy will actually create (cloned now ∪ already present) so a
 mirrored file never references a missing field (which would fail the whole
 deploy). Both profiles and permission sets are emitted
 (`cli_script.profile_xml` / `permission_set_xml`) — a partial Profile /

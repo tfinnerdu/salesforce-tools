@@ -31,6 +31,26 @@ def _soql_escape(value: str) -> str:
     return (value or '').replace('\\', '\\\\').replace("'", "\\'")
 
 
+# Standard profiles whose permissions are license-locked: deploying them — even a
+# minimal, additive file — trips validation on unrelated managed/standard fields
+# ("You may not turn off permission Read X for this License Type"). They're never
+# a real user population to mirror onto, so the plan reports them as skipped
+# rather than emitting an undeployable Profile file. The endswith('Integration
+# User') catch covers managed-package integration profiles (e.g. B2BMA) generically.
+LOCKED_PROFILES = frozenset({
+    'Analytics Cloud Integration User', 'Analytics Cloud Security User',
+    'Authenticated Website', 'Automated Process', 'B2BMA Integration User',
+    'Chatter External User', 'Chatter Free User', 'Chatter Moderator User',
+    'Cloud Integration User', 'Einstein Agent User', 'External Identity User',
+    'Salesforce API Only System Integrations', 'Site.com Only User',
+    'Work.com Only User',
+})
+
+
+def _is_locked_profile(name: str) -> bool:
+    return name in LOCKED_PROFILES or name.endswith('Integration User')
+
+
 def _parent_of(rec: dict):
     """(type, name) for a FieldPermissions/ObjectPermissions row's Parent, or None.
 
@@ -144,6 +164,23 @@ def target_catalog(sf) -> dict:
     return {'profiles': profiles, 'permission_sets': permission_sets}
 
 
+def target_object_names(sf):
+    """API names of every sobject in the target (DescribeGlobal), or None if it
+    can't be read. Used to skip cloned Lookups whose referenceTo object isn't in
+    the target (e.g. a managed `hed__Term__c` that Ed Cloud doesn't have) — a
+    None result means "couldn't verify", so callers fail *open* (don't drop)."""
+    res = None
+    try:
+        res = sf.describe() or {}
+    except Exception:
+        try:
+            res = sf.restful('sobjects/') or {}
+        except Exception:
+            return None
+    names = {s.get('name') for s in (res.get('sobjects') or []) if s.get('name')}
+    return names or None
+
+
 def target_field_set(sf, object_name: str):
     """`Object.Field` API names that already exist in the target for object_name,
     or None if the object itself isn't there yet (it'll be created by the same
@@ -186,12 +223,17 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
         allowed |= existing
     scoped = bool(allowed)
 
-    matched, unmatched = [], []
+    matched, unmatched, skipped_locked = [], [], []
     for p in source['parents']:
         present = (p['name'] in catalog['profiles']) if p['type'] == 'Profile' \
             else (p['name'] in catalog['permission_sets'])
         if not present:
             unmatched.append({'name': p['name'], 'type': p['type']})
+            continue
+        # A license-locked standard/integration profile can't be deployed cleanly,
+        # so report it separately instead of emitting an undeployable file.
+        if p['type'] == 'Profile' and _is_locked_profile(p['name']):
+            skipped_locked.append({'name': p['name'], 'type': p['type']})
             continue
         if scoped:
             kept = [fp for fp in p['field_perms'] if fp['field'] in allowed]
@@ -215,12 +257,14 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
         'scoped': scoped,
         'matched': matched,
         'unmatched': unmatched,
+        'skipped_locked': skipped_locked,
         'counts': {
             'source_parents': len(source['parents']),
             'matched': len(matched),
             'matched_profiles': len(matched_profiles),
             'matched_permsets': len(matched_permsets),
             'unmatched': len(unmatched),
+            'skipped_locked': len(skipped_locked),
         },
     }
 

@@ -56,12 +56,17 @@ _UNSUPPORTED_REASON = {
 }
 
 
-def _field_spec(f: dict, object_name: str):
+def _field_spec(f: dict, object_name: str, target_objects=None):
     """Map one describe field → (spec, None) or (None, reason).
 
     Only custom fields are cloned; standard fields return (None, None) — they're
     counted, not itemized. A returned ``reason`` marks a custom field the builder
     can't reproduce (relationship / formula / auto-number / unsupported type).
+
+    ``target_objects`` (when given) is the set of sObject API names that exist in
+    the deploy target — a Lookup whose referenceTo object isn't among them (e.g. a
+    managed ``hed__Term__c`` absent from Ed Cloud) is skipped, since it can't
+    resolve there. ``None`` means "target unknown" → don't apply the check.
     """
     name = f.get('name') or ''
     if not name.endswith('__c'):
@@ -82,6 +87,9 @@ def _field_spec(f: dict, object_name: str):
         refs = [r for r in (f.get('referenceTo') or []) if r]
         if len(refs) != 1:
             return None, 'polymorphic relationship (unsupported)'
+        if target_objects is not None and refs[0] not in target_objects:
+            return None, (f"lookup target '{refs[0]}' not in the target org "
+                          "(managed/absent object — create or remap it first)")
         spec = {
             'object': object_name, 'api_name': name, 'label': f.get('label') or name,
             'type': 'Lookup', 'referenceTo': refs[0],
@@ -160,13 +168,18 @@ def object_shell(desc: dict, object_name: str) -> dict:
     }
 
 
-def plan_from_object(org: str, object_name: str, include_shell: bool = False) -> dict:
+def plan_from_object(org: str, object_name: str, include_shell: bool = False,
+                     target_objects=None) -> dict:
     """Describe a source object and build a clone plan.
 
     Returns ``{object, is_custom, fields, skipped, shell, counts}`` where
     ``fields`` are ready-to-package CLI field specs, ``skipped`` is
     ``[{api_name, type, reason}]`` for custom fields that can't be reproduced,
     and ``shell`` is the CustomObject spec (or None).
+
+    ``target_objects`` (when given) is the set of sObject API names in the deploy
+    target; a Lookup whose referenceTo object isn't there is skipped rather than
+    emitted as a field that would fail the deploy (unresolved referenceTo).
     """
     object_name = (object_name or '').strip()
     if not object_name:
@@ -177,7 +190,7 @@ def plan_from_object(org: str, object_name: str, include_shell: bool = False) ->
 
     fields, skipped, standard = [], [], 0
     for f in raw_fields:
-        spec, reason = _field_spec(f, object_name)
+        spec, reason = _field_spec(f, object_name, target_objects)
         if spec:
             fields.append(spec)
         elif reason:

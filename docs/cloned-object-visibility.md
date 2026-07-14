@@ -100,11 +100,33 @@ fields being deployed, so a mirrored profile never references a field the target
 lacks (which would fail the whole deploy).
 
 **Preview before you download:** the Clone card shows *matched* vs *not in
-target*. Or hit the endpoint directly:
+target* (and *locked profiles skipped* — see below). Or hit the endpoint directly:
 ```
 POST /cli/access-mirror/plan
 { "object": "RoomAssignment__c", "source_org": "eda", "target_org": "sandbox" }
 ```
+
+**Two things the mirror/clone skip automatically** (so you don't hand-edit the
+manifest, as you would have before):
+
+- **License-locked profiles.** Standard/integration profiles like `B2BMA
+  Integration User` (or anything ending `Integration User`, plus Chatter /
+  Analytics / Site.com profiles) can't take an additive deploy — the platform
+  re-validates their license-locked permissions and rejects it ("You may not turn
+  off permission Read … for this License Type"). They're reported as *skipped*,
+  never emitted.
+- **Lookups to an object the target doesn't have.** A cloned lookup whose target
+  object isn't in the deploy org — classically an EDA/HEDA `hed__Term__c` that Ed
+  Cloud doesn't have — is skipped (the field would fail with "referenceTo … does
+  not resolve to a valid sObject type"), and its field grant is dropped from the
+  mirror too. Create or remap that object first if you need the lookup.
+
+**Re-deploying existing fields.** If the object's fields already live in the
+target (a prior clone), you don't need them in this deploy at all — deploy just
+the tab + permission sets + profiles. Re-deploying an existing lookup can also
+trip "must be unique across all <parent> fields" (its child relationship already
+exists). The fields only need to *exist* in the org for the permset/profile
+grants to resolve; they don't need to be in this package.
 
 **Why it's safe:** a partial Profile / PermissionSet deploy is *additive* —
 Salesforce upserts the object/field permissions the file names and leaves every

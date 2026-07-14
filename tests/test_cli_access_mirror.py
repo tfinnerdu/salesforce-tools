@@ -48,9 +48,10 @@ def _source_sf(object_rows, field_rows):
     return sf
 
 
-def _target_sf(profiles, permsets, describe=None):
+def _target_sf(profiles, permsets, describe=None, objects=None):
     """profiles: iterable of names; permsets: {name: label}; describe: object
-    describe payload (None => object not in target yet)."""
+    describe payload (None => object not in target yet); objects: global-describe
+    sObject names present in the target (for the Lookup-resolution check)."""
     sf = MagicMock()
 
     def q(soql):
@@ -60,6 +61,7 @@ def _target_sf(profiles, permsets, describe=None):
             return {'records': [{'Name': n, 'Label': l} for n, l in permsets.items()]}
         return {'records': []}
     sf.query_all.side_effect = q
+    sf.describe.return_value = {'sobjects': [{'name': n} for n in (objects or [])]}
     if describe is None:
         sf.restful.side_effect = RuntimeError('NOT_FOUND')
     else:
@@ -171,6 +173,48 @@ def test_mirror_permset_carries_target_label():
     plan = _run_plan(cloned_fields=['RoomAssignment__c.Room__c'])
     hs = next(m for m in plan['matched'] if m['name'] == 'Housing_Staff')
     assert hs['label'] == 'Housing Staff'
+
+
+# ── locked-profile skip ───────────────────────────────────────────────────────
+
+def test_locked_profile_is_skipped_not_matched():
+    src = _source_sf(
+        [_op(True, 'B2BMA Integration User', read=True),
+         _op(True, 'System Administrator', read=True)],
+        [_fp(True, 'B2BMA Integration User', 'RoomAssignment__c.Room__c', read=True),
+         _fp(True, 'System Administrator', 'RoomAssignment__c.Room__c', read=True)])
+    tgt = _target_sf(['B2BMA Integration User', 'System Administrator'], {}, describe=None)
+
+    def fake(org):
+        return src if org == 'eda' else tgt
+    with patch('services.cli_access_mirror.get_sf', side_effect=fake):
+        plan = mirror.mirror_plan('eda', 'sandbox', 'RoomAssignment__c',
+                                  ['RoomAssignment__c.Room__c'])
+    matched = {m['name'] for m in plan['matched']}
+    locked = {x['name'] for x in plan['skipped_locked']}
+    assert matched == {'System Administrator'}          # locked one dropped
+    assert locked == {'B2BMA Integration User'}
+    assert plan['counts']['skipped_locked'] == 1
+
+
+def test_locked_profile_heuristic_matches_integration_user_suffix():
+    assert mirror._is_locked_profile('Marketing Cloud Integration User')
+    assert mirror._is_locked_profile('B2BMA Integration User')
+    assert not mirror._is_locked_profile('Conductor Integration')   # custom, deployable
+    assert not mirror._is_locked_profile('System Administrator')
+
+
+def test_target_object_names_reads_global_describe():
+    sf = MagicMock()
+    sf.describe.return_value = {'sobjects': [{'name': 'Account'}, {'name': 'RoomAssignment__c'}]}
+    assert mirror.target_object_names(sf) == {'Account', 'RoomAssignment__c'}
+
+
+def test_target_object_names_none_on_failure():
+    sf = MagicMock()
+    sf.describe.side_effect = RuntimeError('boom')
+    sf.restful.side_effect = RuntimeError('boom')
+    assert mirror.target_object_names(sf) is None
 
 
 # ── split_grants ──────────────────────────────────────────────────────────────
