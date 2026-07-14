@@ -248,3 +248,100 @@ def test_build_package_zip_layout():
 def test_build_package_zip_empty_raises():
     with pytest.raises(ValueError):
         cs.build_package_zip('p', [], None, 'DoaneUAT')
+
+
+# ── Phase 2: CustomTab + tab-visibility + Profile generators ──────────────────
+
+def test_tab_meta_xml():
+    xml = cs.tab_meta_xml('RoomAssignment__c')
+    assert xml.startswith('<?xml version="1.0" encoding="UTF-8"?>\n<CustomTab')
+    assert '<customObject>true</customObject>' in xml
+    assert '<motif>' in xml
+    assert xml.endswith('</CustomTab>\n')
+
+
+def test_tab_meta_xml_requires_object():
+    with pytest.raises(ValueError):
+        cs.tab_meta_xml('')
+
+
+def test_permission_set_xml_with_tab_settings():
+    xml = cs.permission_set_xml(
+        'RA_Access', 'RA Access',
+        [{'field': 'RoomAssignment__c.Room__c', 'readable': True, 'editable': True}],
+        tab_settings=[{'tab': 'RoomAssignment__c', 'visibility': 'Visible'}])
+    assert '<tabSettings><tab>RoomAssignment__c</tab><visibility>Visible</visibility></tabSettings>' in xml
+
+
+def test_permission_set_xml_no_tab_settings_by_default():
+    xml = cs.permission_set_xml('P', 'P',
+                                [{'field': 'A.B__c', 'readable': True, 'editable': False}])
+    assert '<tabSettings>' not in xml   # additive — unchanged unless requested
+
+
+def test_profile_xml_object_and_field_grants():
+    xml = cs.profile_xml(
+        'System Administrator',
+        object_perms=cs.object_perms_for(['RoomAssignment__c'], True),
+        field_perms=[{'field': 'RoomAssignment__c.Room__c', 'readable': True, 'editable': True}])
+    assert xml.startswith('<?xml version="1.0" encoding="UTF-8"?>\n<Profile')
+    assert '<object>RoomAssignment__c</object>' in xml
+    assert '<field>RoomAssignment__c.Room__c</field>' in xml
+    # retrieve order: fieldPermissions before objectPermissions
+    assert xml.index('<fieldPermissions>') < xml.index('<objectPermissions>')
+    assert xml.endswith('</Profile>\n')
+
+
+def test_profile_xml_maps_tab_visibility_enum():
+    # Permission-set "Visible" maps to a profile's "DefaultOn".
+    xml = cs.profile_xml('Standard User',
+                         tab_settings=[{'tab': 'RoomAssignment__c', 'visibility': 'Visible'}])
+    assert '<tabVisibilities><tab>RoomAssignment__c</tab><visibility>DefaultOn</visibility></tabVisibilities>' in xml
+
+
+def test_profile_xml_requires_api_name():
+    with pytest.raises(ValueError):
+        cs.profile_xml('')
+
+
+def test_package_xml_with_tabs_and_profiles():
+    pkg = cs.package_xml([], tab_names=['RoomAssignment__c'],
+                         profile_names=['System Administrator'])
+    assert '<name>CustomTab</name>' in pkg
+    assert '<name>Profile</name>' in pkg
+    assert '<members>RoomAssignment__c</members>' in pkg
+    assert '<members>System Administrator</members>' in pkg
+
+
+def test_deploy_snippet_orders_tab_and_profile():
+    s = cs.deploy_snippet(
+        [{'object': 'Foo__c', 'api_name': 'Bar__c'}], 'PS', 'UAT',
+        object_names=['Foo__c'], tab_names=['Foo__c'], profile_names=['Admin'])
+    # object -> field -> tab -> permset -> profile
+    assert s.index('CustomObject:Foo__c') < s.index('CustomField:Foo__c.Bar__c')
+    assert s.index('CustomField:Foo__c.Bar__c') < s.index('CustomTab:Foo__c')
+    assert s.index('PermissionSet:PS') < s.index('Profile:Admin')
+
+
+def test_build_package_zip_with_tab_and_profile():
+    fields = [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}]
+    tabs = [{'object': 'Foo__c'}]
+    profiles = [{'api_name': 'System Administrator',
+                 'object_perms': cs.object_perms_for(['Foo__c'], True),
+                 'field_perms': [{'field': 'Foo__c.Bar__c', 'readable': True, 'editable': True}]}]
+    data, _ = cs.build_package_zip('p', fields, None, 'UAT', tabs=tabs, profiles=profiles)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        names = set(zf.namelist())
+        assert 'force-app/main/default/tabs/Foo__c.tab-meta.xml' in names
+        assert 'force-app/main/default/profiles/System Administrator.profile-meta.xml' in names
+        pkg = zf.read('manifest/package.xml').decode()
+        prof = zf.read('force-app/main/default/profiles/System Administrator.profile-meta.xml').decode()
+    assert '<name>CustomTab</name>' in pkg and '<name>Profile</name>' in pkg
+    assert '<object>Foo__c</object>' in prof
+
+
+def test_build_package_zip_profile_with_no_grants_is_dropped():
+    # A profile file that grants nothing is not written (and can't be the only content).
+    with pytest.raises(ValueError):
+        cs.build_package_zip('p', [], None, 'UAT',
+                             profiles=[{'api_name': 'Empty'}])

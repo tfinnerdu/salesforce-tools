@@ -132,6 +132,7 @@ MC.cli = {
       human_permset: this._humanPermset(),
       existing_fields: this._existingFields(),
       new_objects: this.newObjects,
+      generate_tabs: document.getElementById('noGenerateTabs')?.checked || false,
       layouts: this.layouts,
       layout_name: document.getElementById('cliLayoutName').value.trim(),
       layout_retrieve_alias: document.getElementById('cliLayoutRetrieveAlias').value.trim(),
@@ -897,10 +898,16 @@ MC.cliClone = {
   init() {
     document.getElementById('btnClonePreview')?.addEventListener('click', () => this.preview());
     document.getElementById('btnClonePackage')?.addEventListener('click', () => this.download());
-    ['cliCloneSourceOrg', 'cliCloneObject', 'cliCloneShell', 'cliClonePermset'].forEach(id => {
+    ['cliCloneSourceOrg', 'cliCloneObject', 'cliCloneShell', 'cliClonePermset',
+     'cliCloneTab', 'cliCloneMirror', 'cliCloneTargetOrg'].forEach(id => {
       const el = document.getElementById(id);
       el?.addEventListener('change', () => this._lock());
       el?.addEventListener('input', () => this._lock());
+    });
+    // Reveal the target-org picker only when mirroring is on.
+    document.getElementById('cliCloneMirror')?.addEventListener('change', (e) => {
+      document.getElementById('cliCloneMirrorTargetWrap')
+        ?.classList.toggle('d-none', !e.target.checked);
     });
   },
 
@@ -908,7 +915,13 @@ MC.cliClone = {
   _obj() { return (document.getElementById('cliCloneObject')?.value || '').trim(); },
   _shell() { return document.getElementById('cliCloneShell')?.checked || false; },
   _permset() { return document.getElementById('cliClonePermset')?.checked || false; },
-  _key() { return `${this._srcOrg()}|${this._obj()}|${this._shell()}|${this._permset()}`; },
+  _tab() { return document.getElementById('cliCloneTab')?.checked || false; },
+  _mirror() { return document.getElementById('cliCloneMirror')?.checked || false; },
+  _targetOrg() { return (document.getElementById('cliCloneTargetOrg')?.value || '').trim(); },
+  _key() {
+    return `${this._srcOrg()}|${this._obj()}|${this._shell()}|${this._permset()}`
+      + `|${this._tab()}|${this._mirror()}|${this._targetOrg()}`;
+  },
 
   _lock() {
     const btn = document.getElementById('btnClonePackage');
@@ -921,10 +934,14 @@ MC.cliClone = {
     MC.showSpinner();
     try {
       const data = await MC.api('/cli/clone-object/plan', 'POST',
-        { object: obj, include_shell: this._shell(), source_org: this._srcOrg() });
+        { object: obj, include_shell: this._shell(), source_org: this._srcOrg(),
+          mirror_access: this._mirror(), target_org: this._targetOrg() });
       this._render(data);
       const btn = document.getElementById('btnClonePackage');
-      const nothing = data.fields.length === 0 && !data.shell;
+      // A tab or a matched access mirror is deployable even with no fields/shell.
+      const hasMirror = !!(data.mirror && data.mirror.counts && data.mirror.counts.matched);
+      const nothing = data.fields.length === 0 && !data.shell
+        && !(this._tab() && this._obj().endsWith('__c')) && !hasMirror;
       if (btn) btn.disabled = nothing;
       this._lastKey = nothing ? null : this._key();
       if (nothing) MC.showToast('Nothing to clone — no reproducible custom fields (tick “include the object definition” to at least create the shell).', 'warning');
@@ -939,7 +956,8 @@ MC.cliClone = {
       `<span class="badge bg-success me-1">clone ${c.custom_fields} field(s)</span>`
       + `<span class="badge bg-${c.skipped ? 'warning' : 'secondary'} me-1">skip ${c.skipped}</span>`
       + `<span class="badge bg-secondary me-1">${c.standard_fields} standard</span>`
-      + (d.shell ? '<span class="badge bg-info me-1">+ object shell</span>' : '');
+      + (d.shell ? '<span class="badge bg-info me-1">+ object shell</span>' : '')
+      + (this._tab() && this._obj().endsWith('__c') ? '<span class="badge bg-info me-1">+ custom tab</span>' : '');
     document.getElementById('cliCloneFieldCount').textContent = d.fields.length;
     document.getElementById('cliCloneSkipCount').textContent = d.skipped.length;
     document.getElementById('cliCloneFields').innerHTML = d.fields.map(f =>
@@ -956,7 +974,44 @@ MC.cliClone = {
     } else {
       note.classList.add('d-none');
     }
+    this._renderMirror(d.mirror, d.mirror_error);
     document.getElementById('cliCloneResult').classList.remove('d-none');
+  },
+
+  _renderMirror(m, err) {
+    const wrap = document.getElementById('cliCloneMirrorResult');
+    const warn = document.getElementById('cliCloneMirrorWarn');
+    if (!m && !err) { wrap.classList.add('d-none'); return; }
+    wrap.classList.remove('d-none');
+    if (err || !m) {
+      warn.classList.remove('d-none');
+      warn.textContent = err || 'Access mirror unavailable.';
+      document.getElementById('cliCloneMirrorSummary').textContent = '';
+      document.getElementById('cliCloneMirrorMatched').innerHTML = '';
+      document.getElementById('cliCloneMirrorUnmatched').innerHTML = '';
+      return;
+    }
+    const c = m.counts;
+    document.getElementById('cliCloneMirrorSummary').innerHTML =
+      `<span class="badge bg-success me-1">${c.matched} matched</span>`
+      + `<span class="badge bg-secondary me-1">${c.unmatched} not in target</span>`
+      + `<span class="text-muted">(${c.matched_profiles} profile(s), ${c.matched_permsets} permission set(s))</span>`;
+    // A profile/permset referencing a field the target lacks would fail the whole
+    // deploy, so field grants are scoped. Flag when scoping couldn't run.
+    if (m.scoped === false) {
+      warn.classList.remove('d-none');
+      warn.textContent = 'Field grants are not scoped to the target’s fields '
+        + '(no field context) — review before deploying.';
+    } else { warn.classList.add('d-none'); }
+    document.getElementById('cliCloneMirrorMatched').innerHTML = (m.matched || []).map(x => {
+      const obj = x.object_perms ? (x.object_perms.edit ? 'read/edit' : 'read') : '—';
+      const drop = x.dropped_fields ? ` <span class="text-muted">(−${x.dropped_fields})</span>` : '';
+      return `<tr><td>${MC._escHtml(x.name)}</td><td>${MC._escHtml(x.type)}</td>`
+        + `<td>${obj}</td><td>${(x.field_perms || []).length}${drop}</td></tr>`;
+    }).join('') || '<tr><td colspan="4" class="text-muted">None matched</td></tr>';
+    document.getElementById('cliCloneMirrorUnmatched').innerHTML = (m.unmatched || []).map(x =>
+      `<tr><td><code>${MC._escHtml(x.name)}</code></td><td class="text-muted">${MC._escHtml(x.type)}</td></tr>`
+    ).join('') || '<tr><td colspan="2" class="text-muted">None</td></tr>';
   },
 
   async download() {
@@ -975,6 +1030,9 @@ MC.cliClone = {
           source_org: this._srcOrg(),
           include_shell: this._shell(),
           include_permset: this._permset(),
+          include_tab: this._tab(),
+          mirror_access: this._mirror(),
+          target_org: this._targetOrg(),
           project: (document.getElementById('cliProject')?.value || '').trim(),
           alias: (document.getElementById('cliAlias')?.value || '').trim(),
         }),

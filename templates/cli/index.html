@@ -112,6 +112,14 @@
         </div>
       </div>
       <div class="form-text">Name field is a Text “Name” (the common case). Deploy the whole folder (or the by-name deploy, which now includes the object) so the object lands before its fields.</div>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" id="noGenerateTabs" checked>
+        <label class="form-check-label small" for="noGenerateTabs">
+          Generate a Custom Tab for each new object
+          <span class="text-muted">(a fresh object has no tab &mdash; without one it never appears in the App
+          Launcher or nav; the visibility permission set is granted the tab too)</span>
+        </label>
+      </div>
       <div id="newObjectList" class="mt-2 d-flex flex-wrap gap-2"></div>
     </div>
   </div>
@@ -245,6 +253,31 @@
             <span class="text-muted">(read/edit &mdash; otherwise the new fields aren't visible)</span>
           </label>
         </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="cliCloneTab" checked>
+          <label class="form-check-label small" for="cliCloneTab">
+            Generate a Custom Tab
+            <span class="text-muted">(so the object shows in the App Launcher / nav &mdash; a cloned
+            object has no tab and is otherwise only reachable by direct URL; the access permission
+            set is granted tab visibility)</span>
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="cliCloneMirror">
+          <label class="form-check-label small" for="cliCloneMirror">
+            Mirror the source org's access by name
+            <span class="text-muted">(read which profiles &amp; permission sets grant this object in the
+            source org, and reproduce the same grants on the <em>same-named</em> profiles / permission sets that
+            already exist in the target &mdash; additive, skips names the target doesn't have)</span>
+          </label>
+        </div>
+        <div id="cliCloneMirrorTargetWrap" class="d-none ms-4 mt-1">
+          <label for="cliCloneTargetOrg" class="form-label small mb-1">Target org
+            <span class="text-muted fw-normal">(whose profile / permission-set names to match)</span></label>
+          <select id="cliCloneTargetOrg" class="form-select form-select-sm" style="max-width:16rem">
+            {% for org in nav_orgs %}<option value="{{ org }}"{% if org == active_org %} selected{% endif %}>{{ org }}</option>{% endfor %}
+          </select>
+        </div>
       </div>
 
       <div id="cliCloneResult" class="mt-3 d-none">
@@ -267,6 +300,29 @@
                 <thead><tr><th>Field</th><th>Reason</th></tr></thead>
                 <tbody id="cliCloneSkipped"></tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="cliCloneMirrorResult" class="mt-3 d-none">
+          <h6 class="fw-semibold small mb-1">Access mirror <span id="cliCloneMirrorSummary" class="fw-normal"></span></h6>
+          <div id="cliCloneMirrorWarn" class="alert alert-warning py-1 small d-none"></div>
+          <div class="row g-3">
+            <div class="col-md-7">
+              <div class="table-responsive" style="max-height:220px;overflow:auto">
+                <table class="table table-sm table-striped small mb-0">
+                  <thead><tr><th>Matched in target</th><th>Type</th><th>Object</th><th>Fields</th></tr></thead>
+                  <tbody id="cliCloneMirrorMatched"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-md-5">
+              <div class="table-responsive" style="max-height:220px;overflow:auto">
+                <table class="table table-sm table-striped small mb-0">
+                  <thead><tr><th>Not in target (skipped)</th><th>Type</th></tr></thead>
+                  <tbody id="cliCloneMirrorUnmatched"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

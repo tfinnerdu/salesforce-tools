@@ -12,6 +12,11 @@ picklist `Type_of_Assistance__c` with values Academic / Financial / Medical, and
 the human permission set `Case_Assistance_Fields`) as the running example.
 Substitute your own object, fields, and permission-set name.
 
+> **Cloning a whole object** (not just adding a field to an existing one)? There
+> are two switches *beneath* these — the object itself has to be granted, and it
+> needs a tab to appear in the app. See
+> [Making a cloned object visible](cloned-object-visibility.md).
+
 ---
 
 ## The mental model — four separate switches

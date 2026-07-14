@@ -25,6 +25,8 @@ XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>'
 CF_OPEN = '<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">'
 PS_OPEN = '<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">'
 CO_OPEN = '<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">'
+PROFILE_OPEN = '<Profile xmlns="http://soap.sforce.com/2006/04/metadata">'
+CT_OPEN = '<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">'
 PKG_NS = 'http://soap.sforce.com/2006/04/metadata'
 
 # Default Metadata API version for a generated package.xml.
@@ -200,93 +202,199 @@ def object_perms_for(objects: list, editable: bool) -> list:
              'view_all': False, 'modify_all': False} for o in objects if o]
 
 
+def _b(v) -> str:
+    return 'true' if v else 'false'
+
+
+def _object_permission_line(op: dict) -> str:
+    """One `<objectPermissions>` line (all 7 sub-elements, retrieve's alphabetical
+    order). Returns '' when the spec has no object. Shared by permission set +
+    profile so both render object access identically."""
+    obj = escape(str(op.get('object', '')))
+    if not obj:
+        return ''
+    return (
+        '    <objectPermissions>'
+        f'<allowCreate>{_b(op.get("create"))}</allowCreate>'
+        f'<allowDelete>{_b(op.get("delete"))}</allowDelete>'
+        f'<allowEdit>{_b(op.get("edit"))}</allowEdit>'
+        f'<allowRead>{_b(op.get("read", True))}</allowRead>'
+        f'<modifyAllRecords>{_b(op.get("modify_all"))}</modifyAllRecords>'
+        f'<object>{obj}</object>'
+        f'<viewAllRecords>{_b(op.get("view_all"))}</viewAllRecords>'
+        '</objectPermissions>'
+    )
+
+
+def _field_permission_line(fp: dict) -> str:
+    """One `<fieldPermissions>` line. Shared by permission set + profile."""
+    field = escape(str(fp.get('field', '')))
+    readable = _b(fp.get('readable', True))
+    editable = _b(fp.get('editable', False))
+    return (
+        f'    <fieldPermissions><field>{field}</field>'
+        f'<readable>{readable}</readable><editable>{editable}</editable></fieldPermissions>'
+    )
+
+
+def _tab_setting_line(ts: dict, element: str = 'tabSettings') -> str:
+    """One tab-visibility line. Permission sets use `<tabSettings>` with
+    visibility None/Available/Visible; profiles use `<tabVisibilities>` with
+    Hidden/DefaultOff/DefaultOn (map via the caller). Returns '' if no tab."""
+    tab = escape(str(ts.get('tab', '')))
+    if not tab:
+        return ''
+    vis = escape(str(ts.get('visibility') or 'Visible'))
+    return (f'    <{element}><tab>{tab}</tab>'
+            f'<visibility>{vis}</visibility></{element}>')
+
+
 def permission_set_xml(api_name: str, label: str, field_perms: list,
-                       description: str = '', object_perms: list = None) -> str:
+                       description: str = '', object_perms: list = None,
+                       tab_settings: list = None) -> str:
     """Render a PermissionSet `.permissionset-meta.xml`.
 
     field_perms: [{field: 'Object.Field__c', readable: bool, editable: bool}].
     object_perms: [{object, read, create, edit, delete, view_all, modify_all}] —
     object-level access so the permset opens the object itself, not just its
     fields (field FLS is moot if the object is hidden).
+    tab_settings: [{tab: 'Object__c', visibility: 'Visible'}] — makes a custom
+    object's tab show in the App Launcher / nav for assignees.
     Emits one single-line entry per permission, matching retrieve output.
     """
     if not api_name:
         raise ValueError('permission set requires api_name')
-
-    def _b(v):
-        return 'true' if v else 'false'
 
     lines = [XML_HEADER, PS_OPEN, _tag('label', label or api_name)]
     if description:
         lines.append(_tag('description', description))
     lines.append(_tag('hasActivationRequired', False))
     for op in (object_perms or []):
-        obj = escape(str(op.get('object', '')))
-        if not obj:
-            continue
-        # Sub-elements are all required, in retrieve's alphabetical order.
-        lines.append(
-            '    <objectPermissions>'
-            f'<allowCreate>{_b(op.get("create"))}</allowCreate>'
-            f'<allowDelete>{_b(op.get("delete"))}</allowDelete>'
-            f'<allowEdit>{_b(op.get("edit"))}</allowEdit>'
-            f'<allowRead>{_b(op.get("read", True))}</allowRead>'
-            f'<modifyAllRecords>{_b(op.get("modify_all"))}</modifyAllRecords>'
-            f'<object>{obj}</object>'
-            f'<viewAllRecords>{_b(op.get("view_all"))}</viewAllRecords>'
-            '</objectPermissions>'
-        )
+        line = _object_permission_line(op)
+        if line:
+            lines.append(line)
     for fp in field_perms:
-        field = escape(str(fp.get('field', '')))
-        readable = 'true' if fp.get('readable', True) else 'false'
-        editable = 'true' if fp.get('editable', False) else 'false'
-        lines.append(
-            f'    <fieldPermissions><field>{field}</field>'
-            f'<readable>{readable}</readable><editable>{editable}</editable></fieldPermissions>'
-        )
+        lines.append(_field_permission_line(fp))
+    for ts in (tab_settings or []):
+        line = _tab_setting_line(ts, 'tabSettings')
+        if line:
+            lines.append(line)
     lines.append('</PermissionSet>')
     return '\n'.join(lines) + '\n'
 
 
+# ── XML: profile (additive object/field/tab grant) ───────────────────────────
+
+# Permission-set tab visibility -> profile tab visibility. A permission set's
+# tabSettings uses Available/Visible; a profile's tabVisibilities uses
+# DefaultOff/DefaultOn (and Hidden). Same intent, different enum.
+_PROFILE_TAB_VIS = {'Visible': 'DefaultOn', 'Available': 'DefaultOff',
+                    'None': 'Hidden', 'Hidden': 'Hidden',
+                    'DefaultOn': 'DefaultOn', 'DefaultOff': 'DefaultOff'}
+
+
+def profile_xml(api_name: str, object_perms: list = None, field_perms: list = None,
+                tab_settings: list = None, description: str = '') -> str:
+    """Render a Profile `.profile-meta.xml` carrying ONLY the given object/field/
+    tab grants for one object.
+
+    A partial profile deploy is *additive* for objectPermissions /
+    fieldPermissions / tabVisibilities — Salesforce upserts the referenced
+    permissions and leaves everything else on the profile untouched — so a file
+    that names just the cloned object's access is safe to deploy onto an existing
+    profile. `api_name` is the profile's fullName (its label under the modern
+    `sf` source format, e.g. "System Administrator").
+
+    Element order follows retrieve (alphabetical by element type): description,
+    fieldPermissions, objectPermissions, tabVisibilities.
+    """
+    if not api_name:
+        raise ValueError('profile requires api_name')
+    lines = [XML_HEADER, PROFILE_OPEN]
+    if description:
+        lines.append(_tag('description', description))
+    for fp in (field_perms or []):
+        lines.append(_field_permission_line(fp))
+    for op in (object_perms or []):
+        line = _object_permission_line(op)
+        if line:
+            lines.append(line)
+    for ts in (tab_settings or []):
+        mapped = dict(ts)
+        mapped['visibility'] = _PROFILE_TAB_VIS.get(
+            ts.get('visibility') or 'Visible', 'DefaultOn')
+        line = _tab_setting_line(mapped, 'tabVisibilities')
+        if line:
+            lines.append(line)
+    lines.append('</Profile>')
+    return '\n'.join(lines) + '\n'
+
+
+# ── XML: custom tab ──────────────────────────────────────────────────────────
+
+# Default tab icon for a generated custom-object tab. Any of Salesforce's stock
+# motifs works; a neutral one keeps the tab from looking placeholder-broken.
+DEFAULT_TAB_MOTIF = 'Custom53: Bell'
+
+
+def tab_meta_xml(object_name: str, motif: str = DEFAULT_TAB_MOTIF,
+                 label: str = '') -> str:
+    """Render a CustomTab `.tab-meta.xml` for a custom object.
+
+    A custom object has no tab by default, so it never appears in the App
+    Launcher / nav — only reachable by direct URL. This makes one. For a
+    custom-object tab the fullName IS the object API name and `<customObject>`
+    is true; `<label>` is ignored by SF for object tabs (the object's own label
+    wins) but harmless, so it's omitted unless supplied.
+    """
+    if not object_name:
+        raise ValueError('custom tab requires an object name')
+    body = [_tag('customObject', True)]
+    if label:
+        body.append(_tag('label', label))
+    body.append(_tag('motif', motif or DEFAULT_TAB_MOTIF))
+    return '\n'.join([XML_HEADER, CT_OPEN, *body, '</CustomTab>']) + '\n'
+
+
 # ── XML: package manifest ────────────────────────────────────────────────────
+
+def _types_block(members: list, type_name: str) -> list:
+    lines = ['    <types>']
+    for name in members:
+        lines.append(f'        <members>{escape(str(name))}</members>')
+    lines.append(f'        <name>{type_name}</name>')
+    lines.append('    </types>')
+    return lines
+
 
 def package_xml(fields: list, permset_name: str = '',
                 api_version: str = DEFAULT_API_VERSION,
                 extra_permset_names: list = None,
-                object_names: list = None, layout_names: list = None) -> str:
+                object_names: list = None, layout_names: list = None,
+                profile_names: list = None, tab_names: list = None) -> str:
     """Render a manifest/package.xml listing the package's members.
 
     object_names adds a CustomObject <types> block (for a cloned object's shell);
-    layout_names adds a Layout block (for a pasted layout copied as-is).
+    layout_names adds a Layout block (for a pasted layout copied as-is);
+    tab_names adds a CustomTab block; profile_names adds a Profile block (for
+    name-matched access mirroring).
     """
     lines = [XML_HEADER, f'<Package xmlns="{PKG_NS}">']
     if object_names:
-        lines.append('    <types>')
-        for name in object_names:
-            lines.append(f'        <members>{escape(name)}</members>')
-        lines.append('        <name>CustomObject</name>')
-        lines.append('    </types>')
+        lines += _types_block(object_names, 'CustomObject')
     if fields:
-        lines.append('    <types>')
-        for f in fields:
-            member = escape(f'{f["object"]}.{f["api_name"]}')
-            lines.append(f'        <members>{member}</members>')
-        lines.append('        <name>CustomField</name>')
-        lines.append('    </types>')
+        members = [f'{f["object"]}.{f["api_name"]}' for f in fields]
+        lines += _types_block(members, 'CustomField')
+    if tab_names:
+        lines += _types_block(tab_names, 'CustomTab')
     if layout_names:
-        lines.append('    <types>')
-        for name in layout_names:
-            lines.append(f'        <members>{escape(name)}</members>')
-        lines.append('        <name>Layout</name>')
-        lines.append('    </types>')
+        lines += _types_block(layout_names, 'Layout')
     permset_names = ([permset_name] if permset_name else []) + \
         [n for n in (extra_permset_names or []) if n and n != permset_name]
     if permset_names:
-        lines.append('    <types>')
-        for name in permset_names:
-            lines.append(f'        <members>{escape(name)}</members>')
-        lines.append('        <name>PermissionSet</name>')
-        lines.append('    </types>')
+        lines += _types_block(permset_names, 'PermissionSet')
+    if profile_names:
+        lines += _types_block(profile_names, 'Profile')
     lines.append(f'    <version>{escape(str(api_version))}</version>')
     lines.append('</Package>')
     return '\n'.join(lines) + '\n'
@@ -326,31 +434,38 @@ def retrieve_snippet(alias: str) -> str:
 
 
 def _members(fields: list, permset_name: str, extra_permset_names: list = None,
-             object_names: list = None, layout_names: list = None) -> list:
+             object_names: list = None, layout_names: list = None,
+             profile_names: list = None, tab_names: list = None) -> list:
     # CustomObject first — a field's object must exist for the same deploy to
     # create its fields (Metadata deploy resolves the dependency within one run).
     members = [f'CustomObject:{name}' for name in (object_names or []) if name]
     members += [f'CustomField:{f["object"]}.{f["api_name"]}' for f in fields]
-    # Layouts after fields — a layout references its object's fields.
+    # CustomTab after its object; Layouts after fields (a layout references them).
+    members += [f'CustomTab:{name}' for name in (tab_names or []) if name]
     members += [f'Layout:{name}' for name in (layout_names or []) if name]
     if permset_name:
         members.append(f'PermissionSet:{permset_name}')
     for name in (extra_permset_names or []):
         if name and name != permset_name:
             members.append(f'PermissionSet:{name}')
+    # Profiles last — they reference the object/fields/tab created above.
+    members += [f'Profile:{name}' for name in (profile_names or []) if name]
     return members
 
 
 def deploy_snippet(fields: list, permset_name: str, alias: str,
                    dry_run: bool = False, extra_permset_names: list = None,
-                   object_names: list = None, layout_names: list = None) -> str:
+                   object_names: list = None, layout_names: list = None,
+                   profile_names: list = None, tab_names: list = None) -> str:
     """Steps 8/9 — deploy the authored components by name. dry_run adds --dry-run.
     extra_permset_names carries additional permission sets (e.g. the cloned
     human-visibility set) alongside the integration one. object_names carries
     new/cloned CustomObject shells so the object deploys with its fields;
-    layout_names carries pasted layouts copied as-is."""
+    layout_names carries pasted layouts copied as-is; tab_names carries generated
+    CustomTabs; profile_names carries name-matched Profiles (access mirror)."""
     alias = alias or '<alias>'
-    members = _members(fields, permset_name, extra_permset_names, object_names, layout_names)
+    members = _members(fields, permset_name, extra_permset_names, object_names,
+                       layout_names, profile_names, tab_names)
     lines = ['sf project deploy start `']
     for m in members:
         lines.append(f'  -m "{m}" `')
@@ -497,7 +612,8 @@ def verify_snippet(flip_fields: list, alias: str) -> str:
 
 def _readme(project: str, fields: list, permset_name: str, alias: str,
             extra_permset_names: list = None, object_names: list = None,
-            layout_names: list = None) -> str:
+            layout_names: list = None, profile_names: list = None,
+            tab_names: list = None) -> str:
     lines = [
         'SF CLI package — generated by SF Mission Control (CLI tab)',
         '=' * 58,
@@ -512,19 +628,24 @@ def _readme(project: str, fields: list, permset_name: str, alias: str,
     for f in fields:
         tag = 'flip -> External ID' if f.get('mode') == 'flip' else 'create'
         lines.append(f'  CustomField   {f["object"]}.{f["api_name"]}   ({tag})')
+    for name in (tab_names or []):
+        lines.append(f'  CustomTab     {name}  (so the object shows in the App Launcher / nav)')
     for name in (layout_names or []):
         lines.append(f'  Layout        {name}  (copied as-is — target must have every field it references)')
     if permset_name:
         lines.append(f'  PermissionSet {permset_name}')
     for name in (extra_permset_names or []):
         lines.append(f'  PermissionSet {name}  (human visibility)')
+    for name in (profile_names or []):
+        lines.append(f'  Profile       {name}  (name-matched access mirror — ADDITIVE grant, '
+                     'leaves the rest of the profile untouched)')
     lines += ['']
-    if object_names or layout_names:
+    if object_names or layout_names or tab_names or profile_names:
         # A member (-m) deploy can't reliably create an object + its fields in one
-        # pass, and a layout needs its fields to exist first; the whole-folder
-        # deploy resolves that ordering in a single run.
+        # pass, a layout/tab needs its object first, and a profile references them;
+        # the whole-folder deploy resolves that ordering in a single run.
         lines += [
-            'Deploy the whole folder (resolves object/field/layout ordering):',
+            'Deploy the whole folder (resolves object/field/tab/layout/profile ordering):',
             '  ' + deploy_dir_snippet(alias, dry_run=True) + '   # validate',
             '  ' + deploy_dir_snippet(alias, dry_run=False) + '   # commit',
         ]
@@ -549,34 +670,55 @@ def base_project_path(project: str, base_path: str = 'C:\\Doane\\Code\\Salesforc
 def build_package_zip(project: str, fields: list, permset: dict = None,
                       alias: str = '', api_version: str = DEFAULT_API_VERSION,
                       extra_permsets: list = None, object_shells: list = None,
-                      layouts: list = None) -> tuple:
+                      layouts: list = None, tabs: list = None,
+                      profiles: list = None) -> tuple:
     """Build the force-app metadata package as a zip.
 
     extra_permsets carries additional permission sets (e.g. the cloned
-    human-visibility set) as [{api_name,label,description,field_perms}].
+    human-visibility set) as [{api_name,label,description,field_perms,object_perms,
+    tab_settings}].
     object_shells carries CustomObject shells (a cloned object's definition) as
     [{object, label, plural_label, name_label, sharing_model}].
     layouts carries pasted page layouts copied as-is as [{full_name, xml}].
+    tabs carries generated CustomTabs as [{object, motif?}].
+    profiles carries name-matched access-mirror grants as
+    [{api_name, object_perms, field_perms, tab_settings, description}].
 
     Returns (zip_bytes, filename). Layout:
       force-app/main/default/objects/<Object>/<Object>.object-meta.xml
       force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml
+      force-app/main/default/tabs/<Object>.tab-meta.xml
       force-app/main/default/layouts/<Object>-<Name>.layout-meta.xml
       force-app/main/default/permissionsets/<Name>.permissionset-meta.xml
+      force-app/main/default/profiles/<Name>.profile-meta.xml
       manifest/package.xml
       README.txt
     """
-    all_permsets = ([permset] if permset and permset.get('field_perms') else []) + \
-        [p for p in (extra_permsets or []) if p and p.get('field_perms')]
+    def _ps_has_content(p):
+        # A permission set is worth writing if it grants anything — fields (the
+        # common case), object access, or a tab (a mirrored object-only grant).
+        return bool(p and (p.get('field_perms') or p.get('object_perms')
+                           or p.get('tab_settings')))
+
+    all_permsets = ([permset] if _ps_has_content(permset) else []) + \
+        [p for p in (extra_permsets or []) if _ps_has_content(p)]
     object_shells = [s for s in (object_shells or []) if s and s.get('object')]
     layouts = [lay for lay in (layouts or []) if lay and lay.get('full_name') and lay.get('xml')]
-    if not fields and not all_permsets and not object_shells and not layouts:
-        raise ValueError('Nothing to package — add at least one field, permission set, object, or layout.')
+    tabs = [t for t in (tabs or []) if t and t.get('object')]
+    # A profile file is worth emitting only if it grants something.
+    profiles = [p for p in (profiles or []) if p and p.get('api_name')
+                and (p.get('object_perms') or p.get('field_perms') or p.get('tab_settings'))]
+    if not fields and not all_permsets and not object_shells and not layouts \
+            and not tabs and not profiles:
+        raise ValueError('Nothing to package — add at least one field, permission set, '
+                         'object, tab, layout, or profile.')
 
     permset_name = (permset or {}).get('api_name', '') if permset else ''
-    extra_names = [p['api_name'] for p in (extra_permsets or []) if p and p.get('field_perms')]
+    extra_names = [p['api_name'] for p in (extra_permsets or []) if _ps_has_content(p)]
     object_names = [s['object'] for s in object_shells]
     layout_names = [lay['full_name'] for lay in layouts]
+    tab_names = [t['object'] for t in tabs]
+    profile_names = [p['api_name'] for p in profiles]
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         for s in object_shells:
@@ -587,6 +729,9 @@ def build_package_zip(project: str, fields: list, permset: dict = None,
             path = (f'force-app/main/default/objects/{f["object"]}/fields/'
                     f'{f["api_name"]}.field-meta.xml')
             zf.writestr(path, field_meta_xml(f))
+        for t in tabs:
+            path = f'force-app/main/default/tabs/{t["object"]}.tab-meta.xml'
+            zf.writestr(path, tab_meta_xml(t['object'], t.get('motif') or DEFAULT_TAB_MOTIF))
         for lay in layouts:
             path = f'force-app/main/default/layouts/{lay["full_name"]}.layout-meta.xml'
             zf.writestr(path, lay['xml'])
@@ -596,13 +741,19 @@ def build_package_zip(project: str, fields: list, permset: dict = None,
             zf.writestr(path, permission_set_xml(
                 name, ps.get('label', name),
                 ps.get('field_perms', []), ps.get('description', ''),
-                ps.get('object_perms')))
+                ps.get('object_perms'), ps.get('tab_settings')))
+        for pr in profiles:
+            name = pr['api_name']
+            path = f'force-app/main/default/profiles/{name}.profile-meta.xml'
+            zf.writestr(path, profile_xml(
+                name, pr.get('object_perms'), pr.get('field_perms'),
+                pr.get('tab_settings'), pr.get('description', '')))
         zf.writestr('manifest/package.xml',
                     package_xml(fields, permset_name, api_version, extra_names,
-                                object_names, layout_names))
+                                object_names, layout_names, profile_names, tab_names))
         zf.writestr('README.txt',
                     _readme(project, fields, permset_name, alias, extra_names,
-                            object_names, layout_names))
+                            object_names, layout_names, profile_names, tab_names))
 
     safe = ''.join(c for c in (project or 'package') if c.isalnum() or c in '-_') or 'package'
     return buf.getvalue(), f'sf-cli-package-{safe}.zip'

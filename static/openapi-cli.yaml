@@ -123,6 +123,25 @@ paths:
         "200": { description: FLS map (parents + summary), content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
         "400": { description: Missing/invalid params or unknown org, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         "502": { description: Salesforce FLS read failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /access-mirror/plan:
+    post:
+      summary: Read a source org's object+field access and match it to same-named profiles/permission sets in the target.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [object]
+              properties:
+                object: { type: string }
+                source_org: { type: string, description: Org to read access from (AVAILABLE_ORGS). }
+                target_org: { type: string, description: Org whose profile/permset names to match (AVAILABLE_ORGS). }
+                cloned_fields: { type: array, items: { type: string }, description: Object.Field names being deployed — scopes field grants. }
+      responses:
+        "200": { description: "{matched, unmatched, counts, scoped, ...}", content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: Missing object or unknown org, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "502": { description: Salesforce access read failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /recipes:
     post:
       summary: Describe-driven sf command recipes for an object (describe/query/count/retrieve).

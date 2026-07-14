@@ -15,7 +15,8 @@ import logging
 from flask import Blueprint, Response, render_template, request, session
 
 from config import Config, get_org_config
-from services import cli_clone, cli_fls, cli_layout, cli_metadata, cli_recordtype, cli_script
+from services import (cli_access_mirror, cli_clone, cli_fls, cli_layout,
+                      cli_metadata, cli_recordtype, cli_script)
 from sf_provider import available_orgs
 from utils.responses import error_response, new_request_id, ok
 
@@ -135,6 +136,18 @@ def _object_shells_from(payload) -> list:
             'sharing_model': (item.get('sharing_model') or 'ReadWrite').strip(),
         })
     return out
+
+
+def _tab_settings_for(objects) -> list:
+    """Permission-set tab-visibility entries that make a custom object's tab show
+    in the App Launcher / nav for assignees (Visible = on by default)."""
+    return [{'tab': o, 'visibility': 'Visible'} for o in objects if o]
+
+
+def _tabs_from_objects(objects) -> list:
+    """CustomTab specs for custom objects (only `__c` objects get a generated
+    tab — standard objects already have one)."""
+    return [{'object': o} for o in objects if o and o.endswith('__c')]
 
 
 def _layouts_from(payload) -> list:
@@ -328,8 +341,16 @@ def api_generate():
     permset = _permset_from(payload)
     permset_name = permset.get('api_name', '')
     humans = _human_permsets_from(payload, fields, existing)
-    extra_names = [h['api_name'] for h in humans]
     object_names = [s['object'] for s in object_shells]
+    # A freshly-built object has no tab (invisible in the App Launcher) — offer to
+    # generate one + grant its visibility in the human permset.
+    tab_objects = object_names if payload.get('generate_tabs') else []
+    tab_member_names = [t['object'] for t in _tabs_from_objects(tab_objects)]
+    if tab_member_names and humans:
+        tab_settings = _tab_settings_for(tab_member_names)
+        for h in humans:
+            h['tab_settings'] = tab_settings
+    extra_names = [h['api_name'] for h in humans]
     layout_member_names = [lay['full_name'] for lay in layouts]
     flip_fields = [f for f in fields if f.get('mode') == 'flip']
     username = get_org_config(_org()).get('username', '')
@@ -356,18 +377,21 @@ def api_generate():
         'deploy_dry_run': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=True,
                                                     extra_permset_names=extra_names,
                                                     object_names=object_names,
-                                                    layout_names=layout_member_names),
+                                                    layout_names=layout_member_names,
+                                                    tab_names=tab_member_names),
         'deploy_full': cli_script.deploy_snippet(fields, permset_name, alias, dry_run=False,
                                                  extra_permset_names=extra_names,
                                                  object_names=object_names,
-                                                 layout_names=layout_member_names),
+                                                 layout_names=layout_member_names,
+                                                 tab_names=tab_member_names),
         'assign': cli_script.assign_snippets(assign_entries, alias),
         'deploy_dir': cli_script.deploy_dir_snippet(alias, dry_run=False),
         'members': cli_script._members(fields, permset_name, extra_names, object_names,
-                                       layout_member_names),
+                                       layout_member_names, tab_names=tab_member_names),
         'has_flips': bool(flip_fields),
         'has_human_permset': bool(humans),
         'has_new_objects': bool(object_names),
+        'has_tabs': bool(tab_member_names),
         'has_layouts': bool(layout_member_names),
         'layout_list': cli_script.layout_list_snippet(layout_retrieve_alias),
         'layout_retrieve': cli_script.layout_retrieve_snippet(layout_name, layout_retrieve_alias),
@@ -391,10 +415,17 @@ def api_package():
         layouts = _layouts_from(payload)
         permset = _permset_from(payload)
         humans = _human_permsets_from(payload, fields, existing)
+        object_names = [s['object'] for s in object_shells]
+        tab_objects = object_names if payload.get('generate_tabs') else []
+        tabs = _tabs_from_objects(tab_objects)
+        if tabs and humans:
+            tab_settings = _tab_settings_for([t['object'] for t in tabs])
+            for h in humans:
+                h['tab_settings'] = tab_settings
         zip_bytes, filename = cli_script.build_package_zip(
             project, fields, permset or None, alias,
             extra_permsets=humans or None, object_shells=object_shells or None,
-            layouts=layouts or None)
+            layouts=layouts or None, tabs=tabs or None)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
@@ -410,11 +441,15 @@ def api_package():
 
 # ── Clone a whole object's schema into a package ─────────────────────────────
 
-def _clone_permset(object_name: str, fields: list) -> dict:
-    """An access permission set granting read/edit on every cloned field."""
+def _clone_permset(object_name: str, fields: list, include_tab: bool = False) -> dict:
+    """An access permission set granting read/edit on every cloned field.
+
+    When include_tab is set, it also grants visibility on the object's generated
+    Custom Tab, so an assignee sees the object in the App Launcher / nav.
+    """
     base = object_name[:-3] if object_name.endswith('__c') else object_name
     name = f'{base}_Access'
-    return {
+    ps = {
         'api_name': name,
         'label': name.replace('_', ' '),
         'description': f'Object + field access for cloned {object_name}.',
@@ -422,6 +457,9 @@ def _clone_permset(object_name: str, fields: list) -> dict:
         # A cloned object is hidden by default — grant object access so it's usable.
         'object_perms': cli_script.object_perms_for([object_name], editable=True),
     }
+    if include_tab and object_name.endswith('__c'):
+        ps['tab_settings'] = _tab_settings_for([object_name])
+    return ps
 
 
 def _source_org(payload) -> str:
@@ -430,6 +468,38 @@ def _source_org(payload) -> str:
     if src not in Config.AVAILABLE_ORGS:
         raise ValueError(f'Unknown source org: {src}')
     return src
+
+
+def _target_org(payload) -> str:
+    """The org the clone deploys to — whose profile/permission-set names the
+    access mirror matches against (defaults to the active org)."""
+    tgt = (payload.get('target_org') or _org()).strip()
+    if tgt not in Config.AVAILABLE_ORGS:
+        raise ValueError(f'Unknown target org: {tgt}')
+    return tgt
+
+
+# ── Access mirror: reproduce a source org's access by name in the target ──────
+
+@cli_bp.route('/access-mirror/plan', methods=['POST'])
+def api_access_mirror_plan():
+    """Preview which source-org profiles / permission sets grant access to an
+    object, and which of those names exist in the target (matched vs unmatched)."""
+    payload = request.get_json(silent=True) or {}
+    obj = (payload.get('object') or '').strip()
+    if not obj:
+        return error_response('object is required', 'INVALID_INPUT', 400)
+    try:
+        source = _source_org(payload)
+        target = _target_org(payload)
+    except ValueError as exc:
+        return error_response(str(exc), 'INVALID_INPUT', 400)
+    cloned_fields = [f for f in (payload.get('cloned_fields') or []) if f]
+    try:
+        return ok(cli_access_mirror.mirror_plan(source, target, obj, cloned_fields))
+    except Exception as exc:
+        logger.exception('cli access-mirror plan failed for %s', obj)
+        return error_response(str(exc), 'SF_ACCESS_READ_FAILED', 502)
 
 
 @cli_bp.route('/clone-object/plan', methods=['POST'])
@@ -445,39 +515,74 @@ def api_clone_object_plan():
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     try:
-        return ok(cli_clone.plan_from_object(source, obj, include_shell=include_shell))
+        plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell)
     except Exception as exc:
         logger.exception('cli clone plan failed for %s', obj)
         return error_response(str(exc), 'SF_DESCRIBE_FAILED', 502)
 
+    # Preview the name-matched access mirror alongside the field plan when asked,
+    # scoped to the fields this clone will actually deploy.
+    if payload.get('mirror_access'):
+        try:
+            target = _target_org(payload)
+            cloned_fields = [f'{obj}.{f["api_name"]}' for f in plan['fields']]
+            plan['mirror'] = cli_access_mirror.mirror_plan(source, target, obj, cloned_fields)
+        except ValueError as exc:
+            return error_response(str(exc), 'INVALID_INPUT', 400)
+        except Exception:
+            logger.exception('cli access-mirror preview failed for %s', obj)
+            plan['mirror_error'] = 'Could not read access from the source/target org.'
+    return ok(plan)
+
 
 @cli_bp.route('/clone-object/package', methods=['POST'])
 def api_clone_object_package():
-    """Build the force-app zip for a cloned object (fields + optional shell + permset)."""
+    """Build the force-app zip for a cloned object.
+
+    Beyond the fields (+ optional shell + access permset), Phase 2 can ride in a
+    Custom Tab (`include_tab`, so the object shows in the App Launcher) and a
+    name-matched access mirror (`mirror_access`, reproducing the source org's
+    profile + permission-set grants for the object onto same-named metadata in
+    the target)."""
     payload = request.get_json(silent=True) or {}
     obj = (payload.get('object') or '').strip()
     project = (payload.get('project') or '').strip()
     alias = (payload.get('alias') or '').strip()
     include_shell = bool(payload.get('include_shell'))
     include_permset = bool(payload.get('include_permset'))
+    include_tab = bool(payload.get('include_tab'))
+    mirror_access = bool(payload.get('mirror_access'))
     if not obj:
         return error_response('object is required', 'INVALID_INPUT', 400)
     try:
         source = _source_org(payload)
+        target = _target_org(payload) if mirror_access else None
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     try:
         plan = cli_clone.plan_from_object(source, obj, include_shell=include_shell)
         fields = plan['fields']
         object_shells = [plan['shell']] if plan['shell'] else None
-        if not fields and not object_shells:
+        tabs = _tabs_from_objects([obj]) if include_tab else None
+
+        profiles = extra_permsets = None
+        if mirror_access:
+            cloned_fields = [f'{obj}.{f["api_name"]}' for f in fields]
+            mplan = cli_access_mirror.mirror_plan(source, target, obj, cloned_fields)
+            mprofiles, mpermsets = cli_access_mirror.split_grants(mplan['matched'])
+            profiles = mprofiles or None
+            extra_permsets = mpermsets or None
+
+        if not fields and not object_shells and not tabs and not profiles \
+                and not extra_permsets:
             return error_response(
                 'Nothing to clone — the object has no reproducible custom fields. '
                 'Tick "include the object definition" to at least create the object shell.',
                 'INVALID_INPUT', 400)
-        permset = _clone_permset(obj, fields) if (include_permset and fields) else None
+        permset = _clone_permset(obj, fields, include_tab) if (include_permset and fields) else None
         zip_bytes, filename = cli_script.build_package_zip(
-            project or obj, fields, permset, alias, object_shells=object_shells)
+            project or obj, fields, permset, alias, object_shells=object_shells,
+            tabs=tabs, extra_permsets=extra_permsets, profiles=profiles)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:

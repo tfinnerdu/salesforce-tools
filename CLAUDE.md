@@ -106,6 +106,14 @@ services/            Business logic, one module per feature
                            types (can't reproduce 1:1). Read-only; deploy is upsert
   cli_fls.py               CLI tab: read a field's FLS from a source org (clone
                            visibility) + synthesize a human permission set
+  cli_access_mirror.py     CLI tab: read a source org's per-parent object+field
+                           access (ObjectPermissions/FieldPermissions grouped by
+                           Profile / PermissionSet) and mirror it onto same-named
+                           profiles + permission sets that EXIST in the target
+                           (skips names the target lacks; field grants scoped to
+                           the target's fields so a deploy never dangles). Read-
+                           only; generated Profile/PermissionSet deploys are
+                           additive (upsert the named perms, leave the rest)
   cli_layout.py            CLI tab: add fields to a pasted page-layout XML (new
                            or existing section) — pure string surgery, org-to-org
   cli_recordtype.py        CLI tab: make a picklist field's values available on a
@@ -218,6 +226,33 @@ as skipped**, never dropped silently. An opt-in best-effort
 `CustomObject` shell (Text name field, `sharingModel` defaulted since describe
 omits it) creates the object if it doesn't exist yet; deploy is upsert. Reuses
 `build_package_zip` (now with `object_shells`) + an optional access permission set.
+
+**Custom Tab + tab visibility (Phase 2).** A metadata-deployed custom object has
+no tab, so it never shows in the App Launcher / nav (reachable only by direct
+URL — `sf org open -o <alias> -p "/lightning/o/<Object>/list"`). Ticking
+**Generate a Custom Tab** in the Clone (or New-object) card adds a
+`CustomTab` (`cli_script.tab_meta_xml`, fullName = the object API name,
+`customObject=true` + a stock motif) to the package and grants its visibility in
+the access permission set (`permission_set_xml`'s `tab_settings` →
+`<tabSettings><tab>…</tab><visibility>Visible</visibility></tabSettings>`).
+Closes the create → object-visible → field-visible → **tab-visible** lifecycle.
+
+**Access mirror (Phase 2, `cli_access_mirror.py`).** Cloning the object copies
+schema but not *who can see it*. Ticking **Mirror the source org's access by
+name** reads every profile + permission set that grants the object in the source
+org (`ObjectPermissions`/`FieldPermissions` grouped by parent; a profile-owned
+permission set is attributed to its `Parent.Profile.Name`) and reproduces those
+exact object + field grants onto the **same-named** profiles / permission sets
+that already exist in the **target** (a per-run target-org picker). Names the
+target doesn't have are **reported, never invented**. Field grants are scoped to
+the fields the deploy will actually create (cloned now ∪ already present) so a
+mirrored file never references a missing field (which would fail the whole
+deploy). Both profiles and permission sets are emitted
+(`cli_script.profile_xml` / `permission_set_xml`) — a partial Profile /
+PermissionSet deploy is **additive** (upserts the named object/field perms,
+leaves the rest untouched), so this is safe on live metadata.
+`POST /cli/access-mirror/plan` previews matched vs unmatched; the clone
+`plan`/`package` fold it in when `mirror_access` is set.
 
 **Command composer.** A bottom-of-tab utility (`POST /cli/recipes`,
 `cli_script.command_recipes`) that turns an object + field selection into
