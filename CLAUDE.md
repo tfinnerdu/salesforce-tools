@@ -64,7 +64,9 @@ sf_provider.py       SF client factory + Bulk API / DML helpers + MockSalesforce
 conductor_provider.py Conductor client + MockConductorClient (SHOW_MOCK)
 scheduler.py         APScheduler daily readiness job
 routes/              One file per tab, each defining a `<name>_bp` (HTML pages,
-                     unversioned) and a `<name>_api_bp` (JSON, /api/v1/<tab>)
+                     unversioned) and a `<name>_api_bp` (JSON, /api/v1/<tab>).
+                     help.py is the one exception — a single HTML-only page,
+                     no JSON API, so just `help_bp`
 services/            Business logic, one module per feature
   audit.py                 Shared AuditEvent dataclass + emit() — structured
                            stdout JSON line + best-effort audit_events row
@@ -406,6 +408,30 @@ Wire declaratively, mirroring `data-mc-confirm`: add
 free-typeable — the picker is assistive, not restrictive, so an object the
 describe doesn't return can still be typed by hand. The org picker reloads the
 page on change, so the per-org cache needs no explicit invalidation.
+
+## Help & User Guide
+
+A circled `?` icon in the navbar (just left of Logout) links to `/help` — an
+in-app knowledge base rendering `docs/user-guide.md` as HTML
+(`routes/help.py`, via the `markdown` package with the `toc`/`tables`/
+`fenced_code`/`attr_list`/`sane_lists` extensions). The markdown file is the
+single source of truth; the page is re-rendered on every request (no cache),
+so a doc edit shows up without a redeploy. A per-tab/per-feature sidebar nav
+is built from the doc's *real* H2/H3/H4 headers via the `toc` extension's
+token tree (`_nav_tree`), not a hand-maintained list — it can't drift out of
+sync with the content the way the file's own `## Table of Contents` section
+could (that section is stripped from the rendered body via `_strip_manual_toc`
+since the sidebar supersedes it). `_unescape_names` decodes the `toc`
+extension's pre-escaped token names (e.g. `Velocity &amp; ETA`) back to plain
+text before Jinja re-escapes them, avoiding double-encoding.
+
+`static/js/mc-help-snippet.js` adds client-side findability on top of the
+server-rendered page: an `IntersectionObserver` highlights the active section
+in the sidebar while scrolling, and a search box does a per-section
+substring match (heading + all content up to the next same-or-higher-level
+heading), filtering the sidebar to matching sections, wrapping matches in
+`<mark>`, and jumping to the first one. No search index or backend call —
+it's one page, so full-text search is just DOM traversal.
 
 ## Health endpoints
 

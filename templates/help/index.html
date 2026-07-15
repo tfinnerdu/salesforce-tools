@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Help & User Guide — Doane SF Mission Control{% endblock %}
+
+{% block content %}
+<style>
+  .mc-help-layout { display: flex; align-items: flex-start; gap: 1.5rem; }
+  .mc-help-sidebar {
+    flex: 0 0 280px;
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+  .mc-help-search {
+    position: sticky;
+    top: 0;
+    background: var(--doane-page);
+    padding-bottom: 0.5rem;
+    z-index: 1;
+  }
+  .mc-help-nav { list-style: none; padding-left: 0; margin: 0; font-size: 0.85rem; }
+  .mc-help-nav ul { list-style: none; padding-left: 0.9rem; margin: 0; }
+  .mc-help-nav > li { margin-bottom: 0.15rem; }
+  .mc-help-nav a {
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    color: var(--doane-slate);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mc-help-nav > li > a { font-weight: 700; color: var(--doane-ink); margin-top: 0.5rem; }
+  .mc-help-nav a:hover { background: var(--doane-section); }
+  .mc-help-nav a.mc-help-nav-active { background: var(--doane-orange-light); color: #fff; }
+  .mc-help-nav li.mc-help-nav-hidden { display: none; }
+  .mc-help-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid var(--doane-border);
+    border-radius: 0.5rem;
+    padding: 1.5rem 2rem;
+  }
+  .mc-help-content h1 { font-size: 1.6rem; border-bottom: 3px solid var(--doane-orange); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+  .mc-help-content h2 {
+    font-size: 1.35rem; color: var(--doane-ink); margin-top: 2.5rem;
+    padding-top: 0.5rem; border-top: 1px solid var(--doane-border);
+    scroll-margin-top: 1rem;
+  }
+  .mc-help-content h2:first-of-type { border-top: none; margin-top: 1rem; }
+  .mc-help-content h3 { font-size: 1.1rem; color: var(--doane-slate); margin-top: 1.75rem; scroll-margin-top: 1rem; }
+  .mc-help-content h4 { font-size: 1rem; color: var(--doane-slate); margin-top: 1.25rem; scroll-margin-top: 1rem; }
+  .mc-help-content table { width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+  .mc-help-content table th, .mc-help-content table td {
+    border: 1px solid var(--doane-border); padding: 0.4rem 0.6rem;
+  }
+  .mc-help-content table th { background: var(--doane-section); }
+  .mc-help-content code {
+    background: var(--doane-section); padding: 0.1rem 0.35rem; border-radius: 0.25rem;
+    color: var(--doane-orange-dark); font-size: 0.9em;
+  }
+  .mc-help-content pre code { background: none; color: inherit; padding: 0; }
+  .mc-help-content pre {
+    background: var(--doane-ink); color: #e8e8e8; padding: 1rem; border-radius: 0.4rem;
+    overflow-x: auto;
+  }
+  .mc-help-content blockquote {
+    border-left: 4px solid var(--doane-orange); background: var(--doane-section);
+    padding: 0.6rem 1rem; margin: 1rem 0; color: var(--doane-slate);
+  }
+  .mc-help-content hr { border-color: var(--doane-border); margin: 2rem 0; }
+  .mc-help-content mark { background: var(--doane-orange-light); padding: 0 0.1em; }
+  .mc-help-no-results { color: var(--doane-muted); font-style: italic; padding: 0.5rem; }
+  @media (max-width: 900px) {
+    .mc-help-layout { flex-direction: column; }
+    .mc-help-sidebar { position: static; max-height: none; width: 100%; }
+  }
+</style>
+
+<div class="mc-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h4 class="mc-page-title">Help &amp; User Guide</h4>
+  <span class="text-muted small">Every tab, every feature — one searchable reference.</span>
+</div>
+
+<div class="mc-help-layout">
+  <nav class="mc-help-sidebar" aria-label="User guide sections">
+    <div class="mc-help-search">
+      <input type="search" id="helpSearchInput" class="form-control form-control-sm"
+             placeholder="Search the guide..." aria-label="Search the user guide">
+      <div id="helpSearchCount" class="small text-muted mt-1"></div>
+    </div>
+    <ul class="mc-help-nav" id="helpNav">
+      {% macro render_nav(tokens) %}
+        {% for tok in tokens %}
+        <li data-search-text="{{ tok.name|lower }}">
+          <a href="#{{ tok.id }}">{{ tok.name }}</a>
+          {% if tok.children %}
+          <ul>{{ render_nav(tok.children) }}</ul>
+          {% endif %}
+        </li>
+        {% endfor %}
+      {% endmacro %}
+      {{ render_nav(nav) }}
+    </ul>
+  </nav>
+
+  <div class="mc-help-content" id="helpContent">
+    {{ content | safe }}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mc-help-snippet.js') }}"></script>
+{% endblock %}

@@ -97,6 +97,7 @@ the Observe / Logs / Impact / Deploy tabs).
 | `routes/admin.py` | Unit-tested | `test_admin_service.py`, `test_audit_trail.py`, `test_job_queue_login_history.py`, `test_record_types_email_templates.py`, `test_perm_auditor.py`, `test_org_automation.py`, `test_integration_inventory.py`, `test_platform_events.py`, `test_custom_config_viewer.py` |
 | `routes/deploy.py` | Unit-tested | `test_changeset_builder.py` |
 | `routes/dashboard.py` | Unit-tested | `test_dashboard.py` |
+| `routes/help.py` | Unit-tested | `test_help.py` — render pipeline (TOC stripping, header unescaping, nav-tree unwrapping) plus the route + navbar icon |
 
 ### Services (`services/`)
 
@@ -868,8 +869,8 @@ relying on it for the team's first onboarding.
 ## Coverage Summary
 
 **Known gap, stated plainly rather than papered over:** the File Classification
-Matrix above currently has 14 route rows and 49 service rows, but the repo
-actually has 17 route files and 63 service files as of this writing — the CLI
+Matrix above currently has 15 route rows and 49 service rows, but the repo
+actually has 18 route files and 63 service files as of this writing — the CLI
 tab (`routes/cli.py`, `routes/meta.py`, and seven `services/cli_*.py`
 modules, built across several sessions after this matrix was last fully
 reconciled) is real, tested (see `tests/test_cli_*.py` and
@@ -881,7 +882,7 @@ specific matrix yet.
 
 | Bucket | Count | Notes |
 |---|---|---|
-| Unit-tested | 6 core + 13 of 17 routes + 48 of 63 services (matrix rows; see gap above) | Every *itemized* route and service module has a test exercising it |
+| Unit-tested | 6 core + 14 of 18 routes + 48 of 63 services (matrix rows; see gap above) | Every *itemized* route and service module has a test exercising it |
 | Contract-pinned | `test_contracts.py` + 13 characterization specs (`tests/characterization/`) | Mock-data invariants, Tooling API contracts, route/health/error-envelope/mock-signal/env-var/k8s-manifest contracts, CLI-artifact byte-for-byte pins, Tune-rule and Soundex transformations, the ContactPoint-parent "known-bad" invariant |
 | Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/mission-control.css`, `Dockerfile`, `requirements.txt` | Declarative — the toolchain validates them |
 | Compile-verified + Contract-pinned | `k8s/manifest.yaml` | `kubectl apply --dry-run` validates; required fields pinned in `test_k8s_manifest_characterization.py` |

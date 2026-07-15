@@ -12,3 +12,4 @@ responses==0.25.3
 tzdata>=2024.1
 PyYAML==6.0.3
 flask-swagger-ui==5.32.8
+markdown==3.10.2

@@ -109,6 +109,27 @@ a {
   font-weight: 600;
 }
 
+/* ── Help icon (navbar, next to Logout) ─────────────────────────────────── */
+.mc-help-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.mc-help-nav-icon:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: #fff;
+  color: #fff;
+}
+
 /* ── Spinner Overlay ─────────────────────────────────────────────────────── */
 .mc-spinner-overlay {
   position: fixed;

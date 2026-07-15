@@ -377,7 +377,7 @@ Unlike Org Schema Diff (fields), this compares deployable metadata components.
 ```sql
 SELECT s.StudentId, s.FirstName, s.LastName,
        sf.Id, sf.SIS_ID__c, sf.PersonEmail
-FROM dbo.Students s
+FROM dbo.Students s WITH (NOLOCK)
 JOIN OPENQUERY(SALESFORCE, '
     SELECT Id, SIS_ID__c, PersonEmail
     FROM Account
@@ -385,8 +385,10 @@ JOIN OPENQUERY(SALESFORCE, '
 ') sf ON sf.SIS_ID__c = s.StudentId
 ```
 
-8. Click "Copy to clipboard" — toast confirms copy
-9. Click "Run here (Python fallback)" — since SQL Server not configured, shows friendly error with setup instructions
+8. Click "Copy to Clipboard" — toast confirms copy
+9. Click "Run (Python fallback)" — without SQL Server configured this fails with a generic
+   "Run failed" toast (the friendly `SQLSERVER_CONN` setup hint the API returns isn't
+   currently surfaced by the UI on this path — a known gap, not a rendering bug in this doc)
 
 ---
 
@@ -402,7 +404,7 @@ JOIN OPENQUERY(SALESFORCE, '
 3. Click "Next: Map Fields →". Step 2 shows a column→field mapping table.
 4. Click "Auto-Map" — columns auto-bind to matching SF fields.
 5. Click "Next: Validate →", then "Run Validation".
-6. **Expected:** four stat cards (Total / Clean / Warnings / Errors). The bad-email row
+6. **Expected:** four stat cards (Total Rows / Clean / Warnings / Errors). The bad-email row
    is flagged as an **error** in the issues table.
 7. With a clean CSV, the "Next: Import →" button appears; advancing to step 4 and
    clicking "Execute Import" returns Total / Succeeded / Failed counts.
@@ -457,7 +459,7 @@ JOIN OPENQUERY(SALESFORCE, '
 **Steps:**
 1. Navigate to Data Ops > Tune.
 2. Object `Account`, WHERE clause `Id != null`.
-3. Click **+ Add Field**; enter `Name` and select the **Proper case** rule.
+3. Click **+ Add Field**; enter `Name` and select the **Proper case (name-aware)** rule.
 4. Click **Preview**.
 5. **Expected:** a Before / After table for records that would change, plus a
    count line ("N of M sampled records would change").
@@ -497,8 +499,8 @@ Validation > Duplicate Radar.
 2. Confirm the **Objects to back up** textarea pre-fills with the default object
    list (`Account`, `Contact`, `Individual`, the three ContactPoint objects).
 3. Click **Run Backup Now**.
-4. **Expected:** a result panel reports a status (`success` or `partial`), an
-   object count, and a total record count.
+4. **Expected:** a result panel reports a status (`success`, `partial`, or
+   `error` if every object failed), an object count, and a total record count.
 5. The **Backup History** table shows the run with trigger `manual`, status,
    object count, and record count.
 6. Click **Download ZIP** — a `.zip` downloads containing one `.csv` per object.
@@ -745,3 +747,4 @@ pins this against the real Conductor migration artifacts.
 24. `GET /api/v1/health` returns 200 with `status: "ok"`; `GET /api/v1/health/deep` returns 200 with a `checks` dict and a `mock` key matching `SHOW_MOCK`; `GET /health` 308-redirects to `/api/v1/health`
 25. Every pre-versioning JSON path (e.g. `POST /cli/generate`, `POST /migration/readiness/run`) still 308-redirects to its `/api/v1/...` equivalent, preserving method — confirms old integrations/scripts/bookmarks keep working during the transition
 26. `GET /swagger` loads the Swagger UI and lists the `/api/v1/...` paths from `static/openapi.yaml`
+27. The circled `?` icon next to Logout links to `GET /help`, which renders `docs/user-guide.md` with a sidebar nav grouped by tab; typing in the search box filters the sidebar and highlights matches in the content

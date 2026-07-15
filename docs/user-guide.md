@@ -30,6 +30,7 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Record Inspector](#record-inspector)
    - [Field Usage](#field-usage)
    - [Data Dictionary](#data-dictionary)
+   - [Field Finder](#field-finder)
    - [Apex Code Search](#apex-code-search)
    - [Schema Snapshots](#schema-snapshots)
 7. [Data Ops](#data-ops)
@@ -45,23 +46,33 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Bulk Update](#bulk-update)
    - [Record Lock Detector](#record-lock-detector)
    - [Bulk API Job History](#bulk-api-job-history)
-8. [Logs](#logs)
-   - [Apex Logs](#apex-logs)
-   - [Flow Errors](#flow-errors)
-   - [CPU Summary](#cpu-summary)
-   - [Trace Flags](#trace-flags)
-9. [Observe](#observe)
-   - [API Limits](#api-limits)
-   - [Data Quality Trends](#data-quality-trends)
-   - [Cross-Org Record Count](#cross-org-record-count)
-   - [Record Counts by Object](#record-counts-by-object)
-   - [Sandbox Drift Detector](#sandbox-drift-detector)
-10. [Impact](#impact)
+8. [Scenarios](#scenarios)
+   - [Scenario List & Tags](#scenario-list--tags)
+   - [Building a Scenario](#building-a-scenario)
+   - [Running a Scenario](#running-a-scenario)
+   - [Scheduling (Argo)](#scheduling-argo)
+9. [Key Maps](#key-maps)
+   - [Key Map List](#key-map-list)
+   - [Building a Key Map](#building-a-key-map)
+   - [Running a Preview](#running-a-preview)
+   - [Using a Key Map in a Scenario](#using-a-key-map-in-a-scenario)
+10. [Logs](#logs)
+    - [Apex Logs](#apex-logs)
+    - [Flow Errors](#flow-errors)
+    - [CPU Summary](#cpu-summary)
+    - [Trace Flags](#trace-flags)
+11. [Observe](#observe)
+    - [API Limits](#api-limits)
+    - [Data Quality Trends](#data-quality-trends)
+    - [Cross-Org Record Count](#cross-org-record-count)
+    - [Record Counts by Object](#record-counts-by-object)
+    - [Sandbox Drift Detector](#sandbox-drift-detector)
+12. [Impact](#impact)
     - [Field Impact Scanner](#field-impact-scanner)
     - [Permission Set Viewer](#permission-set-viewer)
     - [Regression Tester](#regression-tester)
     - [Permission Gap Analyzer](#permission-gap-analyzer)
-11. [Admin](#admin)
+13. [Admin](#admin)
     - [Scheduled Jobs](#scheduled-jobs)
     - [Test Coverage](#test-coverage)
     - [Deployment History](#deployment-history)
@@ -78,9 +89,9 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
     - [Custom Settings](#custom-settings)
     - [Permissions Audit](#permissions-audit)
     - [Automation & Sharing](#automation--sharing)
-12. [Deploy](#deploy)
-13. [Settings](#settings)
-14. [CLI](#cli)
+14. [Deploy](#deploy)
+15. [Settings](#settings)
+16. [CLI](#cli)
 
 ---
 
@@ -561,6 +572,22 @@ Custom fields are sorted to the top of the list.
 
 ---
 
+### Field Finder
+
+**URL:** `/schema/field-finder`
+
+The inverse of the Data Dictionary: instead of listing every field on one object, you give it a field and it lists every object that has it. Useful before renaming or removing a field, or to find every custom object that stores a given External ID.
+
+**How to use it:**
+1. Enter the **Field API name** — paste it however you have it. A trailing `__c` and any managed-package namespace prefix (e.g. `hed__`) are stripped automatically, so `SIS_ID__c`, `SIS_ID`, and `hed__SIS_ID__c` all resolve to the same search.
+2. Click **Find**. This always runs the fast path first: one Tooling API `CustomField` query keyed on the normalized name, which finds **custom** fields only and returns almost instantly.
+3. Tick **Deep scan — also find standard fields** before clicking Find to also catch **standard** fields (and any custom field the fast path missed) — this describes every object in the org one at a time and can take up to a minute on a large org. The scan is capped at 500 objects; if the org has more, the summary line notes the scan was capped.
+4. Click **Export CSV** once results are showing to download the table.
+
+The results table lists Object, Field API Name, Label, Type, and Custom (a checkmark) for every match, sorted by object; custom-field rows get a light amber row highlight. The summary line above the table reports the normalized field name, how many objects matched, the custom/standard split, and which method ran (Tooling API vs. deep scan). If a Tooling-only search comes back empty, a warning banner suggests ticking Deep scan in case it's a standard field. Read-only — Field Finder never writes to Salesforce.
+
+---
+
 ### Apex Code Search
 
 **URL:** `/schema/apex-search`
@@ -639,7 +666,7 @@ unlocks only when there are zero errors.
 
 **Step 4 — Import:** Review the summary and click **Execute Import**. Results show
 Succeeded / Failed counts. For any failures, click **Download Error CSV** to get
-your original rows back with a `_sf_error` column explaining each failure — fix
+your original rows back with an `sf__Error` column explaining each failure — fix
 those rows and re-import just them.
 
 > **Why two steps?** DemandTools shows you Salesforce's error only *after* a failed
@@ -870,6 +897,145 @@ Shows recent Bulk API v2 ingest jobs and their status.
 **Columns:** Operation · Object · Records Processed · Records Failed (red if >0) · Processing Time · Created date.
 
 Use this after a migration batch to verify all bulk operations completed cleanly before proceeding to the next step.
+
+---
+
+## Scenarios
+
+The Scenarios tab chains individual Data Ops actions — delete, modify field, reassign owner, bulk update, tune — into a single saved, repeatable pipeline. Each step calls the exact same service the Data Ops tab calls directly, so the same `SHOW_MOCK` demo data, `dml_guard` safety checks, and audit trail apply — a scenario is just Data Ops steps run in sequence and remembered for next time. Scenarios can be tagged for organization and, once tested, approved for unattended scheduled runs via Argo.
+
+### Scenario List & Tags
+
+**URL:** `/scenarios`
+
+Lists every saved scenario.
+
+**How to use it:**
+1. Click **+ New Scenario** to start building one ([see below](#building-a-scenario)).
+2. The **Saved scenarios** table shows each scenario's Name (with its description underneath, if set), Steps count, Tags, and Last updated time.
+3. Click **Edit** to open the builder, **Run** to execute it immediately from the list (asks for confirmation with a required acknowledgement checkbox, same as the builder's Run button), or **×** to delete it (asks for confirmation).
+
+**Tags** (left rail): click **+ New** to create a tag — a name plus a color from a fixed palette (slate, orange, amber, green, blue, purple, red, muted). Click a tag chip to filter the scenario list to just that tag; click **Show all scenarios** to clear the filter. Click the **×** on a tag row to delete it — this also detaches it from every scenario it was on.
+
+---
+
+### Building a Scenario
+
+**URL:** `/scenarios/new` (or `/scenarios/<id>` to edit an existing one)
+
+**How to use it:**
+1. Enter a **Name** (required) and optional **Description**.
+2. Pick a step type from the dropdown — **Delete**, **Modify field**, **Reassign owner**, **Bulk update**, or **Tune (standardize)** — and click **+ Add**. Each added step gets its own card with the parameter fields for that type:
+
+   | Step type | Fields |
+   |---|---|
+   | Delete | SF Object, WHERE clause |
+   | Modify field | SF Object, WHERE clause, Field, New value |
+   | Reassign owner | SF Object, WHERE clause, New owner ID |
+   | Bulk update | SF Object, WHERE clause, Field, Value, Dry run |
+   | Tune (standardize) | SF Object, WHERE clause, Field rules (JSON, e.g. `{"FirstName": ["trim","title_case"]}` — see [Tune](#tune-data-standardization) for the rule vocabulary) |
+
+3. On each step card, use **▲** / **▼** to reorder it, **×** to remove it (asks for confirmation — the step is only removed from the editor until you click Save), the **On error** dropdown to choose **Stop pipeline** or **Continue to next step** if that step fails, and the **Bypass triggers** checkbox to pass `bypass_triggers` through to that step's Data Ops call.
+4. Click **Save**. Saving a brand-new scenario redirects you to its canonical `/scenarios/<id>` URL — the **Run** button stays disabled until then.
+
+> **Not in the dropdown:** the backend also recognizes a sixth step type, `key_map_expand` (requires `key_map_id` + `source` params), for driving a [Key Map](#key-maps) preview from inside a pipeline. It has no row in the step-type dropdown or parameter form — the only way to add one today is to include it in the `steps` array you `POST` directly to `/api/v1/scenarios/create` or `/update/<id>`. See [Using a Key Map in a Scenario](#using-a-key-map-in-a-scenario).
+
+**Tags:** once the scenario is saved, click **Manage tags** — this opens a browser prompt listing existing tag names; type an existing name to attach it, or a new name to create-and-attach a tag (created in the default *slate* color). Click the **×** on an attached tag chip to detach it.
+
+**Scheduling** — see [Scheduling (Argo)](#scheduling-argo) below.
+
+---
+
+### Running a Scenario
+
+Run from the builder's **▶ Run** button or the list's **Run** button — both execute synchronously (the request doesn't return until every step has finished) and both are gated by the same confirmation dialog with a required acknowledgement checkbox, since this performs live writes.
+
+Each step runs in order. A step's outcome is recorded even when it fails; if that step's **On error** was **Continue to next step**, the run keeps going and finishes `partial`. If it was **Stop pipeline** (the default), the run stops there and finishes `failed`. A run with no failed steps finishes `success`.
+
+The builder's **Last run** card (appears after you click Run) shows a status badge — green **SUCCESS**, amber **PARTIAL**, or red **FAILED** — and a table of every step's index, type, status, and detail. This card only reflects the run you just triggered; it does not reload from history on a page refresh.
+
+> **Which org does it run against?** An interactive Run — from either the builder or the list — always runs against whatever org is currently selected in the top-right **Org** dropdown, regardless of which org the scenario was created under. Only the scheduled (Argo-triggered) run below uses the org the scenario was originally saved with.
+
+Every run is recorded server-side and retrievable via `GET /api/v1/scenarios/<id>/runs` (documented in `/swagger`), but there is no run-history table in the UI today — the builder only ever shows the most recent run.
+
+---
+
+### Scheduling (Argo)
+
+**URL:** `/scenarios/<id>` (Scheduling card)
+
+A scenario can be promoted to unattended, scheduled execution once you've run it interactively and trust it.
+
+**How to use it:**
+1. Toggle **Approved for scheduled runs** on. Turning it on asks for confirmation — approving lets the scenario run unattended with no one watching, so only do this after testing it interactively. Turning it off needs no confirmation.
+2. Enter a **Cron schedule** (5 fields, e.g. `0 6 * * 0` for 6am every Sunday).
+3. Click **Generate Argo CronWorkflow** — a modal shows the generated YAML in a read-only textarea. Click **Copy** to copy it.
+4. Commit the YAML to your manifests repo. It references a K8s secret holding the scheduler token that must match the app's `SCHEDULER_TOKEN` config — the modal spells out the exact secret name and key to use.
+
+On its cron schedule, Argo `POST`s the token-authed `/api/v1/scenarios/<id>/scheduled-run` endpoint (header `X-MC-Scheduler-Token`). The app checks the token, refuses the run unless **Approved for scheduled runs** is on, then runs the scenario against the org it was created in and logs one structured summary line to stdout — that log line is what shows up in the Argo UI. A run that doesn't finish clean (any failed step) returns HTTP 500, so `curl -f` fails and Argo flags the CronWorkflow.
+
+> **Blank `SCHEDULER_TOKEN` disables scheduling entirely** — every scheduled-run request is rejected, so there is no accidental unauthenticated trigger of a write pipeline.
+
+---
+
+## Key Maps
+
+A Key Map turns source rows — a Colleague SQL Server query, pasted CSV, or pasted JSON — into Salesforce records of one target SObject. Build one when a single source row needs to fan out into several related Salesforce records that each resolve different foreign keys and set different literal field values. PTAT (`ProgramTermApplnTimeline`) is the first consumer, but the model is generic. A key map isn't tied to a specific org — only its target SObject is fixed; FK resolution runs against whichever org is active in the navbar when you preview or export.
+
+Three layers make up a key map:
+- **FK lookups** resolve a target foreign-key field from a source column by matching another SObject's external-ID field (e.g. source `TERMS_ID` → `AcademicTermId` via `AcademicTerm.SIS_ID__c`).
+- **Family routing** picks which family of variants applies to a given source row, based on column-equals-value rules (a family with no rule is the default, used when no other family's routing matches).
+- **Variants** — each variant in the chosen family produces one output row, merging its overlay (target field → literal value) onto the FK-resolved base. One source row can become several output rows this way.
+
+A key map is **preview-only** — running it reads from Salesforce to resolve FKs but never writes. Every run returns the would-be-inserted rows plus a list of anything that couldn't be resolved, exportable as CSV.
+
+### Key Map List
+
+**URL:** `/key-maps`
+
+Lists every saved key map. The **Saved key maps** table shows Name (with description underneath, if set), Target SObject, and Updated time. Click **Edit** to open the builder, **Run** to go straight to the preview page, or **×** to delete it (asks for confirmation).
+
+---
+
+### Building a Key Map
+
+**URL:** `/key-maps/new` (or `/key-maps/<id>` to edit an existing one)
+
+**How to use it:**
+1. Under **Details**, enter a **Name**, the **Target SObject**, and an optional **Description**, then click **Save**. FK lookups and families can't be added until the key map has been saved once.
+2. Under **Foreign-key lookups**, fill in **source column**, **target field**, **lookup SObject** (an autocomplete restricted to queryable objects), and **lookup field** (defaults to `SIS_ID__c`), then click **+ Add**. Each lookup appears in the table above with a **×** to delete it.
+3. Under **Families & variants**, type a family name and click **+ Family** — a modal lets you add **+ Condition** rows (`source column` = `value`); leave it with no conditions to make this the default family. Click **Create family**.
+4. On a family card, click **+ Variant** to open the Add Variant modal: name the variant, add one or more **Overlay** rows (target field → literal value — every row needs both a field and a value), and choose **Applies to**: **Every row in this family** (default), or **Only when…** with its own `source column` = `value` condition rows. Click **Add variant**.
+
+Each family card shows its routing summary (`when X=Y AND ...`, or `(default — no routing)`) and a table of its variants (name, overlay, applies-when) with a **×** to delete each one. Deleting a family (confirmed) removes all of its variants too.
+
+Once saved, a **Run / Preview →** link appears next to Save, taking you to the preview page below.
+
+---
+
+### Running a Preview
+
+**URL:** `/key-maps/<id>/run`
+
+**How to use it:**
+1. Choose a source mode — **SQL** (default), **CSV**, or **JSON**:
+   - **SQL** — a read-only `SELECT` query against the Colleague SQL Server (the same shared connection the Join Builder uses).
+   - **CSV** — paste CSV or TSV text; the first row is the header.
+   - **JSON** — paste a JSON array of objects (or an object plus an optional **records_path** to navigate to the array).
+2. Click **▶ Preview**. The results card shows a badge (`N rows from M source` — green if every FK resolved, amber if any didn't), summary tiles for **Source rows**, **Output rows**, **Unresolved FKs**, and **Skipped (no family)**, and two tabs:
+   - **Output rows** — the expanded rows, columns dynamic per your FK/overlay fields. Capped to the first 200 rows in the preview (a note says so and points you to Export for the full set).
+   - **Unresolved FKs** — one row per source value that didn't resolve, showing which row, source column, value, and lookup SObject/field it failed against. Also capped at 200.
+3. Click **⭳ Export CSV** (enabled once a preview has run) to download the full, uncapped result as `key_map_preview.csv`.
+
+> A source row that doesn't match any family (including no default family) is silently counted in **Skipped (no family)** rather than erroring — check that count if your output has fewer rows than you expected.
+
+---
+
+### Using a Key Map in a Scenario
+
+A key map can be driven from a [Scenario](#scenarios) as a `key_map_expand` step instead of run manually — useful for a scheduled Argo run that regenerates the preview on a cadence. The step's params are `key_map_id` and `source` (the same `{mode, ...}` source spec used above — `sql`, `csv`, `json`, or an API-only `inline` mode that takes a literal `rows` list). Running the step ingests the source rows, expands them through the key map, and saves a run; the scenario's own step result carries only the summary (counts), not the full row set, to keep the scenario run record small — pull the full output from the key map's Run / Preview page instead.
+
+As noted in [Building a Scenario](#building-a-scenario), `key_map_expand` has no row in the Steps UI dropdown — add it by including it in the `steps` array when you `POST` to `/api/v1/scenarios/create` or `/update/<id>` directly.
 
 ---
 

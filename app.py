@@ -24,6 +24,7 @@ from routes.scenarios import scenarios_bp, scenarios_api_bp
 from routes.key_map import key_map_bp, key_map_api_bp
 from routes.cli import cli_bp, cli_api_bp
 from routes.meta import meta_bp, meta_api_bp
+from routes.help import help_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -79,6 +80,7 @@ def create_app() -> Flask:
     app.register_blueprint(cli_api_bp)
     app.register_blueprint(meta_bp)
     app.register_blueprint(meta_api_bp)
+    app.register_blueprint(help_bp)
     app.register_blueprint(swagger_ui_bp)
 
     @app.before_request
