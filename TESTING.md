@@ -846,10 +846,23 @@ present with at least `SECRET_KEY` set.
 `/api/v1/health`, never leaves an orphaned Python process behind on failure,
 and every flag does what its `-Help` text says.
 
-**Last verified against:** v1.1.0 (this launcher revision — Werkzeug isolation
-+ health-probe wait loop + standard flag vocabulary added; not yet re-verified
-on a live Windows box by a human, since this session's environment is
-Linux-only. Re-verify before relying on it for the team's first onboarding.)
+**Last verified against:** v1.1.0. Real `pwsh` (7.6, installed via the
+Microsoft Linux package feed) parsed the file with zero syntax errors, and
+several logic paths were exercised for real rather than just read: the
+`-Help` branch ran directly against the unmodified script; the `.env` regex
+was extracted and run against a fixture covering quoted values, inline `#`
+comments, blank/comment lines, and Windows paths — this caught a real bug
+(unquoted inline comments like `KEY=value # note` were captured verbatim into
+the value instead of being stripped) which is now fixed (quoted values keep
+`#`, unquoted values drop a trailing `" #..."`); and the background-mode
+health-poll loop (success, timeout, and early-process-exit branches) plus the
+`-Foreground` `$LASTEXITCODE` propagation were verified via a faithful
+line-for-line re-run of that logic against a dummy Python HTTP server, since
+this sandbox is Linux-only and can't run the real `app.py`/venv/`Get-NetIPAddress`
+path. **Still not verified:** the actual `.venv` auto-create + `pip install`
+branches and `Get-NetIPAddress` (Windows-only, no equivalent here) against a
+real Windows box with the real app — do a live run of steps 1-5 above before
+relying on it for the team's first onboarding.
 
 ---
 

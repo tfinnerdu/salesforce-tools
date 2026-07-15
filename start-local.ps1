@@ -69,7 +69,17 @@ if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
         if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
             $key = $matches[1]
-            $val = $matches[2].Trim().Trim('"').Trim("'")
+            $raw = $matches[2]
+            # Quoted values keep '#' and whitespace verbatim; unquoted values
+            # drop a trailing " #..." inline comment (space required before
+            # '#' so a bare fragment/anchor like "...page#section" survives).
+            if ($raw -match '^"([^"]*)"') {
+                $val = $matches[1]
+            } elseif ($raw -match "^'([^']*)'") {
+                $val = $matches[1]
+            } else {
+                $val = ($raw -replace '\s+#.*$', '').Trim()
+            }
             [System.Environment]::SetEnvironmentVariable($key, $val, 'Process')
         }
     }
