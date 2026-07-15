@@ -1435,6 +1435,82 @@ Every command box has a **Copy** button.
 
 > **Picklist values:** one value per line. Just type the value — the API value (code) and the label are both set to that text (e.g. `Freshman`). Use `CODE=Label` only when you want them to differ (e.g. `MAJ=Major, Faculty`). Prefix a line with `-` to retire (deactivate) a value instead of deleting it — existing records keep their value.
 
+### New object (optional) — define a fresh custom object
+
+Building fields on an object that doesn't exist yet? Define it here instead of
+creating it by hand in Setup first:
+
+- **API name** (must end in `__c`), **Label**, **Plural label**, and
+  **Sharing** model.
+- Click **+ Add**. The object joins the Object picker above so your fields can
+  target it, and rides into the package as a best-effort `CustomObject` shell
+  (a Text "Name" field) ahead of its fields, so a single deploy creates the
+  object then the fields on it.
+- **Generate a Custom Tab for each new object** (checked by default): a fresh
+  object has no tab, so it never shows in the App Launcher or nav — only
+  reachable by a direct URL. This adds a `CustomTab` to the package and grants
+  its visibility in the human permission set (below), closing the
+  create → visible → on-the-page → **in-the-nav** lifecycle in one deploy.
+
+### Clone object (optional) — copy a whole object's schema across orgs
+
+Instead of hand-adding fields one at a time, describe a **whole object** in a
+source org (EDA, say) and generate a package that reproduces its custom fields
+in your target org:
+
+- Pick a **Source org** and **Source object**, then **Preview**. The result
+  shows fields it can clone (reusing the exact same field generator as the
+  builder above, so the output is identical either way) and fields it
+  **skips and reports** — relationships it can't reproduce 1:1 (master-detail,
+  polymorphic), formulas, roll-ups, auto-numbers, and unsupported types
+  (currency, percent, multi-select picklist, rich text). Plain **Lookup**
+  fields *do* clone — they reference by object API name, so they work as long
+  as the target has that object. If the target is known (see Mirror below), a
+  Lookup whose target object doesn't exist there (e.g. a managed
+  `hed__Term__c` absent from Ed Cloud) is skipped too, rather than shipping a
+  field that would fail to deploy.
+- **Include the object definition** creates the object (a best-effort shell)
+  if it doesn't exist in the target yet; leave it off to just sync fields into
+  an object that's already there.
+- **Also generate a permission set** grants read/edit on the cloned fields —
+  otherwise they're invisible, same as any new field.
+- **Generate a Custom Tab** — same as New object above: without one, a cloned
+  object is only reachable by direct URL.
+- **Mirror the source org's access by name** — see below.
+- **Download package (.zip)** once you're happy with the preview.
+
+#### Mirror the source org's access by name (optional)
+
+Cloning the object's *schema* doesn't clone *who can see it*. This reads every
+profile and permission set that grants the object in the **source** org and
+reproduces those same object + field grants onto the **same-named** profiles /
+permission sets that already exist in your **target** org — so the object's
+real-world security posture comes with it, not just its fields:
+
+- Pick the **Target org** (whose profile/permission-set names to match
+  against) and enter a short **justification** (required — this reads another
+  org's full security posture, so the read is logged, not silent).
+- The preview shows **matched** (name exists in target — these ride into the
+  package), **not in target** (skipped, never invented), and any
+  **license-locked** profiles that can't take even an additive deploy (e.g.
+  `B2BMA Integration User` — reported, not emitted).
+- **High-privilege profiles** (`System Administrator` and equivalents) are
+  **excluded by default** — shown separately as "excluded," not silently
+  mirrored — since replicating admin-level access deserves a deliberate
+  choice. Tick **include high-privilege profiles** if you specifically mean to.
+- Both **Profiles** and **Permission Sets** are generated. A partial
+  Profile/PermissionSet deploy is *additive* — it only adds the object/field
+  grants this package names and leaves everything else on that
+  profile/permission set untouched, so this is safe to deploy onto live
+  metadata.
+
+> **New to this lifecycle?** [Making a cloned object visible](cloned-object-visibility.md)
+> walks the whole chain — object exists → object access → field FLS → tab →
+> mirrored security — with a worked example and the `sf` CLI commands that
+> verify each switch from the terminal, plus the two gotchas real deploys hit
+> (re-deploying a field that already exists; a lookup whose target object
+> the destination org doesn't have).
+
 ### 3. Permission set (optional)
 
 The permission set **API name** and **Label** come prefilled (`SF_Tools_Importer`) and editable — it's built from the Readable/Editable choices on each field you added. **Clear the API name to skip the permission set** entirely. (This is the *integration* user's access — for staff visibility, see Visibility below.)

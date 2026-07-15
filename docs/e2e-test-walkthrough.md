@@ -598,10 +598,13 @@ edit) and a bulk DML execute to confirm none of them proceed without confirmatio
 ## CLI > Script & Metadata Generator
 
 The CLI tab composes Salesforce CLI (`sf`) scripts and a `force-app` metadata
-package for creating fields, flipping External IDs, and building a permission
-set. It is read-only against Salesforce (describe only) — the generated
-commands run on your own machine. Everything is driven by the header **Org**
-picker.
+package for creating fields, flipping External IDs, building permission sets,
+cloning a whole object's schema across orgs, generating a Custom Tab, and
+mirroring a source org's profile/permission-set access onto same-named
+metadata in a target org. It is read-only against Salesforce (describe +
+permission reads only) — the generated commands run on your own machine, and
+the app never deploys anything itself. Everything is driven by the header
+**Org** picker (plus a per-card source/target-org override where relevant).
 
 **Steps:**
 1. Navigate to `/cli`. **Expected:** the page loads with the setup snippets
@@ -661,17 +664,46 @@ picker.
    summary, a **Download** (`Advisee_Case.recordType-meta.xml` with a new
    `<picklistValues>` block, everything else unchanged), and a record-type
    deploy snippet. Values already present are skipped; non-RecordType text 400s.
+6f. **New object:** enter an **API name** (`Accommodation__c`), **Label**, and
+   **Plural label**, then **+ Add**. **Expected:** the object appears in the
+   Object picker dropdown (so fields above can target it) and a chip/row lists
+   it under the New object card. Tick **Generate a Custom Tab for each new
+   object** (default on). **Expected:** a later package download includes
+   `tabs/Accommodation__c.tab-meta.xml` and the human permission set (if any)
+   gets a `<tabSettings>` entry granting it.
+6g. **Clone object:** pick a **Source org** and **Source object**
+   (`RoomAssignment__c`), click **Preview**. **Expected:** a summary badge
+   count of fields to clone / skipped / standard, a fields table, and a skipped
+   table with reasons (master-detail, polymorphic, formula, auto-number,
+   unsupported type). Tick **Include the object definition**, **Also generate
+   a permission set**, and **Generate a Custom Tab**, then **Download package
+   (.zip)**. **Expected:** the zip contains the object shell, cloned fields,
+   `tabs/RoomAssignment__c.tab-meta.xml`, and an access permission set with
+   both `<objectPermissions>` and `<tabSettings>` entries.
+6h. **Mirror the source org's access by name:** tick **Mirror the source
+   org's access by name**, pick a **Target org**, and try **Preview** with the
+   **justification** box empty. **Expected:** a 400 (`INVALID_INPUT`) naming
+   the justification requirement. Fill in a justification (≥10 chars) and
+   preview again. **Expected:** an Access mirror summary with **matched**,
+   **not in target**, and (if applicable) **locked profile(s) skipped** and
+   **high-privilege excluded** badges; the matched table lists each
+   profile/permission set with its granted field count. Tick **include
+   high-privilege profiles** and re-preview — a previously-excluded
+   `System Administrator` (if present in the source) now appears in matched,
+   flagged `high-priv`. **Download package** — the zip's `profiles/` and
+   `permissionsets/` folders contain one file per matched name, and
+   `manifest/package.xml` lists a `Profile` `<types>` block.
 7. **Command composer** (bottom of tab): pick an **Object**. **Expected:** the
    describe / count / retrieve recipes fill in (with the header alias). Select a
    couple of **Fields** — the query recipe updates its `SELECT`. The **Run this
    live in SOQL Workbench →** and **Explore fields live in Data Dictionary →**
    links point at `/soql` and `/schema/data-dictionary`.
-7. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
+8. Click **Download package (.zip)**. **Expected:** a `sf-cli-package-*.zip`
    downloads. Unzipped, it contains
    `force-app/main/default/objects/<Object>/fields/<Field>.field-meta.xml` for
    each field, a `permissionsets/<Name>.permissionset-meta.xml`, a
    `manifest/package.xml`, and a `README.txt`.
-8. Enter an invalid API name (no `__c`) and add it. **Expected:** a warning
+9. Enter an invalid API name (no `__c`) and add it. **Expected:** a warning
    toast; the field is not added (the server also rejects it with a
    `{code: "INVALID_INPUT"}` error envelope).
 
