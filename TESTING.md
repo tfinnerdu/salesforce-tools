@@ -107,13 +107,15 @@ the Observe / Logs / Impact / Deploy tabs).
 | `services/anonymizer.py` | Unit-tested | `test_anonymizer.py` |
 | `services/apex_code_search.py` | Unit-tested | `test_apex_code_search.py` |
 | `services/apex_log_reader.py` | Unit-tested + Contract-pinned | `test_apex_cpu_summary.py`, `test_trace_flags.py`; characterization pins `ProcessException` via the Data API |
+| `services/argo.py` | Unit-tested | `test_argo.py` — cron validation, CronWorkflow rendering, Config.ARGO_* defaults resolved at call time |
+| `services/audit.py` | Unit-tested | `test_audit.py` — AuditEvent shape, emit() dual sink (stdout JSON + best-effort DB), actor resolution, never raises on DB failure |
 | `services/batch_tracker.py` | Unit-tested + Contract-pinned | `test_batch_tracker.py`, `test_contracts.py` |
 | `services/bulk_dml.py` | Unit-tested | `test_bulk_dml.py` |
 | `services/bulk_job_history.py` | Unit-tested | `test_record_locks_bulk_jobs.py` |
 | `services/bulk_ops.py` | Unit-tested | `test_bulk_ops.py`, `test_bulk_api_paths.py` (real Bulk API path) |
 | `services/changeset_builder.py` | Unit-tested | `test_changeset_builder.py` |
 | `services/collection_manager.py` | Unit-tested | `test_collection_manager.py` |
-| `services/contactpoint_scanner.py` | Unit-tested + Contract-pinned | `test_contactpoint_scanner.py`, `test_contracts.py` |
+| `services/contactpoint_scanner.py` | Unit-tested + Contract-pinned | `test_contactpoint_scanner.py`, `test_contracts.py`; `characterization/test_contactpoint_parent_invariant_characterization.py` pins the ContactPoint-parents-to-Account "known-bad" case |
 | `services/crosswalk_diff.py` | Unit-tested | `test_crosswalk_diff.py` |
 | `services/custom_config_viewer.py` | Unit-tested | `test_custom_config_viewer.py` |
 | `services/data_backup.py` | Unit-tested | `test_data_backup.py` — CSV snapshot capture, compressed DB storage, ZIP archive build |
@@ -229,10 +231,19 @@ pinned contract regresses.
 
 | File | Pins |
 |---|---|
-| `test_tooling_api_contracts_characterization.py` | The 3 Tooling API bug fixes (`RemoteSiteSetting.EndpointUrl`, no `Description` on `PlatformEventChannel`, `ProcessException` via the Data API) |
-| `test_route_contracts_characterization.py` | New route paths, methods, and `{success, data}` response envelope shapes |
+| `test_tooling_api_contracts_characterization.py` | 5 real Tooling/Data-API bug fixes found against the doanefull sandbox (`RemoteSiteSetting.EndpointUrl`, `PlatformEventChannelMember.EventChannel`, no `Description` on `PlatformEventChannel`, `ProcessException`/`FlowInterview` via the Data API not Tooling) |
+| `test_route_contracts_characterization.py` | Data Ops/Admin route paths, methods, and `{success, data}` response envelope shapes |
 | `test_tune_rules_characterization.py` | Each Tune standardization rule's known input → output |
 | `test_soundex_characterization.py` | American Soundex reference values used by Fuzzy Match blocking |
+| `test_cli_artifacts_characterization.py` | CLI-generated field-meta.xml / permission-set XML / deploy-command shape, byte-for-byte against the real shipped Conductor EDA→EDF artifacts |
+| `test_cli_layout_characterization.py` | `cli_layout.add_new_section`'s exact insertion block + point against the real Case-Case_Layout fixture |
+| `test_cli_recordtype_characterization.py` | `cli_recordtype.add_picklist_values`'s exact insertion block against the representative Case-Advisee_Case fixture |
+| `test_health_contract_characterization.py` | The liveness/readiness endpoint contract (`/api/v1/health`, `/api/v1/health/deep`) + the bare `/health` 308-redirect |
+| `test_mock_signal_contract_characterization.py` | The three required mock/live signals: navbar badge markup, `X-Mock-Mode` header, `/api/v1/health/deep`'s `mock` key |
+| `test_k8s_manifest_characterization.py` | k8s/manifest.yaml required fields: namespace, imagePullSecrets, secretKeyRef shape, probe paths, Service port, Linkerd annotation, middleware naming/reference, TLS/issuer |
+| `test_error_envelope_contract_characterization.py` | The shared `{error, code, request_id}` non-2xx response shape, both in isolation and on a live CLI-blueprint error path |
+| `test_env_var_names_characterization.py` | Every env var config.py reads is documented in `.env.example`; every env var `k8s/manifest.yaml` injects is one the app actually reads |
+| `test_contactpoint_parent_invariant_characterization.py` | The "known-bad" case: a ContactPoint parented to a Contact (not Account) must never report green |
 
 ---
 
@@ -844,22 +855,30 @@ Linux-only. Re-verify before relying on it for the team's first onboarding.)
 
 ## Coverage Summary
 
-Every production file is accounted for in the File Classification Matrix above —
-6 core modules, 14 route files, 46 service modules, 41 templates, 12 static
-assets, and 3 build files.
+**Known gap, stated plainly rather than papered over:** the File Classification
+Matrix above currently has 14 route rows and 49 service rows, but the repo
+actually has 17 route files and 63 service files as of this writing — the CLI
+tab (`routes/cli.py`, `routes/meta.py`, and roughly a dozen `services/cli_*.py`
+modules, built across several sessions after this matrix was last fully
+reconciled) is real, tested (see `tests/test_cli_*.py` and
+`tests/characterization/test_cli_*characterization.py`), and documented in
+CLAUDE.md, but not yet reflected row-by-row here. Closing that gap is a
+separate, larger backlog item — don't infer from the bucket counts below that
+those files are untested; they aren't, they're just not itemized in this
+specific matrix yet.
 
 | Bucket | Count | Notes |
 |---|---|---|
-| Unit-tested | 6 core + 13 routes + 45 services | Every route and service module has a test exercising it |
-| Contract-pinned | `test_contracts.py` + 4 characterization specs | Mock-data invariants, Tooling API contracts, route contracts, Tune-rule and Soundex transformations |
-| Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/mission-control.css`, `Dockerfile`, `requirements.txt`, `k8s/manifest.yaml` | Declarative — the toolchain validates them |
-| Manual-procedure-documented | 41 templates + 11 JS files | 23 procedures cover every JS-driven UI flow |
+| Unit-tested | 6 core + 13 of 17 routes + 47 of 63 services (matrix rows; see gap above) | Every *itemized* route and service module has a test exercising it |
+| Contract-pinned | `test_contracts.py` + 13 characterization specs (`tests/characterization/`) | Mock-data invariants, Tooling API contracts, route/health/error-envelope/mock-signal/env-var/k8s-manifest contracts, CLI-artifact byte-for-byte pins, Tune-rule and Soundex transformations, the ContactPoint-parent "known-bad" invariant |
+| Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/mission-control.css`, `Dockerfile`, `requirements.txt` | Declarative — the toolchain validates them |
+| Compile-verified + Contract-pinned | `k8s/manifest.yaml` | `kubectl apply --dry-run` validates; required fields pinned in `test_k8s_manifest_characterization.py` |
+| Manual-procedure-documented | 41+ templates + 11+ JS files + `start-local.ps1` | 26 procedures cover every JS-driven UI flow plus the local-dev launcher |
 | Structurally exempt | 1 line | `app.py` `__main__` guard |
 
-**Test suite: 1,109 tests passing.** The May 2026 expansion (DemandTools-equivalent
-Data Ops tools, Permissions Audit, Automation & Sharing, the Tooling API bug-fix
-sweep, the deep-link sweep, and this matrix reconciliation) added 256 tests across
-unit, route-contract, real-Bulk-API-path, and characterization layers.
+**Test suite: 1,586 tests passing** (`pytest tests/ --collect-only -q`). This
+count drifts every session — treat any hardcoded count in a doc (including
+this one) as a snapshot, not a live fact; re-collect before trusting it.
 
 **Characterization layer:** `tests/characterization/` pins the three Tooling API
 bug fixes, the new route contracts, every Tune standardization rule, and the

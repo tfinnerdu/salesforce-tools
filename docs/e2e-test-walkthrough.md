@@ -701,7 +701,12 @@ pins this against the real Conductor migration artifacts.
 15. `POST /schema/metadata-diff/run` with `{"compare_org": "prod"}` returns `success: true` with `total_differences > 0`
 16. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "TEST001"}` returns `success: true` with `total_fields > 0`
 17. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "12345", "external_id_field": "SIS_ID__c"}` returns `lookup_mode: "external_id:SIS_ID__c"`
-18. `pytest tests/ -q` — full suite green (1,301 tests)
-19. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, Soundex, and CLI-artifact contracts intact
+18. `pytest tests/ -q` — full suite green (1,586 tests as of this writing; re-run
+    `--collect-only -q` for the current count rather than trusting this number —
+    it drifts every session)
+19. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, Soundex, health/mock-signal/error-envelope/k8s-manifest/env-var, ContactPoint-invariant, and CLI-artifact contracts intact
 20. `GET /cli` returns 200 and `GET /cli/objects` returns `success: true` with an object list
 21. `POST /cli/generate` with a field plan returns all snippet keys; `POST /cli/package` returns an `application/zip` attachment
+22. `POST /cli/clone-object/plan` for a real object returns `success: true` with `fields`/`skipped`/`counts`; `POST /cli/clone-object/package` returns an `application/zip` attachment
+23. `POST /cli/access-mirror/plan` without a `justification` returns 400; with one (≥10 chars) returns `success: true` with `matched`/`unmatched`/`skipped_locked`/`high_privilege_excluded` and `counts`
+24. `GET /api/v1/health` returns 200 with `status: "ok"`; `GET /api/v1/health/deep` returns 200 with a `checks` dict and a `mock` key matching `SHOW_MOCK`; `GET /health` 308-redirects to `/api/v1/health`

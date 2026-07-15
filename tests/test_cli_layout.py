@@ -46,35 +46,6 @@ def test_add_new_section_preserves_everything(path):
         assert f'<label>{lbl}</label>' in out
 
 
-def test_add_new_section_is_exact_insertion_characterization():
-    """Pin the exact new-section block + insertion point against the real layout.
-    If the emitted layout XML drifts, this fails and names the change."""
-    xml = _load(PRIMARY)
-    r = L.add_new_section(xml, 'Case Assistance', ['Group_Information__c'], 'Edit')
-    expected_section = (
-        '\n    <layoutSections>\n'
-        '        <customLabel>true</customLabel>\n'
-        '        <detailHeading>true</detailHeading>\n'
-        '        <editHeading>true</editHeading>\n'
-        '        <label>Case Assistance</label>\n'
-        '        <layoutColumns>\n'
-        '            <layoutItems>\n'
-        '                <behavior>Edit</behavior>\n'
-        '                <field>Group_Information__c</field>\n'
-        '            </layoutItems>\n'
-        '        </layoutColumns>\n'
-        '        <layoutColumns/>\n'
-        '        <style>TwoColumnsLeftToRight</style>\n'
-        '    </layoutSections>'
-    )
-    idx = xml.rfind('</layoutSections>') + len('</layoutSections>')
-    expected = xml[:idx] + expected_section + xml[idx:]
-    assert r['xml'] == expected, (
-        'Generated layout XML diverged from the known-good insertion against the '
-        'real Case-Case Layout. Verify the change is intentional before updating.'
-    )
-
-
 # ── add_to_section ────────────────────────────────────────────────────────────
 
 def test_add_to_existing_section_places_inside():

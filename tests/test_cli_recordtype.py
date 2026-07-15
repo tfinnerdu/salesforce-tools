@@ -33,26 +33,6 @@ def test_new_block_for_new_field():
     assert r['xml'].endswith(xml[xml.rfind('</picklistValues>') + len('</picklistValues>'):])
 
 
-def test_new_block_exact_insertion_characterization():
-    xml = _load()
-    r = RT.add_picklist_values(xml, 'Type_of_Assistance__c', ['Academic'], default='Academic')
-    expected_block = (
-        '\n    <picklistValues>\n'
-        '        <picklist>Type_of_Assistance__c</picklist>\n'
-        '        <values>\n'
-        '            <fullName>Academic</fullName>\n'
-        '            <default>true</default>\n'
-        '        </values>\n'
-        '    </picklistValues>'
-    )
-    idx = xml.rfind('</picklistValues>') + len('</picklistValues>')
-    expected = xml[:idx] + expected_block + xml[idx:]
-    assert r['xml'] == expected, (
-        'Generated record-type XML diverged from the known-good insertion. '
-        'Verify the change is intentional (and re-pin against a real record type).'
-    )
-
-
 def test_append_to_existing_field_block():
     xml = _load()
     r = RT.add_picklist_values(xml, 'Priority', ['Urgent', 'High'])  # High already present
