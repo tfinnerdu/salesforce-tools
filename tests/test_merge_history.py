@@ -117,8 +117,8 @@ def test_merge_history_page_returns_200(session_client):
 
 
 def test_merge_history_list_api_returns_success(session_client):
-    """GET /validation/merge-history/list returns {success: true, data: [...]}."""
-    resp = session_client.get('/validation/merge-history/list')
+    """GET /api/v1/validation/merge-history/list returns {success: true, data: [...]}."""
+    resp = session_client.get('/api/v1/validation/merge-history/list')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -126,8 +126,8 @@ def test_merge_history_list_api_returns_success(session_client):
 
 
 def test_merge_history_stats_api_returns_success(session_client):
-    """GET /validation/merge-history/stats returns {success: true, data: {...}}."""
-    resp = session_client.get('/validation/merge-history/stats')
+    """GET /api/v1/validation/merge-history/stats returns {success: true, data: {...}}."""
+    resp = session_client.get('/api/v1/validation/merge-history/stats')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True

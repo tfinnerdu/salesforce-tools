@@ -119,7 +119,7 @@ def test_get_login_history_failed_logins_have_success_false():
 
 def test_job_queue_route_200(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_APEX_JOB_ROWS)):
-        response = session_client.get('/admin/job-queue')
+        response = session_client.get('/api/v1/admin/job-queue')
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True
@@ -127,7 +127,7 @@ def test_job_queue_route_200(session_client):
 
 def test_job_queue_route_data_is_list(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_APEX_JOB_ROWS)):
-        response = session_client.get('/admin/job-queue')
+        response = session_client.get('/api/v1/admin/job-queue')
     data = response.get_json()
     assert isinstance(data['data'], list)
     assert len(data['data']) == 3
@@ -135,7 +135,7 @@ def test_job_queue_route_data_is_list(session_client):
 
 def test_login_history_route_200(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_LOGIN_ROWS)):
-        response = session_client.get('/admin/login-history')
+        response = session_client.get('/api/v1/admin/login-history')
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True
@@ -143,7 +143,7 @@ def test_login_history_route_200(session_client):
 
 def test_login_history_route_has_logins_and_summary(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_LOGIN_ROWS)):
-        response = session_client.get('/admin/login-history')
+        response = session_client.get('/api/v1/admin/login-history')
     data = response.get_json()
     assert 'logins' in data['data']
     assert 'summary' in data['data']
@@ -157,7 +157,7 @@ def test_job_queue_exception_returns_500(client):
         )
         with client.session_transaction() as sess:
             sess['active_org'] = 'dev'
-        response = client.get('/admin/job-queue')
+        response = client.get('/api/v1/admin/job-queue')
     assert response.status_code == 500
     data = response.get_json()
     assert data['success'] is False
@@ -171,7 +171,7 @@ def test_login_history_exception_returns_500(client):
         )
         with client.session_transaction() as sess:
             sess['active_org'] = 'dev'
-        response = client.get('/admin/login-history')
+        response = client.get('/api/v1/admin/login-history')
     assert response.status_code == 500
     data = response.get_json()
     assert data['success'] is False

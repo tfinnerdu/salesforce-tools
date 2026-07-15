@@ -129,10 +129,10 @@ def test_bulk_update_raises_value_error_when_over_limit():
 # ── Route integration tests ───────────────────────────────────────────────────
 
 def test_post_bulk_preview_returns_200(session_client):
-    """POST /data-ops/bulk-update/preview returns 200 with success=True."""
+    """POST /api/v1/data-ops/bulk-update/preview returns 200 with success=True."""
     with patch('services.bulk_dml.get_sf', return_value=_fake_sf()):
         resp = session_client.post(
-            '/data-ops/bulk-update/preview',
+            '/api/v1/data-ops/bulk-update/preview',
             json={'sobject': 'Account', 'where_clause': 'IsPersonAccount = true'},
             content_type='application/json',
         )
@@ -143,9 +143,9 @@ def test_post_bulk_preview_returns_200(session_client):
 
 
 def test_post_bulk_preview_missing_sobject_returns_400(session_client):
-    """POST /data-ops/bulk-update/preview without sobject returns 400."""
+    """POST /api/v1/data-ops/bulk-update/preview without sobject returns 400."""
     resp = session_client.post(
-        '/data-ops/bulk-update/preview',
+        '/api/v1/data-ops/bulk-update/preview',
         json={'where_clause': 'IsPersonAccount = true'},
         content_type='application/json',
     )
@@ -155,10 +155,10 @@ def test_post_bulk_preview_missing_sobject_returns_400(session_client):
 
 
 def test_post_bulk_execute_dry_run_returns_dry_run_status(session_client):
-    """POST /data-ops/bulk-update/execute with dry_run=True returns dry_run status."""
+    """POST /api/v1/data-ops/bulk-update/execute with dry_run=True returns dry_run status."""
     with patch('services.bulk_dml.get_sf', return_value=_fake_sf()):
         resp = session_client.post(
-            '/data-ops/bulk-update/execute',
+            '/api/v1/data-ops/bulk-update/execute',
             json={
                 'sobject': 'Account',
                 'where_clause': 'IsPersonAccount = true',
@@ -175,9 +175,9 @@ def test_post_bulk_execute_dry_run_returns_dry_run_status(session_client):
 
 
 def test_post_bulk_execute_missing_field_returns_400(session_client):
-    """POST /data-ops/bulk-update/execute without field returns 400."""
+    """POST /api/v1/data-ops/bulk-update/execute without field returns 400."""
     resp = session_client.post(
-        '/data-ops/bulk-update/execute',
+        '/api/v1/data-ops/bulk-update/execute',
         json={
             'sobject': 'Account',
             'where_clause': 'IsPersonAccount = true',

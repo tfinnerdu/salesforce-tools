@@ -147,7 +147,7 @@ def test_delete_expired_trace_flags_returns_count():
 
 def test_get_trace_flags_route_returns_200(session_client):
     with patch('services.apex_log_reader.get_sf', return_value=_fake_sf()):
-        resp = session_client.get('/logs/trace-flags')
+        resp = session_client.get('/api/v1/logs/trace-flags')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -163,7 +163,7 @@ def test_post_trace_flags_route_returns_200(session_client):
         'duration_minutes': 30,
     }
     with patch('services.apex_log_reader.get_sf', return_value=_fake_sf()):
-        resp = session_client.post('/logs/trace-flags', json=payload)
+        resp = session_client.post('/api/v1/logs/trace-flags', json=payload)
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -175,7 +175,7 @@ def test_post_trace_flags_missing_entity_id_returns_400(session_client):
         'debug_level_id': 'DL001',
         'duration_minutes': 30,
     }
-    resp = session_client.post('/logs/trace-flags', json=payload)
+    resp = session_client.post('/api/v1/logs/trace-flags', json=payload)
     assert resp.status_code == 400
     data = resp.get_json()
     assert data['success'] is False
@@ -184,11 +184,24 @@ def test_post_trace_flags_missing_entity_id_returns_400(session_client):
 
 def test_delete_trace_flag_route_returns_200(session_client):
     with patch('services.apex_log_reader.get_sf', return_value=_fake_sf()):
-        resp = session_client.delete('/logs/trace-flags/TF001')
+        resp = session_client.delete('/api/v1/logs/trace-flags/TF001')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
     assert data['data']['deleted'] is True
+
+
+class TestLogsLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/logs/trace-flags', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/logs/trace-flags')
+
+    def test_old_path_redirect_is_followable(self, client, monkeypatch):
+        with patch('services.apex_log_reader.get_sf', return_value=_fake_sf()):
+            resp = client.get('/logs/trace-flags', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
 
 
 # ── _entity_type_from_id — TraceFlag has no TracedEntityType column ───────────

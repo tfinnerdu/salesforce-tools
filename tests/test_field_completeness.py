@@ -146,7 +146,7 @@ def test_completeness_page_returns_200(client):
 
 def test_completeness_run_returns_success(session_client):
     with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
-        resp = session_client.get('/validation/completeness/run')
+        resp = session_client.get('/api/v1/validation/completeness/run')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -155,7 +155,7 @@ def test_completeness_run_returns_success(session_client):
 
 def test_completeness_run_data_structure(session_client):
     with patch('services.field_completeness.get_sf', return_value=_make_sf_mock()):
-        resp = session_client.get('/validation/completeness/run')
+        resp = session_client.get('/api/v1/validation/completeness/run')
     data = resp.get_json()
     for item in data['data']:
         assert 'object' in item

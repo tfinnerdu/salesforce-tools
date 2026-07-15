@@ -165,28 +165,28 @@ def test_empty_tooling_result_returns_empty(monkeypatch, func):
 
 def test_route_validation_rules(client, monkeypatch):
     monkeypatch.setattr(org_automation, 'get_sf', lambda org: _StubSF())
-    resp = client.get('/admin/automation/validation-rules')
+    resp = client.get('/api/v1/admin/automation/validation-rules')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_route_flows(client, monkeypatch):
     monkeypatch.setattr(org_automation, 'get_sf', lambda org: _StubSF())
-    resp = client.get('/admin/automation/flows')
+    resp = client.get('/api/v1/admin/automation/flows')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_route_triggers(client, monkeypatch):
     monkeypatch.setattr(org_automation, 'get_sf', lambda org: _StubSF())
-    resp = client.get('/admin/automation/triggers')
+    resp = client.get('/api/v1/admin/automation/triggers')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_route_sharing_model(client, monkeypatch):
     monkeypatch.setattr(org_automation, 'get_sf', lambda org: _StubSF())
-    resp = client.get('/admin/automation/sharing-model')
+    resp = client.get('/api/v1/admin/automation/sharing-model')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
@@ -194,6 +194,6 @@ def test_route_sharing_model(client, monkeypatch):
 def test_route_validation_rules_error_returns_500(client, monkeypatch):
     import services.org_automation as oa
     monkeypatch.setattr(oa, 'get_validation_rules', lambda org: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.get('/admin/automation/validation-rules')
+    resp = client.get('/api/v1/admin/automation/validation-rules')
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False

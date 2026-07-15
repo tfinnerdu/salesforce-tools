@@ -157,8 +157,8 @@ def test_velocity_page_returns_200(client):
 
 
 def test_velocity_data_api_returns_success(client):
-    """GET /migration/velocity/data returns 200 with success:true and data payload."""
-    resp = client.get('/migration/velocity/data')
+    """GET /api/v1/migration/velocity/data returns 200 with success:true and data payload."""
+    resp = client.get('/api/v1/migration/velocity/data')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -190,9 +190,22 @@ def test_list_recent_batches_maps_db_rows(monkeypatch):
 
 
 def test_batches_recent_route_returns_success(client):
-    """GET /migration/batches/recent returns 200 (regression — was a 404)."""
-    resp = client.get('/migration/batches/recent')
+    """GET /api/v1/migration/batches/recent returns 200 (regression — was a 404)."""
+    resp = client.get('/api/v1/migration/batches/recent')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
     assert isinstance(body['data'], list)
+
+
+# ── Legacy /migration/<subpath> JSON redirect ─────────────────────────────────
+
+class TestMigrationLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.post('/migration/readiness/run', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/migration/readiness/run')
+
+    def test_old_path_redirect_is_followable(self, client):
+        resp = client.post('/migration/readiness/run', follow_redirects=True)
+        assert resp.status_code != 404

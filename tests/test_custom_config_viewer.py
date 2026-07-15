@@ -119,7 +119,7 @@ def test_get_custom_setting_records_have_owner_type():
 
 def test_custom_metadata_route_returns_200_and_success(session_client):
     with patch('services.custom_config_viewer.get_sf', return_value=_restful_sf(_CMDT_ENTITY_ROWS)):
-        resp = session_client.get('/admin/custom-metadata')
+        resp = session_client.get('/api/v1/admin/custom-metadata')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -128,7 +128,7 @@ def test_custom_metadata_route_returns_200_and_success(session_client):
 
 def test_custom_settings_route_returns_200_and_success(session_client):
     with patch('services.custom_config_viewer.get_sf', return_value=_restful_sf(_CUSTOM_SETTING_ROWS)):
-        resp = session_client.get('/admin/custom-settings')
+        resp = session_client.get('/api/v1/admin/custom-settings')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True

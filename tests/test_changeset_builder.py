@@ -256,13 +256,14 @@ class TestBuildPackage:
 
 @pytest.fixture(scope='module')
 def deploy_client():
-    """Minimal Flask test client with only the deploy blueprint registered."""
-    from routes.deploy import deploy_bp
+    """Minimal Flask test client with only the deploy blueprints registered."""
+    from routes.deploy import deploy_api_bp, deploy_bp
 
     mini_app = Flask(__name__, template_folder='../templates')
     mini_app.secret_key = 'test-deploy-secret'
     mini_app.config['TESTING'] = True
     mini_app.register_blueprint(deploy_bp)
+    mini_app.register_blueprint(deploy_api_bp)
 
     # Provide the context processors that base.html needs
     @mini_app.context_processor
@@ -286,7 +287,7 @@ class TestDeployRoutes:
 
     def test_components_apex_class(self, deploy_client):
         with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
-            resp = deploy_client.get('/deploy/components?type=ApexClass')
+            resp = deploy_client.get('/api/v1/deploy/components?type=ApexClass')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -295,14 +296,14 @@ class TestDeployRoutes:
 
     def test_components_apex_trigger(self, deploy_client):
         with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
-            resp = deploy_client.get('/deploy/components?type=ApexTrigger')
+            resp = deploy_client.get('/api/v1/deploy/components?type=ApexTrigger')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_custom_field(self, deploy_client):
         with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
-            resp = deploy_client.get('/deploy/components?type=CustomField')
+            resp = deploy_client.get('/api/v1/deploy/components?type=CustomField')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -312,33 +313,33 @@ class TestDeployRoutes:
 
     def test_components_flow(self, deploy_client):
         with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
-            resp = deploy_client.get('/deploy/components?type=Flow')
+            resp = deploy_client.get('/api/v1/deploy/components?type=Flow')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_permission_set(self, deploy_client):
         with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
-            resp = deploy_client.get('/deploy/components?type=PermissionSet')
+            resp = deploy_client.get('/api/v1/deploy/components?type=PermissionSet')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_validation_rule(self, deploy_client):
         with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
-            resp = deploy_client.get('/deploy/components?type=ValidationRule')
+            resp = deploy_client.get('/api/v1/deploy/components?type=ValidationRule')
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
 
     def test_components_unsupported_type_returns_400(self, deploy_client):
-        resp = deploy_client.get('/deploy/components?type=Profile')
+        resp = deploy_client.get('/api/v1/deploy/components?type=Profile')
         assert resp.status_code == 400
         data = resp.get_json()
         assert data['success'] is False
 
     def test_components_missing_type_returns_400(self, deploy_client):
-        resp = deploy_client.get('/deploy/components')
+        resp = deploy_client.get('/api/v1/deploy/components')
         assert resp.status_code == 400
 
     def test_generate_returns_package_xml(self, deploy_client):
@@ -348,7 +349,7 @@ class TestDeployRoutes:
                 {'type': 'CustomField', 'member': 'Account.SIS_ID__c'},
             ]
         }
-        resp = deploy_client.post('/deploy/generate', json=payload)
+        resp = deploy_client.post('/api/v1/deploy/generate', json=payload)
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -357,11 +358,11 @@ class TestDeployRoutes:
         assert '<Package' in data['data']['package_xml']
 
     def test_generate_empty_components_returns_400(self, deploy_client):
-        resp = deploy_client.post('/deploy/generate', json={'components': []})
+        resp = deploy_client.post('/api/v1/deploy/generate', json={'components': []})
         assert resp.status_code == 400
 
     def test_generate_no_body_returns_400(self, deploy_client):
-        resp = deploy_client.post('/deploy/generate', json={})
+        resp = deploy_client.post('/api/v1/deploy/generate', json={})
         assert resp.status_code == 400
 
     def test_generate_checklist_has_setup_path(self, deploy_client):
@@ -370,7 +371,7 @@ class TestDeployRoutes:
                 {'type': 'CustomField', 'member': 'Account.SIS_ID__c'},
             ]
         }
-        resp = deploy_client.post('/deploy/generate', json=payload)
+        resp = deploy_client.post('/api/v1/deploy/generate', json=payload)
         data = resp.get_json()
         checklist = data['data']['checklist']
         assert len(checklist) == 1
@@ -381,7 +382,7 @@ class TestDeployRoutes:
         with patch('routes.deploy.changeset_builder.build_package',
                    side_effect=Exception('SF error')):
             payload = {'components': [{'type': 'ApexClass', 'member': 'Foo'}]}
-            resp = deploy_client.post('/deploy/generate', json=payload)
+            resp = deploy_client.post('/api/v1/deploy/generate', json=payload)
         assert resp.status_code == 500
         data = resp.get_json()
         assert data['success'] is False
@@ -389,7 +390,20 @@ class TestDeployRoutes:
     def test_components_exception_returns_500(self, deploy_client):
         with patch('routes.deploy.changeset_builder.list_components',
                    side_effect=Exception('SF down')):
-            resp = deploy_client.get('/deploy/components?type=ApexClass')
+            resp = deploy_client.get('/api/v1/deploy/components?type=ApexClass')
         assert resp.status_code == 500
         data = resp.get_json()
         assert data['success'] is False
+
+
+class TestDeployLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, deploy_client):
+        resp = deploy_client.get('/deploy/components', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/deploy/components')
+
+    def test_old_path_redirect_is_followable(self, deploy_client):
+        with patch('services.changeset_builder.get_sf', return_value=_fake_sf()):
+            resp = deploy_client.get('/deploy/components?type=ApexClass', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

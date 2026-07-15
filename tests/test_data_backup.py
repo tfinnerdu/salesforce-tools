@@ -155,14 +155,14 @@ def test_backup_page_renders(client):
 
 
 def test_backup_objects_route(client):
-    resp = client.get('/data-ops/backup/objects')
+    resp = client.get('/api/v1/data-ops/backup/objects')
     assert resp.status_code == 200
     assert 'Account' in resp.get_json()['data']
 
 
 def test_backup_run_route(client, monkeypatch):
     monkeypatch.setattr(data_backup, 'get_sf', lambda org: _default_sf())
-    resp = client.post('/data-ops/backup/run', json={'objects': ['Account']})
+    resp = client.post('/api/v1/data-ops/backup/run', json={'objects': ['Account']})
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -170,13 +170,13 @@ def test_backup_run_route(client, monkeypatch):
 
 
 def test_backup_list_route(client):
-    resp = client.get('/data-ops/backup/list')
+    resp = client.get('/api/v1/data-ops/backup/list')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_backup_download_missing_run_returns_404(client):
-    resp = client.get('/data-ops/backup/999/download')
+    resp = client.get('/api/v1/data-ops/backup/999/download')
     assert resp.status_code == 404
 
 
@@ -184,6 +184,6 @@ def test_backup_run_error_returns_500(client, monkeypatch):
     import services.data_backup as db_svc
     monkeypatch.setattr(db_svc, 'run_backup',
                         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.post('/data-ops/backup/run', json={'objects': ['Account']})
+    resp = client.post('/api/v1/data-ops/backup/run', json={'objects': ['Account']})
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False

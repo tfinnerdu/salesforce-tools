@@ -1,13 +1,21 @@
 import logging
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, render_template, request, session
 
 from sf_provider import get_sf
 from services import collection_manager
+from utils.responses import error_response, new_request_id, ok, register_legacy_json_redirect
 
 logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
+settings_api_bp = Blueprint('settings_api', __name__, url_prefix='/api/v1/settings')
+
+
+@settings_api_bp.before_request
+def _assign_request_id():
+    from flask import g
+    g.request_id = new_request_id()
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -33,9 +41,12 @@ def index():
                            bypass_active=bypass_active)
 
 
+register_legacy_json_redirect(settings_bp, '/api/v1/settings')
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 
-@settings_bp.route('/org/<name>/test', methods=['GET'])
+@settings_api_bp.route('/org/<name>/test', methods=['GET'])
 def api_org_test(name):
     try:
         sf = get_sf(name)
@@ -43,83 +54,88 @@ def api_org_test(name):
         record_count = result.get('totalSize', 0)
         instance_url = getattr(sf, 'sf_instance', '')
         session[f'sf_instance_{name}'] = instance_url
-        return jsonify({'success': True, 'org': name, 'record_count': record_count,
-                        'instance_url': instance_url})
+        return ok({'org': name, 'record_count': record_count, 'instance_url': instance_url})
     except Exception as exc:
         logger.exception('org connection test failed for %s', name)
-        return jsonify({'success': False, 'org': name, 'error': str(exc)}), 200
+        # Was a bug: this used to return HTTP 200 on failure, so MC.api never
+        # threw and callers had to inspect body.success by hand. A real
+        # non-2xx status here is wire-compatible: ok()/error_response() both
+        # nest the payload under 'data', and MC.api auto-unwraps that key, so
+        # JS call sites reading result.instance_url etc. see the identical
+        # flat shape either way.
+        return error_response(str(exc), 'ORG_TEST_FAILED', 502)
 
 
-@settings_bp.route('/bypass-triggers', methods=['POST'])
+@settings_api_bp.route('/bypass-triggers', methods=['POST'])
 def api_bypass_triggers():
     body = request.get_json(silent=True) or {}
     enabled = bool(body.get('enabled', False))
     session['bypass_triggers'] = enabled
-    return jsonify({'success': True, 'data': {'bypass_triggers': enabled}})
+    return ok({'bypass_triggers': enabled})
 
 
-@settings_bp.route('/org/switch', methods=['POST'])
+@settings_api_bp.route('/org/switch', methods=['POST'])
 def api_org_switch():
     body = request.get_json(silent=True) or {}
     org = body.get('org', '').strip()
     if not org:
-        return jsonify({'success': False, 'data': None, 'error': 'org is required'}), 400
+        return error_response('org is required', 'INVALID_INPUT', 400)
     session['active_org'] = org
-    return jsonify({'success': True, 'data': {'active_org': org}})
+    return ok({'active_org': org})
 
 
-@settings_bp.route('/collections', methods=['GET'])
+@settings_api_bp.route('/collections', methods=['GET'])
 def api_collections_list():
     try:
         collections = collection_manager.list_collections()
-        return jsonify({'success': True, 'data': collections})
+        return ok(collections)
     except Exception as exc:
         logger.exception('list collections failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'COLLECTIONS_LIST_FAILED', 500)
 
 
-@settings_bp.route('/collections', methods=['POST'])
+@settings_api_bp.route('/collections', methods=['POST'])
 def api_collections_create():
     if 'file' in request.files:
         uploaded_file = request.files['file']
         try:
             content = uploaded_file.read().decode('utf-8')
             collection = collection_manager.import_collection(content)
-            return jsonify({'success': True, 'data': collection}), 201
+            return ok(collection, 201)
         except Exception as exc:
             logger.exception('collection import failed')
-            return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+            return error_response(str(exc), 'COLLECTION_IMPORT_FAILED', 500)
 
     body = request.get_json(silent=True) or {}
     name = body.get('name', '').strip()
     collection_json = body.get('collection_json')
     if not name or not collection_json:
-        return jsonify({'success': False, 'data': None, 'error': 'name and collection_json are required'}), 400
+        return error_response('name and collection_json are required', 'INVALID_INPUT', 400)
     try:
         collection = collection_manager.create_collection(name=name, collection_json=collection_json)
-        return jsonify({'success': True, 'data': collection}), 201
+        return ok(collection, 201)
     except Exception as exc:
         logger.exception('collection create failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'COLLECTION_CREATE_FAILED', 500)
 
 
-@settings_bp.route('/collections/<int:col_id>/run', methods=['POST'])
+@settings_api_bp.route('/collections/<int:col_id>/run', methods=['POST'])
 def api_collections_run(col_id):
     body = request.get_json(silent=True) or {}
     env_overrides = body.get('env_overrides', {})
     try:
         result = collection_manager.run_collection(col_id=col_id, env_overrides=env_overrides)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('collection run failed for id=%s', col_id)
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'COLLECTION_RUN_FAILED', 500)
 
 
-@settings_bp.route('/collections/<int:col_id>', methods=['DELETE'])
+@settings_api_bp.route('/collections/<int:col_id>', methods=['DELETE'])
 def api_collections_delete(col_id):
     try:
         collection_manager.delete_collection(col_id=col_id)
-        return jsonify({'success': True, 'data': {'deleted_id': col_id}})
+        return ok({'deleted_id': col_id})
     except Exception as exc:
         logger.exception('collection delete failed for id=%s', col_id)
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'COLLECTION_DELETE_FAILED', 500)

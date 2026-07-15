@@ -202,7 +202,7 @@ def test_metadata_diff_page_renders(client):
 def test_metadata_diff_run_route(client):
     with patch('sf_provider._configured', return_value=True), \
          patch('services.metadata_diff.get_sf', side_effect=_patched_get_sf):
-        resp = client.post('/schema/metadata-diff/run', json={'compare_org': 'prod'})
+        resp = client.post('/api/v1/schema/metadata-diff/run', json={'compare_org': 'prod'})
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -213,7 +213,7 @@ def test_metadata_diff_run_error_returns_500(client, monkeypatch):
     import services.metadata_diff as md
     monkeypatch.setattr(md, 'run_metadata_diff',
                         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.post('/schema/metadata-diff/run', json={})
+    resp = client.post('/api/v1/schema/metadata-diff/run', json={})
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False
 

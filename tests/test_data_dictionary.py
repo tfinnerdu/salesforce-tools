@@ -108,7 +108,7 @@ def test_get_data_dictionary_page_returns_200(client):
 def test_post_data_dictionary_run_with_sobject_returns_200_success(session_client):
     with patch('services.data_dictionary.get_sf', return_value=_describe_sf()):
         resp = session_client.post(
-            '/schema/data-dictionary/run',
+            '/api/v1/schema/data-dictionary/run',
             data=json.dumps({'sobject': 'Account'}),
             content_type='application/json',
         )
@@ -121,7 +121,7 @@ def test_post_data_dictionary_run_with_sobject_returns_200_success(session_clien
 
 def test_post_data_dictionary_run_without_sobject_returns_400(client):
     resp = client.post(
-        '/schema/data-dictionary/run',
+        '/api/v1/schema/data-dictionary/run',
         data=json.dumps({}),
         content_type='application/json',
     )
@@ -139,7 +139,7 @@ def test_post_data_dictionary_run_service_exception_returns_500(client, monkeypa
     monkeypatch.setattr(dd_mod, 'get_field_catalog', boom)
 
     resp = client.post(
-        '/schema/data-dictionary/run',
+        '/api/v1/schema/data-dictionary/run',
         data=json.dumps({'sobject': 'Account'}),
         content_type='application/json',
     )

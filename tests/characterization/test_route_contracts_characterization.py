@@ -55,17 +55,17 @@ def _patch_sf_services():
 # ─────────────────────────────────────────────────────────────────────────────
 
 KNOWN_GET_JSON_ROUTES = [
-    '/admin/permissions/sets',
-    '/admin/permissions/users',
-    '/admin/permissions/user/005000000000000001',
-    '/admin/permissions/set/0PS000000000000001',
-    '/admin/permissions/object-matrix?object=Account',
-    '/admin/permissions/field-matrix?object=Account',
-    '/admin/automation/validation-rules',
-    '/admin/automation/flows',
-    '/admin/automation/triggers',
-    '/admin/automation/sharing-model',
-    '/data-ops/reassign/users?q=',
+    '/api/v1/admin/permissions/sets',
+    '/api/v1/admin/permissions/users',
+    '/api/v1/admin/permissions/user/005000000000000001',
+    '/api/v1/admin/permissions/set/0PS000000000000001',
+    '/api/v1/admin/permissions/object-matrix?object=Account',
+    '/api/v1/admin/permissions/field-matrix?object=Account',
+    '/api/v1/admin/automation/validation-rules',
+    '/api/v1/admin/automation/flows',
+    '/api/v1/admin/automation/triggers',
+    '/api/v1/admin/automation/sharing-model',
+    '/api/v1/data-ops/reassign/users?q=',
 ]
 
 
@@ -126,13 +126,13 @@ def test_data_ops_index_redirect_target_characterization(client):
 def test_export_route_returns_csv_attachment_characterization(client):
     with patch('services.bulk_ops.export_to_csv',
                return_value='Id\n001000000000001\n'):
-        resp = client.post('/data-ops/export/run',
+        resp = client.post('/api/v1/data-ops/export/run',
                            json={'soql': 'SELECT Id FROM Account LIMIT 1',
                                  'filename': 'e.csv'})
     assert resp.status_code == 200
     assert 'text/csv' in resp.content_type, (
-        "/data-ops/export/run no longer returns text/csv. The export contract is "
-        "a direct CSV file download, not a JSON envelope."
+        "/api/v1/data-ops/export/run no longer returns text/csv. The export "
+        "contract is a direct CSV file download, not a JSON envelope."
     )
     assert 'attachment' in resp.headers.get('Content-Disposition', '')
 

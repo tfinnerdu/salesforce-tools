@@ -87,7 +87,7 @@ def test_get_sf_called_with_requested_org():
 def test_api_platform_events_route(client):
     """GET /admin/platform-events returns 200 with success JSON."""
     with patch('services.platform_events.get_sf', return_value=_fake_sf(_EVENT_ROWS)):
-        resp = client.get('/admin/platform-events')
+        resp = client.get('/api/v1/admin/platform-events')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -97,7 +97,7 @@ def test_api_platform_events_route(client):
 def test_api_platform_events_both_keys(client):
     """Route response data contains both 'events' and 'members' keys."""
     with patch('services.platform_events.get_sf', return_value=_fake_sf(_EVENT_ROWS)):
-        resp = client.get('/admin/platform-events')
+        resp = client.get('/api/v1/admin/platform-events')
     assert resp.status_code == 200
     data = resp.get_json()
     assert 'events' in data['data']
@@ -112,7 +112,7 @@ def test_api_platform_events_error(client, monkeypatch):
     import services.platform_events as pe
     monkeypatch.setattr(pe, 'get_all', _boom)
 
-    resp = client.get('/admin/platform-events')
+    resp = client.get('/api/v1/admin/platform-events')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False

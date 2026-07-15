@@ -42,7 +42,7 @@ def _patch(monkeypatch, counts=None):
 
 def test_plan_dry_run_envelope(client, monkeypatch):
     _patch(monkeypatch)
-    resp = client.post('/data-ops/file-migration/plan', data=_multipart(),
+    resp = client.post('/api/v1/data-ops/file-migration/plan', data=_multipart(),
                        content_type='multipart/form-data')
     assert resp.status_code == 200
     body = resp.get_json()
@@ -58,7 +58,7 @@ def test_plan_dry_run_envelope(client, monkeypatch):
 
 def test_plan_requires_file(client, monkeypatch):
     _patch(monkeypatch)
-    resp = client.post('/data-ops/file-migration/plan',
+    resp = client.post('/api/v1/data-ops/file-migration/plan',
                        data={'source': 'eda', 'target': 'prod'},
                        content_type='multipart/form-data')
     assert resp.status_code == 400
@@ -68,7 +68,7 @@ def test_plan_requires_file(client, monkeypatch):
 def test_run_commits_and_returns_counts(client, monkeypatch):
     counts = {'created': 1, 'reused': 0, 'linked': 1, 'skipped': 0}
     _patch(monkeypatch, counts=counts)
-    resp = client.post('/data-ops/file-migration/run', data=_multipart(),
+    resp = client.post('/api/v1/data-ops/file-migration/run', data=_multipart(),
                        content_type='multipart/form-data')
     assert resp.status_code == 200
     data = resp.get_json()['data']
@@ -91,7 +91,7 @@ def test_run_threads_source_and_dest_modes(client, monkeypatch):
         return {'created': 1, 'reused': 0, 'linked': 1, 'skipped': 0}
 
     monkeypatch.setattr(fm, 'execute', fake_exec)
-    resp = client.post('/data-ops/file-migration/run',
+    resp = client.post('/api/v1/data-ops/file-migration/run',
                        data=_multipart({'mode': 'attachments', 'dest': 'files',
                                         'share_type': 'C', 'visibility': 'InternalUsers'}),
                        content_type='multipart/form-data')
@@ -102,7 +102,7 @@ def test_run_threads_source_and_dest_modes(client, monkeypatch):
 
 def test_ext_id_remap_requires_parent_and_extid(client, monkeypatch):
     _patch(monkeypatch)
-    resp = client.post('/data-ops/file-migration/plan',
+    resp = client.post('/api/v1/data-ops/file-migration/plan',
                        data={'source': 'eda', 'target': 'prod',
                              'remap_method': 'ext_id', 'ext_id': 'SIS_ID__c'},
                        content_type='multipart/form-data')
@@ -113,7 +113,7 @@ def test_ext_id_remap_requires_parent_and_extid(client, monkeypatch):
 def test_identity_remap_plan_ok(client, monkeypatch):
     # In-place conversion: no crosswalk, scope by filter on a parent object.
     _patch(monkeypatch)
-    resp = client.post('/data-ops/file-migration/plan',
+    resp = client.post('/api/v1/data-ops/file-migration/plan',
                        data={'source': 'prod', 'target': 'prod',
                              'remap_method': 'identity', 'parent': 'Accommodation__c',
                              'by': 'filter', 'where': 'Id != null'},
@@ -124,7 +124,7 @@ def test_identity_remap_plan_ok(client, monkeypatch):
 
 def test_identity_filter_requires_parent(client, monkeypatch):
     _patch(monkeypatch)
-    resp = client.post('/data-ops/file-migration/plan',
+    resp = client.post('/api/v1/data-ops/file-migration/plan',
                        data={'source': 'prod', 'target': 'prod',
                              'remap_method': 'identity', 'by': 'filter'},
                        content_type='multipart/form-data')

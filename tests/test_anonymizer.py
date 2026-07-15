@@ -165,7 +165,7 @@ def test_run_live_not_wired_returns_not_wired():
 # ---------------------------------------------------------------------------
 
 def test_admin_anonymizer_objects_get(client):
-    resp = client.get('/admin/anonymizer/objects')
+    resp = client.get('/api/v1/admin/anonymizer/objects')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -174,7 +174,7 @@ def test_admin_anonymizer_objects_get(client):
 
 
 def test_admin_anonymizer_objects_has_expected_keys(client):
-    resp = client.get('/admin/anonymizer/objects')
+    resp = client.get('/api/v1/admin/anonymizer/objects')
     data = resp.get_json()
     for item in data['data']:
         assert 'object' in item
@@ -185,7 +185,7 @@ def test_admin_anonymizer_preview_post(session_client):
     payload = {'object': 'Account', 'fields': ['Name', 'PersonEmail']}
     with patch('services.anonymizer.get_sf', return_value=_count_sf(123)):
         resp = session_client.post(
-            '/admin/anonymizer/preview',
+            '/api/v1/admin/anonymizer/preview',
             data=json.dumps(payload),
             content_type='application/json',
         )
@@ -198,7 +198,7 @@ def test_admin_anonymizer_preview_post(session_client):
 
 def test_admin_anonymizer_preview_missing_object(client):
     resp = client.post(
-        '/admin/anonymizer/preview',
+        '/api/v1/admin/anonymizer/preview',
         data=json.dumps({'fields': ['Name']}),
         content_type='application/json',
     )
@@ -212,7 +212,7 @@ def test_admin_anonymizer_run_post(session_client):
     payload = {'object': 'Account', 'fields': ['Name'], 'dry_run': True}
     with patch('services.anonymizer.get_sf', return_value=_count_sf(9)):
         resp = session_client.post(
-            '/admin/anonymizer/run',
+            '/api/v1/admin/anonymizer/run',
             data=json.dumps(payload),
             content_type='application/json',
         )
@@ -224,7 +224,7 @@ def test_admin_anonymizer_run_post(session_client):
 
 def test_admin_anonymizer_run_missing_object(client):
     resp = client.post(
-        '/admin/anonymizer/run',
+        '/api/v1/admin/anonymizer/run',
         data=json.dumps({'fields': ['Name'], 'dry_run': True}),
         content_type='application/json',
     )
@@ -235,7 +235,7 @@ def test_admin_anonymizer_run_missing_object(client):
 
 def test_admin_anonymizer_run_missing_fields(client):
     resp = client.post(
-        '/admin/anonymizer/run',
+        '/api/v1/admin/anonymizer/run',
         data=json.dumps({'object': 'Account', 'dry_run': True}),
         content_type='application/json',
     )
@@ -246,7 +246,7 @@ def test_admin_anonymizer_run_missing_fields(client):
 
 def test_admin_anonymizer_run_empty_fields(client):
     resp = client.post(
-        '/admin/anonymizer/run',
+        '/api/v1/admin/anonymizer/run',
         data=json.dumps({'object': 'Account', 'fields': [], 'dry_run': True}),
         content_type='application/json',
     )
@@ -257,7 +257,7 @@ def test_admin_anonymizer_run_empty_fields(client):
 
 def test_admin_anonymizer_objects_exception_returns_500(client):
     with patch('services.anonymizer.list_objects', side_effect=Exception('boom')):
-        resp = client.get('/admin/anonymizer/objects')
+        resp = client.get('/api/v1/admin/anonymizer/objects')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -266,7 +266,7 @@ def test_admin_anonymizer_objects_exception_returns_500(client):
 def test_admin_anonymizer_preview_exception_returns_500(client):
     with patch('services.anonymizer.preview', side_effect=Exception('sf error')):
         resp = client.post(
-            '/admin/anonymizer/preview',
+            '/api/v1/admin/anonymizer/preview',
             data=json.dumps({'object': 'Account', 'fields': ['Name']}),
             content_type='application/json',
         )
@@ -278,7 +278,7 @@ def test_admin_anonymizer_preview_exception_returns_500(client):
 def test_admin_anonymizer_run_exception_returns_500(client):
     with patch('services.anonymizer.run', side_effect=Exception('pii error')):
         resp = client.post(
-            '/admin/anonymizer/run',
+            '/api/v1/admin/anonymizer/run',
             data=json.dumps({'object': 'Account', 'fields': ['Name'], 'dry_run': True}),
             content_type='application/json',
         )

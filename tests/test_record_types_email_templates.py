@@ -123,7 +123,7 @@ def test_get_email_templates_inactive_present():
 def test_record_types_route_200(session_client):
     sf = _record_types_sf(_RECORD_TYPE_ROWS, [_ACCOUNT_COUNTS, _OPP_COUNTS])
     with patch('services.admin_service.get_sf', return_value=sf):
-        response = session_client.get('/admin/record-types')
+        response = session_client.get('/api/v1/admin/record-types')
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True
@@ -131,7 +131,7 @@ def test_record_types_route_200(session_client):
 
 def test_email_templates_route_200(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_all_sf(_EMAIL_TEMPLATE_ROWS)):
-        response = session_client.get('/admin/email-templates')
+        response = session_client.get('/api/v1/admin/email-templates')
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True
@@ -140,7 +140,7 @@ def test_email_templates_route_200(session_client):
 def test_record_types_response_is_list(session_client):
     sf = _record_types_sf(_RECORD_TYPE_ROWS, [_ACCOUNT_COUNTS, _OPP_COUNTS])
     with patch('services.admin_service.get_sf', return_value=sf):
-        response = session_client.get('/admin/record-types')
+        response = session_client.get('/api/v1/admin/record-types')
     data = response.get_json()
     assert isinstance(data['data'], list)
     assert len(data['data']) == 3
@@ -148,7 +148,7 @@ def test_record_types_response_is_list(session_client):
 
 def test_email_templates_response_is_list(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_all_sf(_EMAIL_TEMPLATE_ROWS)):
-        response = session_client.get('/admin/email-templates')
+        response = session_client.get('/api/v1/admin/email-templates')
     data = response.get_json()
     assert isinstance(data['data'], list)
     assert len(data['data']) == 2
@@ -160,7 +160,7 @@ def test_record_types_exception_returns_500(client):
                    lambda org: (_ for _ in ()).throw(RuntimeError('boom')))
         with client.session_transaction() as sess:
             sess['active_org'] = 'dev'
-        response = client.get('/admin/record-types')
+        response = client.get('/api/v1/admin/record-types')
     assert response.status_code == 500
     data = response.get_json()
     assert data['success'] is False
@@ -172,7 +172,7 @@ def test_email_templates_exception_returns_500(client):
                    lambda org: (_ for _ in ()).throw(RuntimeError('boom')))
         with client.session_transaction() as sess:
             sess['active_org'] = 'dev'
-        response = client.get('/admin/email-templates')
+        response = client.get('/api/v1/admin/email-templates')
     assert response.status_code == 500
     data = response.get_json()
     assert data['success'] is False

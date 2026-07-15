@@ -137,7 +137,7 @@ def test_record_inspector_page_has_sub_nav(client):
 
 def test_inspect_run_returns_fields(client):
     with _patch_sf(_StubSF()):
-        resp = client.post('/schema/inspect/run',
+        resp = client.post('/api/v1/schema/inspect/run',
                            json={'object': 'Account', 'record_id': 'TEST001'})
     assert resp.status_code == 200
     body = resp.get_json()
@@ -148,7 +148,7 @@ def test_inspect_run_returns_fields(client):
 
 def test_inspect_run_external_id(client):
     with _patch_sf(_StubSF()):
-        resp = client.post('/schema/inspect/run',
+        resp = client.post('/api/v1/schema/inspect/run',
                            json={'object': 'Account', 'record_id': '12345',
                                  'external_id_field': 'SIS_ID__c'})
     assert resp.status_code == 200
@@ -158,14 +158,14 @@ def test_inspect_run_external_id(client):
 
 
 def test_inspect_run_missing_object_returns_400(client):
-    resp = client.post('/schema/inspect/run',
+    resp = client.post('/api/v1/schema/inspect/run',
                        json={'record_id': 'TEST001'})
     assert resp.status_code == 400
     assert resp.get_json()['success'] is False
 
 
 def test_inspect_run_missing_record_id_returns_400(client):
-    resp = client.post('/schema/inspect/run',
+    resp = client.post('/api/v1/schema/inspect/run',
                        json={'object': 'Account'})
     assert resp.status_code == 400
     assert resp.get_json()['success'] is False
@@ -175,7 +175,7 @@ def test_inspect_run_service_error_returns_500(client, monkeypatch):
     import services.record_inspector as ri
     monkeypatch.setattr(ri, 'get_record',
                         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.post('/schema/inspect/run',
+    resp = client.post('/api/v1/schema/inspect/run',
                        json={'object': 'Account', 'record_id': 'X'})
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False

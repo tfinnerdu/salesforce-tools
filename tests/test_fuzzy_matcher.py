@@ -159,7 +159,7 @@ def test_match_page_renders(client):
 def test_match_run_route(client, monkeypatch):
     monkeypatch.setattr(fuzzy_matcher, 'get_sf',
                         lambda org: _StubSF(_NEAR_DUP_RECORDS))
-    resp = client.post('/data-ops/match/run', json={
+    resp = client.post('/api/v1/data-ops/match/run', json={
         'object': 'Account', 'where_clause': 'Id != null',
         'compare_fields': ['Name'], 'block_field': 'Name', 'threshold': 0.85,
     })
@@ -170,7 +170,7 @@ def test_match_run_route(client, monkeypatch):
 
 
 def test_match_run_missing_params_returns_400(client):
-    resp = client.post('/data-ops/match/run', json={'object': 'Account'})
+    resp = client.post('/api/v1/data-ops/match/run', json={'object': 'Account'})
     assert resp.status_code == 400
 
 
@@ -178,7 +178,7 @@ def test_match_run_error_returns_500(client, monkeypatch):
     import services.fuzzy_matcher as fm
     monkeypatch.setattr(fm, 'find_matches',
                         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.post('/data-ops/match/run', json={
+    resp = client.post('/api/v1/data-ops/match/run', json={
         'object': 'Account', 'where_clause': 'Id != null',
         'compare_fields': ['Name'], 'block_field': 'Name',
     })

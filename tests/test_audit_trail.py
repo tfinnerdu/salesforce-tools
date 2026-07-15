@@ -69,7 +69,7 @@ def test_get_audit_trail_days_parameter():
 
 def test_audit_trail_route_200(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_AUDIT_ROWS)):
-        response = session_client.get('/admin/audit-trail')
+        response = session_client.get('/api/v1/admin/audit-trail')
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True
@@ -77,7 +77,7 @@ def test_audit_trail_route_200(session_client):
 
 def test_audit_trail_route_days_param(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_AUDIT_ROWS)):
-        response = session_client.get('/admin/audit-trail?days=14')
+        response = session_client.get('/api/v1/admin/audit-trail?days=14')
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True
@@ -85,7 +85,7 @@ def test_audit_trail_route_days_param(session_client):
 
 def test_audit_trail_response_data_is_list(session_client):
     with patch('services.admin_service.get_sf', return_value=_query_sf(_AUDIT_ROWS)):
-        response = session_client.get('/admin/audit-trail')
+        response = session_client.get('/api/v1/admin/audit-trail')
     data = response.get_json()
     assert isinstance(data['data'], list)
     assert len(data['data']) == 3
@@ -99,7 +99,22 @@ def test_audit_trail_exception_returns_500(client):
         )
         with client.session_transaction() as sess:
             sess['active_org'] = 'dev'
-        response = client.get('/admin/audit-trail')
+        response = client.get('/api/v1/admin/audit-trail')
     assert response.status_code == 500
     data = response.get_json()
     assert data['success'] is False
+
+
+# ── Legacy redirect ──────────────────────────────────────────────────────────
+
+class TestAdminLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/admin/audit-trail', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/admin/audit-trail')
+
+    def test_old_path_redirect_is_followable(self, session_client):
+        with patch('services.admin_service.get_sf', return_value=_query_sf(_AUDIT_ROWS)):
+            resp = session_client.get('/admin/audit-trail', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

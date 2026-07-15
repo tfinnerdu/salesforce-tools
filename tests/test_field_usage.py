@@ -128,7 +128,7 @@ def test_get_field_usage_page_returns_200(client):
 def test_post_field_usage_run_with_sobject_returns_200_success(session_client):
     with patch('services.field_usage.get_sf', return_value=_fake_sf()):
         resp = session_client.post(
-            '/schema/field-usage/run',
+            '/api/v1/schema/field-usage/run',
             data=json.dumps({'sobject': 'Account'}),
             content_type='application/json',
         )
@@ -140,7 +140,7 @@ def test_post_field_usage_run_with_sobject_returns_200_success(session_client):
 
 def test_post_field_usage_run_without_sobject_returns_400(client):
     resp = client.post(
-        '/schema/field-usage/run',
+        '/api/v1/schema/field-usage/run',
         data=json.dumps({}),
         content_type='application/json',
     )

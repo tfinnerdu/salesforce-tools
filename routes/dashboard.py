@@ -1,11 +1,26 @@
-"""Dashboard Blueprint — Mission Control home page."""
+"""Dashboard Blueprint — Mission Control home page.
+
+HTML page stays unversioned at the existing prefix, per the Doane standard.
+The one JSON route moved to dashboard_api_bp under /api/v1/dashboard; the old
+/dashboard/summary path 308-redirects there (register_legacy_json_redirect
+below) so existing MC.api('/dashboard/summary') calls keep working unmodified.
+"""
 import logging
 
-from flask import Blueprint, jsonify, render_template, session
+from flask import Blueprint, render_template, session
+
+from utils.responses import error_response, new_request_id, ok, register_legacy_json_redirect
 
 logger = logging.getLogger(__name__)
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
+dashboard_api_bp = Blueprint('dashboard_api', __name__, url_prefix='/api/v1/dashboard')
+
+
+@dashboard_api_bp.before_request
+def _assign_request_id():
+    from flask import g
+    g.request_id = new_request_id()
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -16,9 +31,12 @@ def index():
     return render_template('dashboard/index.html')
 
 
+register_legacy_json_redirect(dashboard_bp, '/api/v1/dashboard')
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 
-@dashboard_bp.route('/summary')
+@dashboard_api_bp.route('/summary')
 def api_summary():
     """Quick stats for the dashboard title bar — doesn't call SF, just reads DB."""
     org = session.get('active_org', 'dev')
@@ -50,6 +68,7 @@ def api_summary():
                 row = cur.fetchone()
                 if row and row['total']:
                     summary['preflight_pct'] = round(row['checked'] / row['total'] * 100, 1)
-        except Exception:
-            pass
-    return jsonify({'success': True, 'data': summary})
+        except Exception as exc:
+            logger.exception('dashboard summary query failed')
+            return error_response(str(exc), 'SUMMARY_FAILED', 500)
+    return ok(summary)

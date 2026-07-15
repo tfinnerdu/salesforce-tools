@@ -213,7 +213,7 @@ def test_post_field_finder_run_returns_200_success(session_client):
     sf = _fake_sf(custom_records=[_cf('SIS_ID', 'Account')])
     with patch('services.field_locator.get_sf', return_value=sf):
         resp = session_client.post(
-            '/schema/field-finder/run',
+            '/api/v1/schema/field-finder/run',
             data=json.dumps({'field': 'SIS_ID__c'}),
             content_type='application/json',
         )
@@ -226,7 +226,7 @@ def test_post_field_finder_run_returns_200_success(session_client):
 
 def test_post_field_finder_run_without_field_returns_400(client):
     resp = client.post(
-        '/schema/field-finder/run',
+        '/api/v1/schema/field-finder/run',
         data=json.dumps({}),
         content_type='application/json',
     )
@@ -245,7 +245,7 @@ def test_post_field_finder_run_passes_include_standard(session_client):
              'type': 'boolean', 'custom': False}]}})
     with patch('services.field_locator.get_sf', return_value=sf):
         resp = session_client.post(
-            '/schema/field-finder/run',
+            '/api/v1/schema/field-finder/run',
             data=json.dumps({'field': 'IsPersonAccount', 'include_standard': True}),
             content_type='application/json',
         )

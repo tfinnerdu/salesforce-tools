@@ -181,7 +181,7 @@ def test_api_integrations_route(client):
     """GET /admin/integrations returns 200 with success JSON."""
     sf = _full_sf(_NC_ROWS, _RSS_ROWS, _CA_ROWS)
     with patch('services.integration_inventory.get_sf', return_value=sf):
-        resp = client.get('/admin/integrations')
+        resp = client.get('/api/v1/admin/integrations')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -199,7 +199,7 @@ def test_api_integrations_error(client, monkeypatch):
     import services.integration_inventory as inv
     monkeypatch.setattr(inv, 'get_all', _boom)
 
-    resp = client.get('/admin/integrations')
+    resp = client.get('/api/v1/admin/integrations')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False

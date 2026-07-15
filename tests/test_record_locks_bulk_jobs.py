@@ -112,20 +112,39 @@ def test_get_bulk_jobs_maps_records():
 
 # ── Route integration tests ───────────────────────────────────────────────────
 
+def test_get_old_api_record_locks_redirects(session_client):
+    """GET /data-ops/api/record-locks (old, redundant-"api"-segment path)
+    308-redirects to the clean new /api/v1/data-ops/record-locks — an
+    explicit override, since the generic legacy-redirect catch-all would
+    otherwise blindly copy the subpath to /api/v1/data-ops/api/record-locks,
+    which doesn't exist."""
+    resp = session_client.get('/data-ops/api/record-locks', follow_redirects=False)
+    assert resp.status_code == 308
+    assert resp.headers['Location'].endswith('/api/v1/data-ops/record-locks')
+
+
 def test_get_api_record_locks_returns_200(session_client):
-    """GET /data-ops/api/record-locks returns 200 with success=True."""
+    """GET /api/v1/data-ops/record-locks returns 200 with success=True."""
     with patch('services.record_lock_detector.get_sf', return_value=_query_sf([])):
-        resp = session_client.get('/data-ops/api/record-locks')
+        resp = session_client.get('/api/v1/data-ops/record-locks')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
     assert 'total_locked' in data['data']
 
 
+def test_get_old_api_bulk_jobs_redirects(session_client):
+    """GET /data-ops/api/bulk-jobs (old, redundant-"api"-segment path)
+    308-redirects to the clean new /api/v1/data-ops/bulk-jobs."""
+    resp = session_client.get('/data-ops/api/bulk-jobs', follow_redirects=False)
+    assert resp.status_code == 308
+    assert resp.headers['Location'].endswith('/api/v1/data-ops/bulk-jobs')
+
+
 def test_get_api_bulk_jobs_returns_200(session_client):
-    """GET /data-ops/api/bulk-jobs returns 200 with success=True."""
+    """GET /api/v1/data-ops/bulk-jobs returns 200 with success=True."""
     with patch('services.bulk_job_history.get_sf', return_value=_RestfulSF(records=[])):
-        resp = session_client.get('/data-ops/api/bulk-jobs')
+        resp = session_client.get('/api/v1/data-ops/bulk-jobs')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True

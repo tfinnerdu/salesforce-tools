@@ -125,10 +125,10 @@ def test_per_check_exception_sets_status_error():
         assert check['baseline_count'] is None
 
 
-# ── Test 9: GET /observe/sandbox-drift → 200 with success JSON ───────────────
+# ── Test 9: GET /api/v1/observe/sandbox-drift → 200 with success JSON ────────
 def test_route_sandbox_drift_returns_200(client):
     with _patch_two_orgs(1000, 980):
-        resp = client.get('/observe/sandbox-drift?baseline=prod&target=sandbox')
+        resp = client.get('/api/v1/observe/sandbox-drift?baseline=prod&target=sandbox')
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload['success'] is True
@@ -138,7 +138,7 @@ def test_route_sandbox_drift_returns_200(client):
 # ── Test 10: baseline_org and target_org appear in response data ──────────────
 def test_route_returns_correct_org_names(client):
     with _patch_two_orgs(1000, 980):
-        resp = client.get('/observe/sandbox-drift?baseline=prod&target=sandbox')
+        resp = client.get('/api/v1/observe/sandbox-drift?baseline=prod&target=sandbox')
     payload = resp.get_json()
     data = payload['data']
     assert data['baseline_org'] == 'prod'

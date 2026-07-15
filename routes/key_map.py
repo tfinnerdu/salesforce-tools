@@ -1,21 +1,32 @@
 """Key Map blueprint — admin CRUD + preview/export for Source → SF key maps.
 
-Page routes render the admin UI; API routes (under the same /key-maps prefix
-per project convention) back it. Preview is read-only — it never writes to
-Salesforce; it returns the would-be-inserted rows for review/export.
+Page routes render the admin UI; JSON/action routes (including the CSV
+export) moved to key_map_api_bp under /api/v1/key-maps; the old
+/key-maps/<subpath> paths 308-redirect there (register_legacy_json_redirect
+below) so existing MC.api('/key-maps/...') calls keep working unmodified.
+Preview is read-only — it never writes to Salesforce; it returns the
+would-be-inserted rows for review/export.
 """
 import csv
 import io
 import logging
 
-from flask import (Blueprint, Response, jsonify, render_template, request,
+from flask import (Blueprint, Response, render_template, request,
                    session)
 
 from services import key_map as svc
+from utils.responses import error_response, new_request_id, ok, register_legacy_json_redirect
 
 logger = logging.getLogger(__name__)
 
 key_map_bp = Blueprint('key_map', __name__, url_prefix='/key-maps')
+key_map_api_bp = Blueprint('key_map_api', __name__, url_prefix='/api/v1/key-maps')
+
+
+@key_map_api_bp.before_request
+def _assign_request_id():
+    from flask import g
+    g.request_id = new_request_id()
 
 
 # ── Page routes ──────────────────────────────────────────────────────────────
@@ -41,30 +52,33 @@ def run_page(key_map_id):
     return render_template('key_map/run.html', key_map_id=key_map_id)
 
 
+register_legacy_json_redirect(key_map_bp, '/api/v1/key-maps')
+
+
 # ── Key map CRUD ─────────────────────────────────────────────────────────────
 
-@key_map_bp.route('/list')
+@key_map_api_bp.route('/list')
 def api_list():
     try:
-        return jsonify({'success': True, 'data': svc.list_key_maps()})
+        return ok(svc.list_key_maps())
     except Exception as exc:
         logger.exception('key_map list failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'LIST_FAILED', 500)
 
 
-@key_map_bp.route('/get/<int:key_map_id>')
+@key_map_api_bp.route('/get/<int:key_map_id>')
 def api_get(key_map_id):
     try:
         km = svc.get_key_map(key_map_id)
         if km is None:
-            return jsonify({'success': False, 'error': 'Key map not found'}), 404
-        return jsonify({'success': True, 'data': km})
+            return error_response('Key map not found', 'NOT_FOUND', 404)
+        return ok(km)
     except Exception as exc:
         logger.exception('key_map get failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'GET_FAILED', 500)
 
 
-@key_map_bp.route('/create', methods=['POST'])
+@key_map_api_bp.route('/create', methods=['POST'])
 def api_create():
     body = request.get_json(silent=True) or {}
     try:
@@ -74,15 +88,15 @@ def api_create():
             target_sobject=body.get('target_sobject', ''),
             created_by=session.get('user', 'system'),
         )
-        return jsonify({'success': True, 'data': km}), 201
+        return ok(km, 201)
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('key_map create failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'CREATE_FAILED', 500)
 
 
-@key_map_bp.route('/update/<int:key_map_id>', methods=['POST'])
+@key_map_api_bp.route('/update/<int:key_map_id>', methods=['POST'])
 def api_update(key_map_id):
     body = request.get_json(silent=True) or {}
     try:
@@ -90,30 +104,30 @@ def api_update(key_map_id):
             key_map_id, body.get('name', ''),
             body.get('description', ''), body.get('target_sobject', ''))
         if km is None:
-            return jsonify({'success': False, 'error': 'Key map not found'}), 404
-        return jsonify({'success': True, 'data': km})
+            return error_response('Key map not found', 'NOT_FOUND', 404)
+        return ok(km)
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('key_map update failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'UPDATE_FAILED', 500)
 
 
-@key_map_bp.route('/<int:key_map_id>', methods=['DELETE'])
+@key_map_api_bp.route('/<int:key_map_id>', methods=['DELETE'])
 def api_delete(key_map_id):
     try:
-        ok = svc.delete_key_map(key_map_id)
-        if not ok:
-            return jsonify({'success': False, 'error': 'Key map not found'}), 404
-        return jsonify({'success': True, 'data': {'deleted': key_map_id}})
+        deleted = svc.delete_key_map(key_map_id)
+        if not deleted:
+            return error_response('Key map not found', 'NOT_FOUND', 404)
+        return ok({'deleted': key_map_id})
     except Exception as exc:
         logger.exception('key_map delete failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'DELETE_FAILED', 500)
 
 
 # ── FK lookups ───────────────────────────────────────────────────────────────
 
-@key_map_bp.route('/<int:key_map_id>/fk-lookups', methods=['POST'])
+@key_map_api_bp.route('/<int:key_map_id>/fk-lookups', methods=['POST'])
 def api_add_fk_lookup(key_map_id):
     body = request.get_json(silent=True) or {}
     try:
@@ -125,27 +139,29 @@ def api_add_fk_lookup(key_map_id):
             lookup_field=body.get('lookup_field', 'SIS_ID__c'),
             position=int(body.get('position', 0) or 0),
         )
-        return jsonify({'success': True, 'data': row}), 201
+        return ok(row, 201)
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('fk lookup add failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'ADD_FK_LOOKUP_FAILED', 500)
 
 
-@key_map_bp.route('/fk-lookups/<int:lookup_id>', methods=['DELETE'])
+@key_map_api_bp.route('/fk-lookups/<int:lookup_id>', methods=['DELETE'])
 def api_delete_fk_lookup(lookup_id):
     try:
-        ok = svc.delete_fk_lookup(lookup_id)
-        return jsonify({'success': ok, 'data': {'deleted': lookup_id}})
+        deleted = svc.delete_fk_lookup(lookup_id)
+        if not deleted:
+            return error_response('FK lookup not found', 'NOT_FOUND', 404)
+        return ok({'deleted': lookup_id})
     except Exception as exc:
         logger.exception('fk lookup delete failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'DELETE_FK_LOOKUP_FAILED', 500)
 
 
 # ── Families + variants ──────────────────────────────────────────────────────
 
-@key_map_bp.route('/<int:key_map_id>/families', methods=['POST'])
+@key_map_api_bp.route('/<int:key_map_id>/families', methods=['POST'])
 def api_add_family(key_map_id):
     body = request.get_json(silent=True) or {}
     try:
@@ -155,25 +171,27 @@ def api_add_family(key_map_id):
             routing=body.get('routing') or {},
             position=int(body.get('position', 0) or 0),
         )
-        return jsonify({'success': True, 'data': row}), 201
+        return ok(row, 201)
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('family add failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'ADD_FAMILY_FAILED', 500)
 
 
-@key_map_bp.route('/families/<int:family_id>', methods=['DELETE'])
+@key_map_api_bp.route('/families/<int:family_id>', methods=['DELETE'])
 def api_delete_family(family_id):
     try:
-        ok = svc.delete_family(family_id)
-        return jsonify({'success': ok, 'data': {'deleted': family_id}})
+        deleted = svc.delete_family(family_id)
+        if not deleted:
+            return error_response('Family not found', 'NOT_FOUND', 404)
+        return ok({'deleted': family_id})
     except Exception as exc:
         logger.exception('family delete failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'DELETE_FAMILY_FAILED', 500)
 
 
-@key_map_bp.route('/families/<int:family_id>/variants', methods=['POST'])
+@key_map_api_bp.route('/families/<int:family_id>/variants', methods=['POST'])
 def api_add_variant(family_id):
     body = request.get_json(silent=True) or {}
     try:
@@ -184,22 +202,24 @@ def api_add_variant(family_id):
             applies_when=body.get('applies_when') or {},
             position=int(body.get('position', 0) or 0),
         )
-        return jsonify({'success': True, 'data': row}), 201
+        return ok(row, 201)
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('variant add failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'ADD_VARIANT_FAILED', 500)
 
 
-@key_map_bp.route('/variants/<int:variant_id>', methods=['DELETE'])
+@key_map_api_bp.route('/variants/<int:variant_id>', methods=['DELETE'])
 def api_delete_variant(variant_id):
     try:
-        ok = svc.delete_variant(variant_id)
-        return jsonify({'success': ok, 'data': {'deleted': variant_id}})
+        deleted = svc.delete_variant(variant_id)
+        if not deleted:
+            return error_response('Variant not found', 'NOT_FOUND', 404)
+        return ok({'deleted': variant_id})
     except Exception as exc:
         logger.exception('variant delete failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'DELETE_VARIANT_FAILED', 500)
 
 
 # ── Preview + export ─────────────────────────────────────────────────────────
@@ -207,7 +227,7 @@ def api_delete_variant(variant_id):
 _PREVIEW_SAMPLE = 200
 
 
-@key_map_bp.route('/<int:key_map_id>/preview', methods=['POST'])
+@key_map_api_bp.route('/<int:key_map_id>/preview', methods=['POST'])
 def api_preview(key_map_id):
     """Ingest a source spec, expand through the key map, and return the
     summary + a capped sample of output rows + the unresolved-FK list.
@@ -224,22 +244,22 @@ def api_preview(key_map_id):
         result = svc.resolve_and_expand(key_map_id, rows, org)
         run_id = svc.save_run(key_map_id, org, result)
         out_rows = result['output_rows']
-        return jsonify({'success': True, 'data': {
+        return ok({
             'run_id': run_id,
             'summary': result['summary'],
             'unresolved_fks': result['unresolved_fks'][:_PREVIEW_SAMPLE],
             'unresolved_truncated': len(result['unresolved_fks']) > _PREVIEW_SAMPLE,
             'sample_rows': out_rows[:_PREVIEW_SAMPLE],
             'sample_truncated': len(out_rows) > _PREVIEW_SAMPLE,
-        }})
+        })
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('key_map preview failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'PREVIEW_FAILED', 500)
 
 
-@key_map_bp.route('/<int:key_map_id>/export', methods=['POST'])
+@key_map_api_bp.route('/<int:key_map_id>/export', methods=['POST'])
 def api_export(key_map_id):
     """Run the expansion and stream the full output as a CSV download."""
     body = request.get_json(silent=True) or request.form or {}
@@ -265,10 +285,10 @@ def api_export(key_map_id):
             headers={'Content-Disposition': f'attachment; filename="{name}_preview.csv"'},
         )
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
         logger.exception('key_map export failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'EXPORT_FAILED', 500)
 
 
 def _rows_to_csv(rows: list) -> str:

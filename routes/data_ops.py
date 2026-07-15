@@ -1,12 +1,26 @@
 import logging
 
-from flask import Blueprint, jsonify, redirect, render_template, request, Response, session, url_for
+from flask import Blueprint, redirect, render_template, request, Response, session, url_for
 
 from services import join_builder, bulk_dml
+from utils.responses import error_response, new_request_id, ok, register_legacy_json_redirect
 
 logger = logging.getLogger(__name__)
 
+# HTML page(s) — stay unversioned at the existing prefix, per the Doane
+# standard. JSON data/action routes (incl. the binary CSV/ZIP downloads, which
+# are action routes that just happen to return non-JSON on success) moved to
+# data_ops_api_bp under /api/v1/data-ops; the old /data-ops/<subpath> paths
+# 308-redirect there (register_legacy_json_redirect below) so existing
+# MC.api('/data-ops/...') calls keep working unmodified.
 data_ops_bp = Blueprint('data_ops', __name__, url_prefix='/data-ops')
+data_ops_api_bp = Blueprint('data_ops_api', __name__, url_prefix='/api/v1/data-ops')
+
+
+@data_ops_api_bp.before_request
+def _assign_request_id():
+    from flask import g
+    g.request_id = new_request_id()
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -88,26 +102,59 @@ def file_migration_page():
     return render_template('data_ops/file_migration.html')
 
 
+register_legacy_json_redirect(data_ops_bp, '/api/v1/data-ops')
+
+
+# ── Legacy path anomalies ─────────────────────────────────────────────────────
+#
+# Two old JSON routes had a redundant literal "api" segment baked into their
+# path (/data-ops/api/record-locks, /data-ops/api/bulk-jobs) — a naming
+# anomaly, not a versioning prefix. Their new canonical homes drop that
+# redundant segment (/api/v1/data-ops/record-locks, /api/v1/data-ops/bulk-jobs)
+# rather than becoming /api/v1/data-ops/api/... . The generic catch-all above
+# does a blind 1:1 subpath copy, which would send these two to a path that
+# doesn't exist, so they get explicit overrides here instead. Werkzeug always
+# matches a literal rule ahead of the <path:subpath> catch-all regardless of
+# registration order, so placement relative to the catch-all doesn't matter.
+
+@data_ops_bp.route('/api/record-locks')
+def _legacy_record_locks_redirect():
+    target = '/api/v1/data-ops/record-locks'
+    qs = request.query_string.decode()
+    if qs:
+        target = f'{target}?{qs}'
+    return redirect(target, code=308)
+
+
+@data_ops_bp.route('/api/bulk-jobs')
+def _legacy_bulk_jobs_redirect():
+    target = '/api/v1/data-ops/bulk-jobs'
+    qs = request.query_string.decode()
+    if qs:
+        target = f'{target}?{qs}'
+    return redirect(target, code=308)
+
+
 # ── Import API ────────────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/import/fields', methods=['POST'])
+@data_ops_api_bp.route('/import/fields', methods=['POST'])
 def api_import_fields():
     """Return SF object fields for mapping UI."""
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
     object_name = body.get('object', '').strip()
     if not object_name:
-        return jsonify({'success': False, 'error': 'object required'}), 400
+        return error_response('object required', 'INVALID_INPUT', 400)
     try:
         from services import data_importer
         fields = data_importer.get_object_fields(org, object_name)
-        return jsonify({'success': True, 'data': fields})
+        return ok(fields)
     except Exception as exc:
         logger.exception('import fields failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'IMPORT_FIELDS_FAILED', 500)
 
 
-@data_ops_bp.route('/import/validate', methods=['POST'])
+@data_ops_api_bp.route('/import/validate', methods=['POST'])
 def api_import_validate():
     """Validate CSV rows against SF schema — no writes."""
     org = session.get('active_org', 'dev')
@@ -119,15 +166,15 @@ def api_import_validate():
     field_mapping = json.loads(body.get('field_mapping', '{}'))
 
     if not csv_file or not object_name:
-        return jsonify({'success': False, 'error': 'csv_file and object are required'}), 400
+        return error_response('csv_file and object are required', 'INVALID_INPUT', 400)
     try:
         csv_text = csv_file.read().decode('utf-8-sig')
         from services import data_importer
         result = data_importer.validate_csv(org, object_name, csv_text, field_mapping, operation)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('import validate failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'IMPORT_VALIDATE_FAILED', 500)
 
 
 def _build_migration_cfg(body, files, tmp_paths):
@@ -214,13 +261,13 @@ def _run_file_migration(commit):
     source = body.get('source', '').strip()
     target = body.get('target', '').strip()
     if not source or not target:
-        return jsonify({'success': False, 'error': 'source and target are required'}), 400
+        return error_response('source and target are required', 'INVALID_INPUT', 400)
 
     tmp_paths = []
     try:
         cfg, err = _build_migration_cfg(body, request.files, tmp_paths)
         if err:
-            return jsonify({'success': False, 'error': err[0]}), err[1]
+            return error_response(err[0], 'INVALID_INPUT', err[1])
         source_sf = get_sf(source)
         target_sf = get_sf(target)
         plan, resolved, unresolved, stats = file_migration.build_plan(source_sf, target_sf, cfg)
@@ -236,7 +283,7 @@ def _run_file_migration(commit):
                 source_sf, target_sf, plan, cfg.mode, cfg.dest or cfg.mode,
                 cfg.share_type, cfg.visibility)
             data['committed'] = True
-        return jsonify({'success': True, 'data': data})
+        return ok(data)
     finally:
         for p in tmp_paths:
             try:
@@ -245,27 +292,27 @@ def _run_file_migration(commit):
                 pass
 
 
-@data_ops_bp.route('/file-migration/plan', methods=['POST'])
+@data_ops_api_bp.route('/file-migration/plan', methods=['POST'])
 def api_file_migration_plan():
     """Dry-run the org-to-org file migration from an uploaded crosswalk — no writes."""
     try:
         return _run_file_migration(commit=False)
     except Exception as exc:
         logger.exception('file migration plan failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'FILE_MIGRATION_PLAN_FAILED', 500)
 
 
-@data_ops_bp.route('/file-migration/run', methods=['POST'])
+@data_ops_api_bp.route('/file-migration/run', methods=['POST'])
 def api_file_migration_run():
     """Execute the org-to-org file migration (streams files, relinks parents)."""
     try:
         return _run_file_migration(commit=True)
     except Exception as exc:
         logger.exception('file migration run failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'FILE_MIGRATION_RUN_FAILED', 500)
 
 
-@data_ops_bp.route('/import/execute', methods=['POST'])
+@data_ops_api_bp.route('/import/execute', methods=['POST'])
 def api_import_execute():
     """Execute CSV import via Bulk API."""
     org = session.get('active_org', 'dev')
@@ -279,7 +326,7 @@ def api_import_execute():
     field_mapping = json.loads(body.get('field_mapping', '{}'))
 
     if not csv_file or not object_name:
-        return jsonify({'success': False, 'error': 'csv_file and object are required'}), 400
+        return error_response('csv_file and object are required', 'INVALID_INPUT', 400)
     try:
         csv_text = csv_file.read().decode('utf-8-sig')
         from services import data_importer
@@ -287,13 +334,13 @@ def api_import_execute():
             org, object_name, csv_text, field_mapping,
             operation, external_id_field, bypass_triggers,
         )
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('import execute failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'IMPORT_EXECUTE_FAILED', 500)
 
 
-@data_ops_bp.route('/import/download-errors', methods=['POST'])
+@data_ops_api_bp.route('/import/download-errors', methods=['POST'])
 def api_import_download_errors():
     """Return error CSV as a file download."""
     error_csv = request.form.get('error_csv', '')
@@ -307,24 +354,24 @@ def api_import_download_errors():
 
 # ── Delete API ────────────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/delete/preview', methods=['POST'])
+@data_ops_api_bp.route('/delete/preview', methods=['POST'])
 def api_delete_preview():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
     object_name = body.get('object', '').strip()
     where_clause = body.get('where_clause', '').strip()
     if not object_name or not where_clause:
-        return jsonify({'success': False, 'error': 'object and where_clause required'}), 400
+        return error_response('object and where_clause required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         result = bulk_ops.bulk_delete_preview(org, object_name, where_clause)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('delete preview failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'DELETE_PREVIEW_FAILED', 500)
 
 
-@data_ops_bp.route('/delete/execute', methods=['POST'])
+@data_ops_api_bp.route('/delete/execute', methods=['POST'])
 def api_delete_execute():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -332,19 +379,19 @@ def api_delete_execute():
     where_clause = body.get('where_clause', '').strip()
     bypass_triggers = bool(body.get('bypass_triggers', False))
     if not object_name or not where_clause:
-        return jsonify({'success': False, 'error': 'object and where_clause required'}), 400
+        return error_response('object and where_clause required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         result = bulk_ops.bulk_delete_execute(org, object_name, where_clause, bypass_triggers)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('delete execute failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'DELETE_EXECUTE_FAILED', 500)
 
 
 # ── Modify API ────────────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/modify/preview', methods=['POST'])
+@data_ops_api_bp.route('/modify/preview', methods=['POST'])
 def api_modify_preview():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -353,17 +400,17 @@ def api_modify_preview():
     field_name = body.get('field', '').strip()
     new_value = body.get('value', '')
     if not object_name or not where_clause or not field_name:
-        return jsonify({'success': False, 'error': 'object, where_clause, and field required'}), 400
+        return error_response('object, where_clause, and field required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         result = bulk_ops.bulk_modify_preview(org, object_name, where_clause, field_name, new_value)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('modify preview failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'MODIFY_PREVIEW_FAILED', 500)
 
 
-@data_ops_bp.route('/modify/execute', methods=['POST'])
+@data_ops_api_bp.route('/modify/execute', methods=['POST'])
 def api_modify_execute():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -372,49 +419,49 @@ def api_modify_execute():
     field_updates = body.get('field_updates', {})
     bypass_triggers = bool(body.get('bypass_triggers', False))
     if not object_name or not where_clause or not field_updates:
-        return jsonify({'success': False, 'error': 'object, where_clause, and field_updates required'}), 400
+        return error_response('object, where_clause, and field_updates required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         result = bulk_ops.bulk_modify_execute(org, object_name, where_clause, field_updates, bypass_triggers)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('modify execute failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'MODIFY_EXECUTE_FAILED', 500)
 
 
 # ── Reassign API ──────────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/reassign/users')
+@data_ops_api_bp.route('/reassign/users')
 def api_reassign_users():
     org = session.get('active_org', 'dev')
     q = request.args.get('q', '').strip()
     try:
         from services import bulk_ops
         data = bulk_ops.search_users(org, q)
-        return jsonify({'success': True, 'data': data})
+        return ok(data)
     except Exception as exc:
         logger.exception('reassign user search failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'REASSIGN_USERS_FAILED', 500)
 
 
-@data_ops_bp.route('/reassign/preview', methods=['POST'])
+@data_ops_api_bp.route('/reassign/preview', methods=['POST'])
 def api_reassign_preview():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
     object_name = body.get('object', '').strip()
     where_clause = body.get('where_clause', '').strip()
     if not object_name or not where_clause:
-        return jsonify({'success': False, 'error': 'object and where_clause required'}), 400
+        return error_response('object and where_clause required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         result = bulk_ops.bulk_reassign_preview(org, object_name, where_clause)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('reassign preview failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'REASSIGN_PREVIEW_FAILED', 500)
 
 
-@data_ops_bp.route('/reassign/execute', methods=['POST'])
+@data_ops_api_bp.route('/reassign/execute', methods=['POST'])
 def api_reassign_execute():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -423,19 +470,19 @@ def api_reassign_execute():
     new_owner_id = body.get('new_owner_id', '').strip()
     bypass_triggers = bool(body.get('bypass_triggers', False))
     if not object_name or not where_clause or not new_owner_id:
-        return jsonify({'success': False, 'error': 'object, where_clause, and new_owner_id required'}), 400
+        return error_response('object, where_clause, and new_owner_id required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         result = bulk_ops.bulk_reassign_execute(org, object_name, where_clause, new_owner_id, bypass_triggers)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('reassign execute failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'REASSIGN_EXECUTE_FAILED', 500)
 
 
 # ── Export API ────────────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/export/run', methods=['POST'])
+@data_ops_api_bp.route('/export/run', methods=['POST'])
 def api_export_run():
     org = session.get('active_org', 'dev')
     # Accept both JSON (from fetch) and form (from direct form submit)
@@ -448,7 +495,7 @@ def api_export_run():
     all_pages_raw = body.get('all_pages', 'true')
     all_pages = str(all_pages_raw).lower() not in ('false', '0', '')
     if not soql:
-        return jsonify({'success': False, 'error': 'soql required'}), 400
+        return error_response('soql required', 'INVALID_INPUT', 400)
     try:
         from services import bulk_ops
         csv_text = bulk_ops.export_to_csv(org, soql, all_pages=all_pages)
@@ -459,18 +506,18 @@ def api_export_run():
         )
     except Exception as exc:
         logger.exception('export failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'EXPORT_RUN_FAILED', 500)
 
 
 # ── Data Backup API ───────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/backup/objects')
+@data_ops_api_bp.route('/backup/objects')
 def api_backup_objects():
     from services import data_backup
-    return jsonify({'success': True, 'data': data_backup.DEFAULT_BACKUP_OBJECTS})
+    return ok(data_backup.DEFAULT_BACKUP_OBJECTS)
 
 
-@data_ops_bp.route('/backup/run', methods=['POST'])
+@data_ops_api_bp.route('/backup/run', methods=['POST'])
 def api_backup_run():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -478,24 +525,24 @@ def api_backup_run():
     try:
         from services import data_backup
         result = data_backup.run_backup(org, objects, trigger='manual')
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('backup run failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'BACKUP_RUN_FAILED', 500)
 
 
-@data_ops_bp.route('/backup/list')
+@data_ops_api_bp.route('/backup/list')
 def api_backup_list():
     org = session.get('active_org', 'dev')
     try:
         from services import data_backup
-        return jsonify({'success': True, 'data': data_backup.list_backups(org)})
+        return ok(data_backup.list_backups(org))
     except Exception as exc:
         logger.exception('backup list failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'BACKUP_LIST_FAILED', 500)
 
 
-@data_ops_bp.route('/backup/<int:run_id>/download')
+@data_ops_api_bp.route('/backup/<int:run_id>/download')
 def api_backup_download(run_id):
     try:
         from services import data_backup
@@ -506,15 +553,15 @@ def api_backup_download(run_id):
             headers={'Content-Disposition': f'attachment; filename="{filename}"'},
         )
     except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 404
+        return error_response(str(exc), 'NOT_FOUND', 404)
     except Exception as exc:
         logger.exception('backup download failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'BACKUP_DOWNLOAD_FAILED', 500)
 
 
 # ── SQL Server schema cache (Join Builder) ────────────────────────────────────
 
-@data_ops_bp.route('/sql-schema')
+@data_ops_api_bp.route('/sql-schema')
 def api_sql_schema():
     """Cached SQL Server schema. ?table=<name> returns that table's columns;
     otherwise returns the table-name list + cache metadata."""
@@ -522,63 +569,63 @@ def api_sql_schema():
     try:
         from services import sql_schema
         if table:
-            return jsonify({'success': True, 'data': {
+            return ok({
                 'table': table,
                 'columns': sql_schema.get_table_columns(table),
-            }})
+            })
         cached = sql_schema.get_cached_schema()
-        return jsonify({'success': True, 'data': {
+        return ok({
             'captured_at': cached.get('captured_at'),
             'table_count': cached.get('table_count', 0),
             'mock': cached.get('mock', False),
             'tables': sorted(cached.get('tables', {}).keys()),
-        }})
+        })
     except Exception as exc:
         logger.exception('sql schema read failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'SQL_SCHEMA_FAILED', 500)
 
 
-@data_ops_bp.route('/sql-schema/refresh', methods=['POST'])
+@data_ops_api_bp.route('/sql-schema/refresh', methods=['POST'])
 def api_sql_schema_refresh():
     """Re-introspect the SQL Server schema and cache it."""
     try:
         from services import sql_schema
         result = sql_schema.refresh_schema()
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('sql schema refresh failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'SQL_SCHEMA_REFRESH_FAILED', 500)
 
 
-@data_ops_bp.route('/sf-object-fields')
+@data_ops_api_bp.route('/sf-object-fields')
 def api_sf_object_fields():
     """Field list for one SF object — for the Join Builder field checker."""
     org = session.get('active_org', 'dev')
     object_name = request.args.get('object', '').strip()
     if not object_name:
-        return jsonify({'success': False, 'error': 'object param required'}), 400
+        return error_response('object param required', 'INVALID_INPUT', 400)
     try:
         from services import soql_workbench
         fields = soql_workbench.list_fields(org, object_name)
-        return jsonify({'success': True, 'data': fields})
+        return ok(fields)
     except Exception as exc:
         logger.exception('sf object fields failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'SF_OBJECT_FIELDS_FAILED', 500)
 
 
 # ── Tune (data standardization) API ───────────────────────────────────────────
 
-@data_ops_bp.route('/tune/rules')
+@data_ops_api_bp.route('/tune/rules')
 def api_tune_rules():
     try:
         from services import data_tuner
-        return jsonify({'success': True, 'data': data_tuner.list_rules()})
+        return ok(data_tuner.list_rules())
     except Exception as exc:
         logger.exception('tune rules failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'TUNE_RULES_FAILED', 500)
 
 
-@data_ops_bp.route('/tune/preview', methods=['POST'])
+@data_ops_api_bp.route('/tune/preview', methods=['POST'])
 def api_tune_preview():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -586,17 +633,17 @@ def api_tune_preview():
     where_clause = body.get('where_clause', '').strip()
     field_rules = body.get('field_rules', {})
     if not object_name or not where_clause or not field_rules:
-        return jsonify({'success': False, 'error': 'object, where_clause, and field_rules required'}), 400
+        return error_response('object, where_clause, and field_rules required', 'INVALID_INPUT', 400)
     try:
         from services import data_tuner
         result = data_tuner.preview_tune(org, object_name, where_clause, field_rules)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('tune preview failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'TUNE_PREVIEW_FAILED', 500)
 
 
-@data_ops_bp.route('/tune/execute', methods=['POST'])
+@data_ops_api_bp.route('/tune/execute', methods=['POST'])
 def api_tune_execute():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -605,19 +652,19 @@ def api_tune_execute():
     field_rules = body.get('field_rules', {})
     bypass_triggers = bool(body.get('bypass_triggers', False))
     if not object_name or not where_clause or not field_rules:
-        return jsonify({'success': False, 'error': 'object, where_clause, and field_rules required'}), 400
+        return error_response('object, where_clause, and field_rules required', 'INVALID_INPUT', 400)
     try:
         from services import data_tuner
         result = data_tuner.apply_tune(org, object_name, where_clause, field_rules, bypass_triggers)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('tune execute failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'TUNE_EXECUTE_FAILED', 500)
 
 
 # ── Match (fuzzy duplicate detection) API ─────────────────────────────────────
 
-@data_ops_bp.route('/match/run', methods=['POST'])
+@data_ops_api_bp.route('/match/run', methods=['POST'])
 def api_match_run():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -627,21 +674,21 @@ def api_match_run():
     block_field = body.get('block_field', '').strip()
     threshold = body.get('threshold', 0.85)
     if not object_name or not where_clause or not compare_fields or not block_field:
-        return jsonify({'success': False,
-                        'error': 'object, where_clause, compare_fields, and block_field required'}), 400
+        return error_response(
+            'object, where_clause, compare_fields, and block_field required', 'INVALID_INPUT', 400)
     try:
         from services import fuzzy_matcher
         result = fuzzy_matcher.find_matches(
             org, object_name, where_clause, compare_fields, block_field, threshold)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('match run failed')
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return error_response(str(exc), 'MATCH_RUN_FAILED', 500)
 
 
-# ── API routes ────────────────────────────────────────────────────────────────
+# ── Join Builder API ──────────────────────────────────────────────────────────
 
-@data_ops_bp.route('/join/build', methods=['POST'])
+@data_ops_api_bp.route('/join/build', methods=['POST'])
 def api_join_build():
     body = request.get_json(silent=True) or {}
     sql_table = body.get('sql_table', '').strip()
@@ -650,7 +697,7 @@ def api_join_build():
     sf_fields = body.get('sf_fields', [])
     join_mapping = body.get('join_mapping', {})
     if not sql_table or not sf_object:
-        return jsonify({'success': False, 'data': None, 'error': 'sql_table and sf_object are required'}), 400
+        return error_response('sql_table and sf_object are required', 'INVALID_INPUT', 400)
     try:
         result = join_builder.build_query(
             sql_table=sql_table,
@@ -659,13 +706,13 @@ def api_join_build():
             sf_fields=sf_fields,
             join_mapping=join_mapping,
         )
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('join build failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'JOIN_BUILD_FAILED', 500)
 
 
-@data_ops_bp.route('/join/run', methods=['POST'])
+@data_ops_api_bp.route('/join/run', methods=['POST'])
 def api_join_run():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -694,7 +741,7 @@ def api_join_run():
         }
 
     if not sql_query or not soql_query:
-        return jsonify({'success': False, 'data': None, 'error': 'sql_query and soql_query are required'}), 400
+        return error_response('sql_query and soql_query are required', 'INVALID_INPUT', 400)
     try:
         result = join_builder.run_join(
             org=org,
@@ -702,29 +749,29 @@ def api_join_run():
             soql_query=soql_query,
             join_mapping=join_mapping,
         )
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('join run failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'JOIN_RUN_FAILED', 500)
 
 
-@data_ops_bp.route('/bulk-update/preview', methods=['POST'])
+@data_ops_api_bp.route('/bulk-update/preview', methods=['POST'])
 def api_bulk_preview():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
     sobject = body.get('sobject', '').strip()
     where_clause = body.get('where_clause', '').strip()
     if not sobject or not where_clause:
-        return jsonify({'success': False, 'data': None, 'error': 'sobject and where_clause required'}), 400
+        return error_response('sobject and where_clause required', 'INVALID_INPUT', 400)
     try:
         result = bulk_dml.preview(org=org, sobject=sobject, where_clause=where_clause)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except Exception as exc:
         logger.exception('bulk preview failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'BULK_PREVIEW_FAILED', 500)
 
 
-@data_ops_bp.route('/bulk-update/execute', methods=['POST'])
+@data_ops_api_bp.route('/bulk-update/execute', methods=['POST'])
 def api_bulk_execute():
     org = session.get('active_org', 'dev')
     body = request.get_json(silent=True) or {}
@@ -734,38 +781,38 @@ def api_bulk_execute():
     value = body.get('value')
     dry_run = bool(body.get('dry_run', True))
     if not sobject or not where_clause or not field:
-        return jsonify({'success': False, 'data': None, 'error': 'sobject, where_clause, and field required'}), 400
+        return error_response('sobject, where_clause, and field required', 'INVALID_INPUT', 400)
     try:
         result = bulk_dml.bulk_update(org=org, sobject=sobject, where_clause=where_clause,
                                       field=field, value=value, dry_run=dry_run)
-        return jsonify({'success': True, 'data': result})
+        return ok(result)
     except ValueError as exc:
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 400
+        return error_response(str(exc), 'BULK_EXECUTE_INVALID', 400)
     except Exception as exc:
         logger.exception('bulk execute failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'BULK_EXECUTE_FAILED', 500)
 
 
-@data_ops_bp.route('/api/record-locks')
+@data_ops_api_bp.route('/record-locks')
 def api_record_locks():
     org = session.get('active_org', 'dev')
     sobject = request.args.get('object', '')
     try:
         from services import record_lock_detector
         data = record_lock_detector.get_locked_records(org=org, sobject=sobject or None)
-        return jsonify({'success': True, 'data': data})
+        return ok(data)
     except Exception as exc:
         logger.exception('record locks failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'RECORD_LOCKS_FAILED', 500)
 
 
-@data_ops_bp.route('/api/bulk-jobs')
+@data_ops_api_bp.route('/bulk-jobs')
 def api_bulk_jobs():
     org = session.get('active_org', 'dev')
     try:
         from services import bulk_job_history
         data = bulk_job_history.get_bulk_jobs(org=org)
-        return jsonify({'success': True, 'data': data})
+        return ok(data)
     except Exception as exc:
         logger.exception('bulk job history failed')
-        return jsonify({'success': False, 'data': None, 'error': str(exc)}), 500
+        return error_response(str(exc), 'BULK_JOBS_FAILED', 500)

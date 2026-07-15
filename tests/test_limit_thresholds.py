@@ -93,22 +93,22 @@ def test_get_limits_uses_default_threshold():
     assert daily['custom_threshold'] is None
 
 
-# ── Test 7: GET /observe/thresholds → 200 success ────────────────────────────
+# ── Test 7: GET /api/v1/observe/thresholds → 200 success ─────────────────────
 def test_route_get_thresholds_returns_200(client):
     with patch('services.org_observer.get_thresholds', return_value={}):
-        resp = client.get('/observe/thresholds')
+        resp = client.get('/api/v1/observe/thresholds')
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload['success'] is True
     assert isinstance(payload['data'], dict)
 
 
-# ── Test 8: POST /observe/thresholds with valid data → 200 success ────────────
+# ── Test 8: POST /api/v1/observe/thresholds with valid data → 200 success ────
 def test_route_post_threshold_valid_returns_200(client):
     saved = {'limit_name': 'DailyApiRequests', 'amber_pct': 40.0, 'red_pct': 70.0, 'saved': True}
     with patch('services.org_observer.set_threshold', return_value=saved):
         resp = client.post(
-            '/observe/thresholds',
+            '/api/v1/observe/thresholds',
             data=json.dumps({'limit_name': 'DailyApiRequests', 'amber_pct': 40, 'red_pct': 70}),
             content_type='application/json',
         )
@@ -118,10 +118,10 @@ def test_route_post_threshold_valid_returns_200(client):
     assert payload['data']['limit_name'] == 'DailyApiRequests'
 
 
-# ── Test 9: POST /observe/thresholds invalid data (amber > red) → 400 ─────────
+# ── Test 9: POST /api/v1/observe/thresholds invalid data (amber > red) → 400 ─
 def test_route_post_threshold_invalid_amber_gt_red_returns_400(client):
     resp = client.post(
-        '/observe/thresholds',
+        '/api/v1/observe/thresholds',
         data=json.dumps({'limit_name': 'DailyApiRequests', 'amber_pct': 80, 'red_pct': 40}),
         content_type='application/json',
     )
@@ -131,11 +131,26 @@ def test_route_post_threshold_invalid_amber_gt_red_returns_400(client):
     assert 'amber_pct' in payload['error']
 
 
-# ── Test 10: DELETE /observe/thresholds/DailyApiRequests → 200 ────────────────
+# ── Test 10: DELETE /api/v1/observe/thresholds/DailyApiRequests → 200 ─────────
 def test_route_delete_threshold_returns_200(client):
     with patch('services.org_observer.delete_threshold', return_value=True):
-        resp = client.delete('/observe/thresholds/DailyApiRequests')
+        resp = client.delete('/api/v1/observe/thresholds/DailyApiRequests')
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload['success'] is True
     assert payload['data']['deleted'] is True
+
+
+# ── Legacy redirect (mirrors TestMetaLegacyRedirect in test_meta_routes.py) ───
+
+class TestObserveLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/observe/limits', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/observe/limits')
+
+    def test_old_path_redirect_is_followable(self, client):
+        with patch('services.org_observer.get_limits', return_value={'limits': []}):
+            resp = client.get('/observe/limits', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

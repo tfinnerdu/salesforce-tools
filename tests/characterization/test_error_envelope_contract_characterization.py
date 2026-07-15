@@ -56,10 +56,10 @@ def test_error_response_threads_g_request_id_when_set(app):
 def test_live_cli_route_error_matches_envelope_contract_characterization(client):
     # A real CLI-blueprint error path (missing required "object") must return
     # the exact contract, not just utils.responses in isolation.
-    resp = client.post('/cli/clone-object/plan', data=json.dumps({}),
+    resp = client.post('/api/v1/cli/clone-object/plan', data=json.dumps({}),
                        content_type='application/json')
     assert resp.status_code == 400
     body = resp.get_json()
     for key in ('error', 'code', 'request_id'):
-        assert key in body, f'/cli/clone-object/plan error response missing required key "{key}"'
+        assert key in body, f'/api/v1/cli/clone-object/plan error response missing required key "{key}"'
     assert not str(body['code']).isdigit()

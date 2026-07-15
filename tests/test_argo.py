@@ -37,17 +37,25 @@ class TestGenerateCronWorkflow:
         assert 'kind: CronWorkflow' in out
         assert 'schedule: "0 6 * * 0"' in out
         assert 'sf-mc-scenario-42-ptat-weekly' in out
-        assert '/scenarios/42/scheduled-run' in out
+        assert '/api/v1/scenarios/42/scheduled-run' in out
         assert 'X-MC-Scheduler-Token: $MC_TOKEN' in out
         assert 'secretKeyRef' in out
         assert 'key: scheduler-token' in out
         assert 'namespace: prod' in out
 
+    def test_curl_follows_redirects(self, monkeypatch):
+        # -L is load-bearing: a manifest generated before the /api/v1 move
+        # still targets the old bare path, which now only 308-redirects.
+        # Without -L, `curl -f` treats a bare 3xx as success and the
+        # CronWorkflow would report green having never run the scenario.
+        out = argo.generate_cronworkflow(1, 'X', '0 0 * * *')
+        assert 'curl -fsS -L -X POST' in out
+
     def test_uses_configured_base_url(self, monkeypatch):
         monkeypatch.setattr(Config, 'PUBLIC_BASE_URL', 'https://example.test/app/')
         out = argo.generate_cronworkflow(1, 'X', '0 0 * * *')
         # trailing slash trimmed, no double slash
-        assert 'https://example.test/app/scenarios/1/scheduled-run' in out
+        assert 'https://example.test/app/api/v1/scenarios/1/scheduled-run' in out
 
     def test_invalid_cron_raises(self):
         with pytest.raises(ValueError):

@@ -199,7 +199,7 @@ def test_diff_snapshots_without_db_raises():
 
 def test_get_snapshots_list_returns_200_and_success(client):
     with patch('services.schema_snapshot.db_available', return_value=False):
-        resp = client.get('/schema/snapshots/list')
+        resp = client.get('/api/v1/schema/snapshots/list')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -210,7 +210,7 @@ def test_post_snapshots_take_returns_200_and_sobject_in_data(session_client):
     with patch('services.schema_snapshot.get_sf', return_value=_fake_sf()), \
          patch('services.schema_snapshot.db_available', return_value=False):
         resp = session_client.post(
-            '/schema/snapshots/take',
+            '/api/v1/schema/snapshots/take',
             data=json.dumps({'sobject': 'Account'}),
             content_type='application/json',
         )
@@ -219,3 +219,18 @@ def test_post_snapshots_take_returns_200_and_sobject_in_data(session_client):
     assert data['success'] is True
     assert data['data']['sobject'] == 'Account'
     assert data['data']['field_count'] == len(_ACCOUNT_DESCRIBE['fields'])
+
+
+# ── Legacy redirect ──────────────────────────────────────────────────────────
+
+class TestSchemaLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/schema/snapshots/list', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/schema/snapshots/list')
+
+    def test_old_path_redirect_is_followable(self, client):
+        with patch('services.schema_snapshot.db_available', return_value=False):
+            resp = client.get('/schema/snapshots/list', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

@@ -95,7 +95,7 @@ def test_migration_reconciler_page(client):
 
 def test_migration_readiness_run_api(client):
     with patch('services.readiness_validator.get_sf', return_value=_count_sf(100)):
-        resp = client.post('/migration/readiness/run')
+        resp = client.post('/api/v1/migration/readiness/run')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -103,7 +103,7 @@ def test_migration_readiness_run_api(client):
 
 
 def test_migration_readiness_history_api(client):
-    resp = client.get('/migration/readiness/history')
+    resp = client.get('/api/v1/migration/readiness/history')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -112,7 +112,7 @@ def test_migration_readiness_history_api(client):
 
 def test_migration_batch_status_api(client):
     with patch('services.batch_tracker.get_conductor_client', return_value=_conductor()):
-        resp = client.get('/migration/batch/status?workflow_name=EDA_Person_Sync')
+        resp = client.get('/api/v1/migration/batch/status?workflow_name=EDA_Person_Sync')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -122,7 +122,7 @@ def test_migration_batch_status_api(client):
 def test_migration_reconciler_errors_api(client):
     with patch('services.error_reconciler.get_conductor_client', return_value=_conductor()):
         resp = client.get(
-            '/migration/reconciler/errors?workflow_name=EDA_Person_Sync&hours_back=24')
+            '/api/v1/migration/reconciler/errors?workflow_name=EDA_Person_Sync&hours_back=24')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -138,7 +138,7 @@ def test_validation_duplicates_page(client):
 
 def test_validation_duplicates_scan_api(client):
     with patch('services.duplicate_radar.get_sf', return_value=_sf()):
-        resp = client.post('/validation/duplicates/scan')
+        resp = client.post('/api/v1/validation/duplicates/scan')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -147,7 +147,7 @@ def test_validation_duplicates_scan_api(client):
 
 def test_validation_external_ids_api(client):
     with patch('services.external_id_coverage.get_sf', return_value=_count_sf(100)):
-        resp = client.get('/validation/external-ids/run')
+        resp = client.get('/api/v1/validation/external-ids/run')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -156,7 +156,7 @@ def test_validation_external_ids_api(client):
 
 def test_validation_contactpoints_api(client):
     with patch('services.contactpoint_scanner.get_sf', return_value=_count_sf(10)):
-        resp = client.get('/validation/contactpoints/scan')
+        resp = client.get('/api/v1/validation/contactpoints/scan')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -227,7 +227,7 @@ def test_schema_org_diff_api(client):
         'run_at': '2026-05-22T00:00:00',
     }
     with patch('routes.schema.schema_diff.run_diff', return_value=diff):
-        resp = client.post('/schema/org-diff/run',
+        resp = client.post('/api/v1/schema/org-diff/run',
                            json={'compare_org': 'prod', 'objects': ['Account']})
     assert resp.status_code == 200
     data = resp.get_json()
@@ -250,7 +250,7 @@ def test_data_ops_join_build_api(client):
         'sf_fields': ['Id', 'SIS_ID__c'],
         'join_mapping': {'sql_field': 'StudentId', 'sf_field': 'SIS_ID__c'},
     }
-    resp = client.post('/data-ops/join/build', json=payload)
+    resp = client.post('/api/v1/data-ops/join/build', json=payload)
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -258,7 +258,7 @@ def test_data_ops_join_build_api(client):
 
 
 def test_data_ops_join_build_requires_fields(client):
-    resp = client.post('/data-ops/join/build', json={})
+    resp = client.post('/api/v1/data-ops/join/build', json={})
     assert resp.status_code == 400
 
 
@@ -270,7 +270,7 @@ def test_settings_page(client):
 
 
 def test_settings_org_switch(client):
-    resp = client.post('/settings/org/switch', json={'org': 'prod'})
+    resp = client.post('/api/v1/settings/org/switch', json={'org': 'prod'})
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -282,24 +282,24 @@ def test_settings_org_test(client):
     sf = _sf({'records': [], 'totalSize': 1, 'done': True})
     sf.sf_instance = 'na1.salesforce.com'
     with patch('routes.settings_routes.get_sf', return_value=sf):
-        resp = client.get('/settings/org/dev/test')
+        resp = client.get('/api/v1/settings/org/dev/test')
     assert resp.status_code == 200
     data = resp.get_json()
-    assert 'org' in data
     assert data['success'] is True
-    assert data['record_count'] == 1
+    assert 'org' in data['data']
+    assert data['data']['record_count'] == 1
 
 
 # ── Migration batch rerun ─────────────────────────────────────────────────────
 
 def test_migration_batch_rerun_requires_ids(client):
-    resp = client.post('/migration/batch/rerun', json={})
+    resp = client.post('/api/v1/migration/batch/rerun', json={})
     assert resp.status_code == 400
 
 
 def test_migration_batch_rerun_with_ids(client):
     with patch('services.batch_tracker.get_conductor_client', return_value=_conductor()):
-        resp = client.post('/migration/batch/rerun', json={'workflow_ids': ['wf-001']})
+        resp = client.post('/api/v1/migration/batch/rerun', json={'workflow_ids': ['wf-001']})
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -308,7 +308,7 @@ def test_migration_batch_rerun_with_ids(client):
 # ── Validation duplicates merge ───────────────────────────────────────────────
 
 def test_validation_duplicates_merge_requires_ids(client):
-    resp = client.post('/validation/duplicates/merge', json={})
+    resp = client.post('/api/v1/validation/duplicates/merge', json={})
     assert resp.status_code == 400
 
 
@@ -316,7 +316,7 @@ def test_validation_duplicates_merge_with_ids(client):
     sf = MagicMock()
     with patch('services.duplicate_radar.get_sf', return_value=sf):
         payload = {'master_id': '001ABC', 'victim_id': '001DEF'}
-        resp = client.post('/validation/duplicates/merge', json=payload)
+        resp = client.post('/api/v1/validation/duplicates/merge', json=payload)
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True

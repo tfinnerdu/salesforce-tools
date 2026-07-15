@@ -260,14 +260,14 @@ def test_legacy_get_field_access_runs():
 
 def test_route_perm_sets(client):
     with patch('services.perm_auditor.get_sf', return_value=_perm_sets_sf()):
-        resp = client.get('/admin/permissions/sets')
+        resp = client.get('/api/v1/admin/permissions/sets')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_route_perm_users(client):
     with patch('services.perm_auditor.get_sf', return_value=_routed_sf(query_all_default=_USER_ROWS)):
-        resp = client.get('/admin/permissions/users')
+        resp = client.get('/api/v1/admin/permissions/users')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
@@ -281,7 +281,7 @@ def test_route_perm_user_detail(client):
         },
     )
     with patch('services.perm_auditor.get_sf', return_value=sf):
-        resp = client.get('/admin/permissions/user/005000000000001')
+        resp = client.get('/api/v1/admin/permissions/user/005000000000001')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
@@ -296,31 +296,31 @@ def test_route_perm_set_detail(client):
         },
     )
     with patch('services.perm_auditor.get_sf', return_value=sf):
-        resp = client.get('/admin/permissions/set/0PS000000000001')
+        resp = client.get('/api/v1/admin/permissions/set/0PS000000000001')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_route_object_matrix_requires_object_param(client):
-    resp = client.get('/admin/permissions/object-matrix')
+    resp = client.get('/api/v1/admin/permissions/object-matrix')
     assert resp.status_code == 400
 
 
 def test_route_object_matrix_with_param(client):
     with patch('services.perm_auditor.get_sf', return_value=_routed_sf(query_all_default=_OBJ_MATRIX_ROWS)):
-        resp = client.get('/admin/permissions/object-matrix?object=Account')
+        resp = client.get('/api/v1/admin/permissions/object-matrix?object=Account')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_route_field_matrix_requires_object_param(client):
-    resp = client.get('/admin/permissions/field-matrix')
+    resp = client.get('/api/v1/admin/permissions/field-matrix')
     assert resp.status_code == 400
 
 
 def test_route_field_matrix_with_param(client):
     with patch('services.perm_auditor.get_sf', return_value=_routed_sf(query_all_default=_FIELD_MATRIX_ROWS)):
-        resp = client.get('/admin/permissions/field-matrix?object=Account')
+        resp = client.get('/api/v1/admin/permissions/field-matrix?object=Account')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
@@ -329,6 +329,6 @@ def test_route_perm_sets_error_returns_500(client, monkeypatch):
     import services.perm_auditor as pa
     monkeypatch.setattr(pa, 'get_permission_sets',
                         lambda org: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.get('/admin/permissions/sets')
+    resp = client.get('/api/v1/admin/permissions/sets')
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False

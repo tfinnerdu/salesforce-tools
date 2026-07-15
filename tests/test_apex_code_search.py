@@ -110,7 +110,7 @@ def test_post_apex_search_run_with_pattern_returns_200_success(session_client):
     with patch('services.apex_code_search.get_sf',
                return_value=_fake_sf(_CLASS_ROWS, bodies=_BODIES)):
         resp = session_client.post(
-            '/schema/apex-search/run',
+            '/api/v1/schema/apex-search/run',
             data=json.dumps({'pattern': 'SIS_ID__c'}),
             content_type='application/json',
         )
@@ -123,7 +123,7 @@ def test_post_apex_search_run_with_pattern_returns_200_success(session_client):
 
 def test_post_apex_search_run_without_pattern_returns_400(client):
     resp = client.post(
-        '/schema/apex-search/run',
+        '/api/v1/schema/apex-search/run',
         data=json.dumps({}),
         content_type='application/json',
     )
@@ -135,7 +135,7 @@ def test_post_apex_search_run_without_pattern_returns_400(client):
 
 def test_post_apex_search_run_with_one_char_pattern_returns_400(client):
     resp = client.post(
-        '/schema/apex-search/run',
+        '/api/v1/schema/apex-search/run',
         data=json.dumps({'pattern': 'x'}),
         content_type='application/json',
     )

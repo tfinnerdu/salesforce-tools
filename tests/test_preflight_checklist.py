@@ -198,9 +198,9 @@ def test_preflight_page_returns_200(client):
 
 
 def test_preflight_items_api_returns_200(client):
-    """GET /migration/preflight/items returns success=True."""
+    """GET /api/v1/migration/preflight/items returns success=True."""
     with patch('db.db_available', return_value=False):
-        resp = client.get('/migration/preflight/items')
+        resp = client.get('/api/v1/migration/preflight/items')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -208,7 +208,7 @@ def test_preflight_items_api_returns_200(client):
 
 
 def test_preflight_toggle_api_returns_200(client):
-    """POST /migration/preflight/toggle with valid id returns 200."""
+    """POST /api/v1/migration/preflight/toggle with valid id returns 200."""
     updated_row = {
         'id': 1, 'org': 'dev', 'category': 'Data Quality', 'label': 'SIS ID coverage',
         'description': 'desc', 'checked': True, 'sort_order': 10, 'is_default': True,
@@ -221,7 +221,7 @@ def test_preflight_toggle_api_returns_200(client):
         mock_get_cursor.return_value.__enter__ = lambda s: mock_cur
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
         resp = client.post(
-            '/migration/preflight/toggle',
+            '/api/v1/migration/preflight/toggle',
             json={'id': 1, 'checked': True},
             content_type='application/json',
         )

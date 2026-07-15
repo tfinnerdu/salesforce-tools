@@ -963,7 +963,7 @@ class TestSettingsCollectionsCreateJsonException:
             side_effect=Exception("db write failed"),
         ):
             resp = client.post(
-                '/settings/collections',
+                '/api/v1/settings/collections',
                 json={
                     'name': 'Test Collection',
                     'collection_json': {'info': {'name': 'test'}, 'item': []},

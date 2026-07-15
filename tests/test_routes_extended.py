@@ -54,7 +54,7 @@ def test_migration_readiness_run_exception_returns_500(client):
         'routes.migration.readiness_validator.run_full_readiness_check',
         side_effect=Exception("SF down"),
     ):
-        resp = client.post('/migration/readiness/run')
+        resp = client.post('/api/v1/migration/readiness/run')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -65,7 +65,7 @@ def test_migration_readiness_history_exception_returns_500(client):
         'routes.migration.readiness_validator.get_history',
         side_effect=Exception("DB down"),
     ):
-        resp = client.get('/migration/readiness/history')
+        resp = client.get('/api/v1/migration/readiness/history')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -87,7 +87,7 @@ def test_migration_batch_status_invalid_start_time(client):
     """Lines 64-68: invalid start_time_ms is silently set to None."""
     with patch('services.batch_tracker.get_conductor_client', return_value=_conductor()):
         resp = client.get(
-            '/migration/batch/status?workflow_name=Test&start_time_ms=not_an_int')
+            '/api/v1/migration/batch/status?workflow_name=Test&start_time_ms=not_an_int')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -98,7 +98,7 @@ def test_migration_batch_status_exception_returns_500(client):
         'routes.migration.batch_tracker.get_batch_status',
         side_effect=Exception("conductor error"),
     ):
-        resp = client.get('/migration/batch/status?workflow_name=Test')
+        resp = client.get('/api/v1/migration/batch/status?workflow_name=Test')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -110,7 +110,7 @@ def test_migration_batch_rerun_exception_returns_500(client):
         side_effect=Exception("retry failed"),
     ):
         resp = client.post(
-            '/migration/batch/rerun',
+            '/api/v1/migration/batch/rerun',
             json={'workflow_ids': ['wf-001']},
         )
     assert resp.status_code == 500
@@ -122,7 +122,7 @@ def test_migration_reconciler_errors_invalid_hours_back(client):
     """Lines 103-105: non-numeric hours_back is coerced to 24."""
     with patch('services.error_reconciler.get_conductor_client', return_value=_conductor()):
         resp = client.get(
-            '/migration/reconciler/errors?workflow_name=Test&hours_back=abc')
+            '/api/v1/migration/reconciler/errors?workflow_name=Test&hours_back=abc')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -133,14 +133,14 @@ def test_migration_reconciler_errors_exception_returns_500(client):
         'routes.migration.error_reconciler.categorize_conductor_failures',
         side_effect=Exception("categorize failed"),
     ):
-        resp = client.get('/migration/reconciler/errors?workflow_name=Test&hours_back=24')
+        resp = client.get('/api/v1/migration/reconciler/errors?workflow_name=Test&hours_back=24')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
 
 
 def test_migration_reconciler_rerun_no_ids_returns_400(client):
-    resp = client.post('/migration/reconciler/rerun', json={})
+    resp = client.post('/api/v1/migration/reconciler/rerun', json={})
     assert resp.status_code == 400
     data = resp.get_json()
     assert data['success'] is False
@@ -148,7 +148,7 @@ def test_migration_reconciler_rerun_no_ids_returns_400(client):
 
 def test_migration_reconciler_rerun_with_ids_succeeds(client):
     with patch('services.error_reconciler.get_conductor_client', return_value=_conductor()):
-        resp = client.post('/migration/reconciler/rerun',
+        resp = client.post('/api/v1/migration/reconciler/rerun',
                            json={'workflow_ids': ['wf-001']})
     assert resp.status_code == 200
     data = resp.get_json()
@@ -161,7 +161,7 @@ def test_migration_reconciler_rerun_exception_returns_500(client):
         side_effect=Exception("rerun failed"),
     ):
         resp = client.post(
-            '/migration/reconciler/rerun',
+            '/api/v1/migration/reconciler/rerun',
             json={'workflow_ids': ['wf-001']},
         )
     assert resp.status_code == 500
@@ -194,7 +194,7 @@ def test_validation_duplicates_scan_exception_returns_500(client):
         'routes.validation.duplicate_radar.scan',
         side_effect=Exception("scan failed"),
     ):
-        resp = client.post('/validation/duplicates/scan')
+        resp = client.post('/api/v1/validation/duplicates/scan')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -206,7 +206,7 @@ def test_validation_duplicates_merge_exception_returns_500(client):
         side_effect=Exception("merge failed"),
     ):
         resp = client.post(
-            '/validation/duplicates/merge',
+            '/api/v1/validation/duplicates/merge',
             json={'master_id': '001A', 'victim_id': '001B'},
         )
     assert resp.status_code == 500
@@ -219,7 +219,7 @@ def test_validation_external_ids_run_exception_returns_500(client):
         'routes.validation.external_id_coverage.run',
         side_effect=Exception("coverage failed"),
     ):
-        resp = client.get('/validation/external-ids/run')
+        resp = client.get('/api/v1/validation/external-ids/run')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -230,7 +230,7 @@ def test_validation_contactpoints_scan_exception_returns_500(client):
         'routes.validation.contactpoint_scanner.scan',
         side_effect=Exception("scan failed"),
     ):
-        resp = client.get('/validation/contactpoints/scan')
+        resp = client.get('/api/v1/validation/contactpoints/scan')
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
@@ -252,7 +252,7 @@ def test_schema_org_diff_page(client):
 
 
 def test_schema_crosswalk_upload_no_file_returns_400(client):
-    resp = client.post('/schema/crosswalk/upload', data={})
+    resp = client.post('/api/v1/schema/crosswalk/upload', data={})
     assert resp.status_code == 400
     data = resp.get_json()
     assert data['success'] is False
@@ -262,7 +262,7 @@ def test_schema_crosswalk_upload_no_file_returns_400(client):
 def test_schema_crosswalk_upload_empty_filename_returns_400(client):
     data = {'file': (io.BytesIO(b''), '')}
     resp = client.post(
-        '/schema/crosswalk/upload',
+        '/api/v1/schema/crosswalk/upload',
         data=data,
         content_type='multipart/form-data',
     )
@@ -276,7 +276,7 @@ def test_schema_crosswalk_upload_with_content_succeeds(client):
     csv_content = b"EDA_Field,EdCloud_Field,Object\nName,Name,Account\n"
     data = {'file': (io.BytesIO(csv_content), 'crosswalk.csv')}
     resp = client.post(
-        '/schema/crosswalk/upload',
+        '/api/v1/schema/crosswalk/upload',
         data=data,
         content_type='multipart/form-data',
     )
@@ -293,7 +293,7 @@ def test_schema_crosswalk_upload_exception_returns_500(client):
         side_effect=Exception("parse error"),
     ):
         resp = client.post(
-            '/schema/crosswalk/upload',
+            '/api/v1/schema/crosswalk/upload',
             data=data,
             content_type='multipart/form-data',
         )
@@ -304,7 +304,7 @@ def test_schema_crosswalk_upload_exception_returns_500(client):
 
 def test_schema_crosswalk_run_succeeds(client):
     with patch('services.crosswalk_diff.get_sf', return_value=MagicMock()):
-        resp = client.post('/schema/crosswalk/run', json={'mappings': []})
+        resp = client.post('/api/v1/schema/crosswalk/run', json={'mappings': []})
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -315,7 +315,7 @@ def test_schema_crosswalk_run_exception_returns_500(client):
         'routes.schema.crosswalk_diff.run_live_check',
         side_effect=Exception("live check failed"),
     ):
-        resp = client.post('/schema/crosswalk/run', json={'mappings': []})
+        resp = client.post('/api/v1/schema/crosswalk/run', json={'mappings': []})
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -327,7 +327,7 @@ def test_schema_org_diff_run_exception_returns_500(client):
         side_effect=Exception("diff failed"),
     ):
         resp = client.post(
-            '/schema/org-diff/run',
+            '/api/v1/schema/org-diff/run',
             json={'compare_org': 'prod', 'objects': ['Account']},
         )
     assert resp.status_code == 500
@@ -340,23 +340,27 @@ def test_schema_org_diff_run_exception_returns_500(client):
 # ---------------------------------------------------------------------------
 
 def test_settings_org_switch_no_org_returns_400(client):
-    resp = client.post('/settings/org/switch', json={})
+    resp = client.post('/api/v1/settings/org/switch', json={})
     assert resp.status_code == 400
     d = resp.get_json()
     assert d['success'] is False
 
 
-def test_settings_org_test_exception_returns_200_with_error(client):
+def test_settings_org_test_exception_returns_error_envelope(client):
+    # Was a bug: this used to return HTTP 200 on failure (silently swallowed
+    # by MC.api, no real error signal). Now a real non-2xx status via the
+    # standard error_response() envelope.
     with patch('routes.settings_routes.get_sf', side_effect=Exception("no auth")):
-        resp = client.get('/settings/org/dev/test')
-    assert resp.status_code == 200
+        resp = client.get('/api/v1/settings/org/dev/test')
+    assert resp.status_code == 502
     d = resp.get_json()
     assert d['success'] is False
+    assert d['code'] == 'ORG_TEST_FAILED'
     assert 'error' in d
 
 
 def test_settings_collections_list_succeeds(client):
-    resp = client.get('/settings/collections')
+    resp = client.get('/api/v1/settings/collections')
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -367,7 +371,7 @@ def test_settings_collections_list_exception_returns_500(client):
         'routes.settings_routes.collection_manager.list_collections',
         side_effect=Exception("db error"),
     ):
-        resp = client.get('/settings/collections')
+        resp = client.get('/api/v1/settings/collections')
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -375,7 +379,7 @@ def test_settings_collections_list_exception_returns_500(client):
 
 def test_settings_collections_create_json_no_name_returns_400(client):
     resp = client.post(
-        '/settings/collections',
+        '/api/v1/settings/collections',
         json={'collection_json': {'info': {'name': 'test'}}},
     )
     assert resp.status_code == 400
@@ -388,7 +392,7 @@ def test_settings_collections_create_json_succeeds(client):
         'name': 'Test Collection',
         'collection_json': {'info': {'name': 'Test Collection'}, 'item': []},
     }
-    resp = client.post('/settings/collections', json=payload)
+    resp = client.post('/api/v1/settings/collections', json=payload)
     # collection_manager.create_collection tries DB; it raises and returns 500
     # or succeeds — either outcome is acceptable here; we just check it's reachable
     assert resp.status_code in (201, 500)
@@ -401,7 +405,7 @@ def test_settings_collections_create_file_upload(client):
     }).encode('utf-8')
     data = {'file': (io.BytesIO(collection_json), 'collection.json')}
     resp = client.post(
-        '/settings/collections',
+        '/api/v1/settings/collections',
         data=data,
         content_type='multipart/form-data',
     )
@@ -417,7 +421,7 @@ def test_settings_collections_create_file_exception_returns_500(client):
         side_effect=Exception("import failed"),
     ):
         resp = client.post(
-            '/settings/collections',
+            '/api/v1/settings/collections',
             data=data,
             content_type='multipart/form-data',
         )
@@ -431,7 +435,7 @@ def test_settings_collections_run_succeeds(client):
         'routes.settings_routes.collection_manager.run_collection',
         return_value={'results': [], 'total': 0, 'passed': 0, 'failed': 0},
     ):
-        resp = client.post('/settings/collections/1/run', json={})
+        resp = client.post('/api/v1/settings/collections/1/run', json={})
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -442,7 +446,7 @@ def test_settings_collections_run_exception_returns_500(client):
         'routes.settings_routes.collection_manager.run_collection',
         side_effect=Exception("run failed"),
     ):
-        resp = client.post('/settings/collections/1/run', json={})
+        resp = client.post('/api/v1/settings/collections/1/run', json={})
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -453,7 +457,7 @@ def test_settings_collections_delete_succeeds(client):
         'routes.settings_routes.collection_manager.delete_collection',
         return_value=None,
     ):
-        resp = client.delete('/settings/collections/1')
+        resp = client.delete('/api/v1/settings/collections/1')
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -464,7 +468,7 @@ def test_settings_collections_delete_exception_returns_500(client):
         'routes.settings_routes.collection_manager.delete_collection',
         side_effect=Exception("delete failed"),
     ):
-        resp = client.delete('/settings/collections/1')
+        resp = client.delete('/api/v1/settings/collections/1')
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -648,7 +652,7 @@ def test_data_ops_join_build_exception_returns_500(client):
         side_effect=Exception("build failed"),
     ):
         resp = client.post(
-            '/data-ops/join/build',
+            '/api/v1/data-ops/join/build',
             json={
                 'sql_table': 'dbo.Students',
                 'sf_object': 'Account',
@@ -663,7 +667,7 @@ def test_data_ops_join_build_exception_returns_500(client):
 
 
 def test_data_ops_join_run_no_queries_returns_400(client):
-    resp = client.post('/data-ops/join/run', json={})
+    resp = client.post('/api/v1/data-ops/join/run', json={})
     assert resp.status_code == 400
     d = resp.get_json()
     assert d['success'] is False
@@ -675,7 +679,7 @@ def test_data_ops_join_run_with_queries_succeeds(client):
         return_value={'rows': [], 'row_count': 0},
     ):
         resp = client.post(
-            '/data-ops/join/run',
+            '/api/v1/data-ops/join/run',
             json={
                 'sql_query': 'SELECT StudentId FROM dbo.Students',
                 'soql_query': 'SELECT Id FROM Account',
@@ -694,7 +698,7 @@ def test_data_ops_join_run_with_table_config_builds_queries(client):
         return_value={'rows': [], 'row_count': 0},
     ):
         resp = client.post(
-            '/data-ops/join/run',
+            '/api/v1/data-ops/join/run',
             json={
                 'sql_table': 'dbo.Students',
                 'sql_fields': ['StudentId'],
@@ -716,7 +720,7 @@ def test_data_ops_join_run_exception_returns_500(client):
         side_effect=Exception("run failed"),
     ):
         resp = client.post(
-            '/data-ops/join/run',
+            '/api/v1/data-ops/join/run',
             json={
                 'sql_query': 'SELECT Id FROM dbo.Students',
                 'soql_query': 'SELECT Id FROM Account',

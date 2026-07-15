@@ -286,7 +286,7 @@ def test_permission_set_xml_no_object_perms_by_default():
 
 def test_clone_permset_grants_object_access(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
-        resp = client.post('/cli/clone-object/package',
+        resp = client.post('/api/v1/cli/clone-object/package',
                            data=json.dumps({'object': 'Accommodation__c', 'include_permset': True}),
                            content_type='application/json')
     with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
@@ -297,7 +297,7 @@ def test_clone_permset_grants_object_access(client):
 
 
 def test_human_permset_object_access(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT',
         'fields': [{'object': 'RoomAssignment__c', 'api_name': 'Room__c', 'label': 'Room',
                     'type': 'Text', 'readable': True, 'editable': True}],
@@ -311,7 +311,7 @@ def test_human_permset_object_access(client):
 
 
 def test_human_permset_no_object_access_when_off(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT',
         'fields': [{'object': 'RoomAssignment__c', 'api_name': 'Room__c', 'label': 'Room',
                     'type': 'Text', 'readable': True, 'editable': True}],
@@ -335,7 +335,7 @@ def test_route_plan_honors_source_org(client, monkeypatch):
                 'counts': {'custom_fields': 0, 'skipped': 0, 'standard_fields': 0, 'total_fields': 0}}
 
     monkeypatch.setattr(cli_clone, 'plan_from_object', fake_plan)
-    resp = client.post('/cli/clone-object/plan',
+    resp = client.post('/api/v1/cli/clone-object/plan',
                        data=json.dumps({'object': 'Foo__c', 'source_org': 'sandbox'}),
                        content_type='application/json')
     assert resp.status_code == 200
@@ -343,14 +343,14 @@ def test_route_plan_honors_source_org(client, monkeypatch):
 
 
 def test_route_plan_rejects_unknown_source_org(client):
-    resp = client.post('/cli/clone-object/plan',
+    resp = client.post('/api/v1/cli/clone-object/plan',
                        data=json.dumps({'object': 'Foo__c', 'source_org': 'nope'}),
                        content_type='application/json')
     assert resp.status_code == 400
 
 
 def test_generate_includes_layout_list_and_new_object_deploy(client):
-    resp = client.post('/cli/generate', data=json.dumps({
+    resp = client.post('/api/v1/cli/generate', data=json.dumps({
         'alias': 'UAT',
         'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
         'new_objects': [{'object': 'Foo__c', 'label': 'Foo'}],
@@ -363,7 +363,7 @@ def test_generate_includes_layout_list_and_new_object_deploy(client):
 
 
 def test_package_includes_new_object_shell(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'proj', 'alias': 'UAT',
         'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
         'new_objects': [{'object': 'Foo__c', 'label': 'Foo', 'plural_label': 'Foos'}],
@@ -375,7 +375,7 @@ def test_package_includes_new_object_shell(client):
 
 
 def test_new_object_bad_api_name_rejected(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT', 'fields': [],
         'new_objects': [{'object': 'NoSuffix', 'label': 'X'}],
     }), content_type='application/json')
@@ -383,7 +383,7 @@ def test_new_object_bad_api_name_rejected(client):
 
 
 def test_package_respects_custom_base_path(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT',
         'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
         'base_path': 'C:\\Other\\Projects',
@@ -396,7 +396,7 @@ def test_package_respects_custom_base_path(client):
 
 
 def test_package_includes_pasted_layout(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT', 'fields': [],
         'layouts': [{'full_name': 'RoomAssignment__c-Room Assignment Layout',
                      'xml': '<?xml version="1.0"?><Layout xmlns="x">stuff</Layout>'}],
@@ -407,7 +407,7 @@ def test_package_includes_pasted_layout(client):
 
 
 def test_generate_layout_rides_in_deploy(client):
-    resp = client.post('/cli/generate', data=json.dumps({
+    resp = client.post('/api/v1/cli/generate', data=json.dumps({
         'alias': 'UAT',
         'layouts': [{'full_name': 'Foo__c-Bar', 'xml': '<Layout>x</Layout>'}],
     }), content_type='application/json')
@@ -417,7 +417,7 @@ def test_generate_layout_rides_in_deploy(client):
 
 
 def test_layout_not_layout_xml_rejected(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT', 'fields': [],
         'layouts': [{'full_name': 'Foo__c-Bar', 'xml': '<NotALayout/>'}],
     }), content_type='application/json')
@@ -426,7 +426,7 @@ def test_layout_not_layout_xml_rejected(client):
 
 def test_generate_retrieve_from_source_deploy_to_target(client):
     # Retrieve layout/record type FROM 'eda', deploy TO the target alias 'UAT'.
-    resp = client.post('/cli/generate', data=json.dumps({
+    resp = client.post('/api/v1/cli/generate', data=json.dumps({
         'alias': 'UAT',
         'layout_name': 'Case-Case Layout', 'layout_retrieve_alias': 'eda',
         'recordtype_name': 'Case.Advisee', 'rt_retrieve_alias': 'eda',
@@ -440,7 +440,7 @@ def test_generate_retrieve_from_source_deploy_to_target(client):
 
 
 def test_generate_retrieve_alias_defaults_to_target(client):
-    resp = client.post('/cli/generate', data=json.dumps({
+    resp = client.post('/api/v1/cli/generate', data=json.dumps({
         'alias': 'UAT', 'layout_name': 'Case-Case Layout',
     }), content_type='application/json')
     data = resp.get_json()['data']
@@ -450,7 +450,7 @@ def test_generate_retrieve_alias_defaults_to_target(client):
 def test_generate_visibility_assign_uses_integration_username(client, monkeypatch):
     import routes.cli as cli_routes
     monkeypatch.setattr(cli_routes, 'get_org_config', lambda org: {'username': 'integ@doane.edu'})
-    resp = client.post('/cli/generate', data=json.dumps({
+    resp = client.post('/api/v1/cli/generate', data=json.dumps({
         'alias': 'UAT',
         'fields': [{'object': 'Case', 'api_name': 'Foo__c', 'label': 'Foo', 'type': 'Text'}],
         'permset': {'api_name': 'Case_Integration', 'label': 'Case Integration',
@@ -464,7 +464,7 @@ def test_generate_visibility_assign_uses_integration_username(client, monkeypatc
 
 def test_route_plan(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
-        resp = client.post('/cli/clone-object/plan',
+        resp = client.post('/api/v1/cli/clone-object/plan',
                            data=json.dumps({'object': 'Accommodation__c'}),
                            content_type='application/json')
     assert resp.status_code == 200
@@ -474,14 +474,14 @@ def test_route_plan(client):
 
 
 def test_route_plan_requires_object(client):
-    resp = client.post('/cli/clone-object/plan', data=json.dumps({}),
+    resp = client.post('/api/v1/cli/clone-object/plan', data=json.dumps({}),
                        content_type='application/json')
     assert resp.status_code == 400
 
 
 def test_route_package_returns_zip(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
-        resp = client.post('/cli/clone-object/package',
+        resp = client.post('/api/v1/cli/clone-object/package',
                            data=json.dumps({'object': 'Accommodation__c', 'include_permset': True}),
                            content_type='application/json')
     assert resp.status_code == 200
@@ -494,7 +494,7 @@ def test_route_package_returns_zip(client):
 
 def test_route_package_with_shell(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
-        resp = client.post('/cli/clone-object/package',
+        resp = client.post('/api/v1/cli/clone-object/package',
                            data=json.dumps({'object': 'Accommodation__c', 'include_shell': True}),
                            content_type='application/json')
     assert resp.status_code == 200
@@ -504,7 +504,7 @@ def test_route_package_with_shell(client):
 
 def test_route_clone_package_respects_custom_base_path(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
-        resp = client.post('/cli/clone-object/package', data=json.dumps({
+        resp = client.post('/api/v1/cli/clone-object/package', data=json.dumps({
             'object': 'Accommodation__c', 'base_path': 'C:\\Other\\Projects'}),
             content_type='application/json')
     assert resp.status_code == 200
@@ -516,7 +516,7 @@ def test_route_clone_package_respects_custom_base_path(client):
 
 def test_route_clone_package_defaults_base_path_to_config(client):
     with patch('services.cli_clone.get_sf', return_value=_sf()):
-        resp = client.post('/cli/clone-object/package',
+        resp = client.post('/api/v1/cli/clone-object/package',
                            data=json.dumps({'object': 'Accommodation__c'}),
                            content_type='application/json')
     with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:

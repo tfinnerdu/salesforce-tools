@@ -208,7 +208,7 @@ def test_tune_page_renders(client):
 
 
 def test_tune_rules_route(client):
-    resp = client.get('/data-ops/tune/rules')
+    resp = client.get('/api/v1/data-ops/tune/rules')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -218,7 +218,7 @@ def test_tune_rules_route(client):
 def test_tune_preview_route(client, monkeypatch):
     monkeypatch.setattr(data_tuner, 'get_sf',
                         lambda org: _StubSF([{'Id': '001', 'Name': 'john'}], total=1))
-    resp = client.post('/data-ops/tune/preview', json={
+    resp = client.post('/api/v1/data-ops/tune/preview', json={
         'object': 'Account', 'where_clause': 'Id != null',
         'field_rules': {'Name': ['upper']},
     })
@@ -227,7 +227,7 @@ def test_tune_preview_route(client, monkeypatch):
 
 
 def test_tune_preview_missing_params_returns_400(client):
-    resp = client.post('/data-ops/tune/preview', json={'object': 'Account'})
+    resp = client.post('/api/v1/data-ops/tune/preview', json={'object': 'Account'})
     assert resp.status_code == 400
 
 
@@ -235,7 +235,7 @@ def test_tune_execute_route(client, monkeypatch):
     monkeypatch.setattr(data_tuner, 'get_sf',
                         lambda org: _LiveSF([{'Id': '001', 'Name': 'john'}],
                                             processed=1, failed=0))
-    resp = client.post('/data-ops/tune/execute', json={
+    resp = client.post('/api/v1/data-ops/tune/execute', json={
         'object': 'Account', 'where_clause': 'Id != null',
         'field_rules': {'Name': ['upper']},
     })
@@ -246,7 +246,7 @@ def test_tune_execute_route(client, monkeypatch):
 
 
 def test_tune_execute_missing_params_returns_400(client):
-    resp = client.post('/data-ops/tune/execute', json={
+    resp = client.post('/api/v1/data-ops/tune/execute', json={
         'object': 'Account', 'where_clause': 'Id != null',
     })
     assert resp.status_code == 400
@@ -256,7 +256,7 @@ def test_tune_preview_error_returns_500(client, monkeypatch):
     import services.data_tuner as dt
     monkeypatch.setattr(dt, 'preview_tune',
                         lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('boom')))
-    resp = client.post('/data-ops/tune/preview', json={
+    resp = client.post('/api/v1/data-ops/tune/preview', json={
         'object': 'Account', 'where_clause': 'Id != null',
         'field_rules': {'Name': ['upper']},
     })

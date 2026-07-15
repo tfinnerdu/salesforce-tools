@@ -77,7 +77,7 @@ def test_get_cpu_summary_warning_flag_for_slow_success():
 
 def test_cpu_summary_route_returns_200(session_client):
     with patch('services.apex_log_reader.get_sf', return_value=_fake_sf(_LOG_ROWS)):
-        resp = session_client.get('/logs/apex/cpu-summary')
+        resp = session_client.get('/api/v1/logs/apex/cpu-summary')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -85,7 +85,7 @@ def test_cpu_summary_route_returns_200(session_client):
 
 def test_cpu_summary_route_data_is_list(session_client):
     with patch('services.apex_log_reader.get_sf', return_value=_fake_sf(_LOG_ROWS)):
-        resp = session_client.get('/logs/apex/cpu-summary')
+        resp = session_client.get('/api/v1/logs/apex/cpu-summary')
     assert resp.status_code == 200
     data = resp.get_json()
     assert isinstance(data['data'], list)

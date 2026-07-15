@@ -1,10 +1,12 @@
 """CLI blueprint — guided Salesforce CLI script + metadata generator.
 
-Page route renders the vertical builder; data/action routes live under the
-same `/cli` prefix (this app's convention — the blueprint prefix is the
-namespace). Read-only against Salesforce: it describes objects/fields to drive
-the pickers and prefill External-ID flips, but never deploys — the generated
-`sf` commands run on the sys admin's own machine.
+Page route (cli_bp) stays unversioned at /cli, per the Doane standard; every
+data/action route lives on cli_api_bp under /api/v1/cli, with the old /cli/...
+JSON paths 308-redirecting there (register_legacy_json_redirect) so existing
+frontend calls keep working unmodified. Read-only against Salesforce: it
+describes objects/fields to drive the pickers and prefill External-ID flips,
+but never deploys — the generated `sf` commands run on the sys admin's own
+machine.
 
 Responses use the shared error envelope (utils.responses) — a superset of the
 app's {success,data} envelope, so MC.api is unaffected. `g.request_id` is set
@@ -18,14 +20,15 @@ from config import Config, get_org_config
 from services import (cli_access_mirror, cli_clone, cli_fls, cli_layout,
                       cli_metadata, cli_recordtype, cli_script)
 from sf_provider import available_orgs
-from utils.responses import error_response, new_request_id, ok
+from utils.responses import error_response, new_request_id, ok, register_legacy_json_redirect
 
 logger = logging.getLogger(__name__)
 
 cli_bp = Blueprint('cli', __name__, url_prefix='/cli')
+cli_api_bp = Blueprint('cli_api', __name__, url_prefix='/api/v1/cli')
 
 
-@cli_bp.before_request
+@cli_api_bp.before_request
 def _assign_request_id():
     from flask import g
     g.request_id = new_request_id()
@@ -54,9 +57,12 @@ def index():
     )
 
 
+register_legacy_json_redirect(cli_bp, '/api/v1/cli')
+
+
 # ── Describe-driven metadata (read-only) ─────────────────────────────────────
 
-@cli_bp.route('/objects')
+@cli_api_bp.route('/objects')
 def api_objects():
     try:
         return ok(cli_metadata.list_objects(_org()))
@@ -65,7 +71,7 @@ def api_objects():
         return error_response(str(exc), 'SF_DESCRIBE_FAILED', 502)
 
 
-@cli_bp.route('/objects/<object_name>/fields')
+@cli_api_bp.route('/objects/<object_name>/fields')
 def api_fields(object_name):
     try:
         return ok(cli_metadata.describe_fields(_org(), object_name))
@@ -237,7 +243,7 @@ def _human_permsets_from(payload, fields, existing_fields=None) -> list:
 
 # ── Field-Level Security clone (read a reference field's visibility) ──────────
 
-@cli_bp.route('/fls')
+@cli_api_bp.route('/fls')
 def api_fls():
     src = (request.args.get('org') or _org()).strip()
     obj = (request.args.get('object') or '').strip()
@@ -255,7 +261,7 @@ def api_fls():
 
 # ── Record type: picklist availability (paste + inject a picklistValues block) ─
 
-@cli_bp.route('/recordtype/picklists', methods=['POST'])
+@cli_api_bp.route('/recordtype/picklists', methods=['POST'])
 def api_recordtype_picklists():
     rt_xml = (request.get_json(silent=True) or {}).get('rt_xml') or ''
     if '<RecordType' not in rt_xml:
@@ -263,7 +269,7 @@ def api_recordtype_picklists():
     return ok({'picklists': cli_recordtype.list_picklists(rt_xml)})
 
 
-@cli_bp.route('/recordtype', methods=['POST'])
+@cli_api_bp.route('/recordtype', methods=['POST'])
 def api_recordtype():
     payload = request.get_json(silent=True) or {}
     rt_xml = payload.get('rt_xml') or ''
@@ -283,7 +289,7 @@ def api_recordtype():
 
 # ── Command composer: describe-driven sf command recipes ─────────────────────
 
-@cli_bp.route('/recipes', methods=['POST'])
+@cli_api_bp.route('/recipes', methods=['POST'])
 def api_recipes():
     payload = request.get_json(silent=True) or {}
     obj = (payload.get('object') or '').strip()
@@ -294,7 +300,7 @@ def api_recipes():
 
 # ── Page layout: add fields to a pasted layout (org-to-org clone-assist) ─────
 
-@cli_bp.route('/layout/sections', methods=['POST'])
+@cli_api_bp.route('/layout/sections', methods=['POST'])
 def api_layout_sections():
     layout_xml = (request.get_json(silent=True) or {}).get('layout_xml') or ''
     if '<Layout' not in layout_xml:
@@ -302,7 +308,7 @@ def api_layout_sections():
     return ok({'sections': cli_layout.list_sections(layout_xml)})
 
 
-@cli_bp.route('/layout', methods=['POST'])
+@cli_api_bp.route('/layout', methods=['POST'])
 def api_layout():
     payload = request.get_json(silent=True) or {}
     layout_xml = payload.get('layout_xml') or ''
@@ -323,7 +329,7 @@ def api_layout():
 
 # ── Snippet generation ───────────────────────────────────────────────────────
 
-@cli_bp.route('/generate', methods=['POST'])
+@cli_api_bp.route('/generate', methods=['POST'])
 def api_generate():
     payload = request.get_json(silent=True) or {}
     alias = (payload.get('alias') or '').strip()
@@ -403,7 +409,7 @@ def api_generate():
 
 # ── Package download (zip) ───────────────────────────────────────────────────
 
-@cli_bp.route('/package', methods=['POST'])
+@cli_api_bp.route('/package', methods=['POST'])
 def api_package():
     payload = request.get_json(silent=True) or {}
     project = (payload.get('project') or '').strip()
@@ -504,7 +510,7 @@ def _target_object_names(target_org: str):
 
 # ── Access mirror: reproduce a source org's access by name in the target ──────
 
-@cli_bp.route('/access-mirror/plan', methods=['POST'])
+@cli_api_bp.route('/access-mirror/plan', methods=['POST'])
 def api_access_mirror_plan():
     """Preview which source-org profiles / permission sets grant access to an
     object, and which of those names exist in the target (matched vs unmatched).
@@ -532,7 +538,7 @@ def api_access_mirror_plan():
         return error_response(str(exc), 'SF_ACCESS_READ_FAILED', 502)
 
 
-@cli_bp.route('/clone-object/plan', methods=['POST'])
+@cli_api_bp.route('/clone-object/plan', methods=['POST'])
 def api_clone_object_plan():
     """Describe a source-org object → a clone plan (fields + skipped + shell)."""
     payload = request.get_json(silent=True) or {}
@@ -571,7 +577,7 @@ def api_clone_object_plan():
     return ok(plan)
 
 
-@cli_bp.route('/clone-object/package', methods=['POST'])
+@cli_api_bp.route('/clone-object/package', methods=['POST'])
 def api_clone_object_package():
     """Build the force-app zip for a cloned object.
 

@@ -2,9 +2,16 @@
 
 The app does not talk to the Argo API. It generates a CronWorkflow YAML that
 an operator commits to their manifests repo. On its schedule, Argo POSTs the
-token-authed ``/scenarios/<id>/scheduled-run`` endpoint; the app runs the
-scenario and logs a structured summary to stdout, which Argo captures — that
-log line is the notification surface.
+token-authed ``/api/v1/scenarios/<id>/scheduled-run`` endpoint; the app runs
+the scenario and logs a structured summary to stdout, which Argo captures —
+that log line is the notification surface.
+
+The generated curl uses ``-fsS -L``: ``-f`` fails the workflow on a non-2xx
+final response, and ``-L`` follows redirects — load-bearing for any manifest
+generated before the /api/v1 move, which still targets the old bare
+/scenarios/... path. That path now only 308-redirects (routes/scenarios.py);
+without -L, curl -f treats a bare 3xx as success and the CronWorkflow would
+report green having never actually run the scenario.
 """
 import re
 
@@ -58,7 +65,7 @@ def generate_cronworkflow(scenario_id: int, scenario_name: str, schedule: str, *
     secret_key = secret_key or Config.ARGO_SECRET_KEY
     image = image or Config.ARGO_IMAGE
     base = (base_url or Config.PUBLIC_BASE_URL).rstrip('/')
-    url = f'{base}/scenarios/{scenario_id}/scheduled-run'
+    url = f'{base}/api/v1/scenarios/{scenario_id}/scheduled-run'
     # K8s object names are DNS-1123: max 253, but keep it short and readable.
     wf_name = f'sf-mc-scenario-{scenario_id}-{_slug(scenario_name)}'[:52].rstrip('-')
 
@@ -86,7 +93,7 @@ spec:
           command: ["sh", "-c"]
           args:
             - >-
-              curl -fsS -X POST
+              curl -fsS -L -X POST
               -H "X-MC-Scheduler-Token: $MC_TOKEN"
               "{url}"
           env:

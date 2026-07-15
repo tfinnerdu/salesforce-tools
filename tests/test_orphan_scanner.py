@@ -110,7 +110,7 @@ def test_orphans_page_returns_200(client):
 
 def test_orphans_scan_api_returns_200_and_success(client):
     with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
-        resp = client.get('/validation/orphans/scan')
+        resp = client.get('/api/v1/validation/orphans/scan')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -118,7 +118,7 @@ def test_orphans_scan_api_returns_200_and_success(client):
 
 def test_orphans_scan_api_data_structure(client):
     with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
-        resp = client.get('/validation/orphans/scan')
+        resp = client.get('/api/v1/validation/orphans/scan')
     data = resp.get_json()
     assert data['success'] is True
     checks = data['data']
@@ -132,3 +132,18 @@ def test_orphans_scan_api_data_structure(client):
         assert 'status' in item
         assert 'samples' in item
         assert item['status'] in ('ok', 'warning', 'error')
+
+
+# ── Legacy redirect ───────────────────────────────────────────────────────────
+
+class TestValidationLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/validation/orphans/scan', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/validation/orphans/scan')
+
+    def test_old_path_redirect_is_followable(self, client, monkeypatch):
+        with patch('services.orphan_scanner.get_sf', return_value=_clean_sf()):
+            resp = client.get('/validation/orphans/scan', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

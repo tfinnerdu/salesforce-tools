@@ -313,7 +313,7 @@ def test_route_access_mirror_plan(client):
     def fake(org):
         return src if org == 'sandbox' else tgt
     with patch('services.cli_access_mirror.get_sf', side_effect=fake):
-        resp = client.post('/cli/access-mirror/plan', data=json.dumps({
+        resp = client.post('/api/v1/cli/access-mirror/plan', data=json.dumps({
             'object': 'RoomAssignment__c', 'source_org': 'sandbox', 'target_org': 'dev',
             'justification': 'onboarding Housing Staff for testing'}),
             content_type='application/json')
@@ -323,19 +323,19 @@ def test_route_access_mirror_plan(client):
 
 
 def test_route_access_mirror_requires_object(client):
-    resp = client.post('/cli/access-mirror/plan', data=json.dumps({}),
+    resp = client.post('/api/v1/cli/access-mirror/plan', data=json.dumps({}),
                        content_type='application/json')
     assert resp.status_code == 400
 
 
 def test_route_access_mirror_rejects_unknown_org(client):
-    resp = client.post('/cli/access-mirror/plan', data=json.dumps(
+    resp = client.post('/api/v1/cli/access-mirror/plan', data=json.dumps(
         {'object': 'X__c', 'source_org': 'nope'}), content_type='application/json')
     assert resp.status_code == 400
 
 
 def test_route_access_mirror_requires_justification(client):
-    resp = client.post('/cli/access-mirror/plan', data=json.dumps({
+    resp = client.post('/api/v1/cli/access-mirror/plan', data=json.dumps({
         'object': 'RoomAssignment__c', 'source_org': 'dev', 'target_org': 'dev'}),
         content_type='application/json')
     assert resp.status_code == 400
@@ -343,7 +343,7 @@ def test_route_access_mirror_requires_justification(client):
 
 
 def test_route_access_mirror_rejects_short_justification(client):
-    resp = client.post('/cli/access-mirror/plan', data=json.dumps({
+    resp = client.post('/api/v1/cli/access-mirror/plan', data=json.dumps({
         'object': 'RoomAssignment__c', 'source_org': 'dev', 'target_org': 'dev',
         'justification': 'why'}), content_type='application/json')
     assert resp.status_code == 400
@@ -368,7 +368,7 @@ def _clone_sf():
 
 def test_clone_package_with_tab(client):
     with patch('services.cli_clone.get_sf', return_value=_clone_sf()):
-        resp = client.post('/cli/clone-object/package', data=json.dumps({
+        resp = client.post('/api/v1/cli/clone-object/package', data=json.dumps({
             'object': 'Accommodation__c', 'include_permset': True, 'include_tab': True}),
             content_type='application/json')
     assert resp.status_code == 200
@@ -394,7 +394,7 @@ def test_clone_package_with_mirror(client):
         return mirror_src if org == 'sandbox' else tgt
     with patch('services.cli_clone.get_sf', return_value=src), \
             patch('services.cli_access_mirror.get_sf', side_effect=fake_mirror_sf):
-        resp = client.post('/cli/clone-object/package', data=json.dumps({
+        resp = client.post('/api/v1/cli/clone-object/package', data=json.dumps({
             'object': 'Accommodation__c', 'source_org': 'sandbox', 'target_org': 'dev',
             'include_permset': True, 'mirror_access': True,
             'justification': 'onboarding Housing Staff for testing'}),
@@ -414,7 +414,7 @@ def test_clone_package_with_mirror(client):
 def test_clone_package_requires_justification_when_mirroring(client):
     src = _clone_sf()
     with patch('services.cli_clone.get_sf', return_value=src):
-        resp = client.post('/cli/clone-object/package', data=json.dumps({
+        resp = client.post('/api/v1/cli/clone-object/package', data=json.dumps({
             'object': 'Accommodation__c', 'source_org': 'dev', 'target_org': 'dev',
             'mirror_access': True}), content_type='application/json')
     assert resp.status_code == 400
@@ -431,7 +431,7 @@ def test_clone_plan_includes_mirror_preview(client):
         return mirror_src if org == 'sandbox' else tgt
     with patch('services.cli_clone.get_sf', return_value=src), \
             patch('services.cli_access_mirror.get_sf', side_effect=fake_mirror_sf):
-        resp = client.post('/cli/clone-object/plan', data=json.dumps({
+        resp = client.post('/api/v1/cli/clone-object/plan', data=json.dumps({
             'object': 'Accommodation__c', 'source_org': 'sandbox', 'target_org': 'dev',
             'mirror_access': True, 'justification': 'onboarding Housing Staff for testing'}),
             content_type='application/json')
@@ -442,7 +442,7 @@ def test_clone_plan_includes_mirror_preview(client):
 # ── main builder: generate_tabs for new objects ───────────────────────────────
 
 def test_generate_tabs_for_new_object(client):
-    resp = client.post('/cli/generate', data=json.dumps({
+    resp = client.post('/api/v1/cli/generate', data=json.dumps({
         'alias': 'UAT',
         'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
         'new_objects': [{'object': 'Foo__c', 'label': 'Foo'}],
@@ -454,7 +454,7 @@ def test_generate_tabs_for_new_object(client):
 
 
 def test_package_tab_and_permset_tab_visibility(client):
-    resp = client.post('/cli/package', data=json.dumps({
+    resp = client.post('/api/v1/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT',
         'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar',
                     'type': 'Text', 'readable': True, 'editable': True}],

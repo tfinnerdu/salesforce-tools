@@ -136,7 +136,7 @@ def test_validate_fields_unknown_table_flags_nothing(cached_schema):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 def test_sql_schema_route_lists_tables(client, cached_schema):
-    resp = client.get('/data-ops/sql-schema')
+    resp = client.get('/api/v1/data-ops/sql-schema')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -146,7 +146,7 @@ def test_sql_schema_route_lists_tables(client, cached_schema):
 
 def test_sql_schema_route_empty_without_cache(client):
     """With no DB and no cache the route still succeeds with an empty schema."""
-    resp = client.get('/data-ops/sql-schema')
+    resp = client.get('/api/v1/data-ops/sql-schema')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -155,7 +155,7 @@ def test_sql_schema_route_empty_without_cache(client):
 
 
 def test_sql_schema_route_returns_table_columns(client, cached_schema):
-    resp = client.get('/data-ops/sql-schema?table=dbo.PERSON')
+    resp = client.get('/api/v1/data-ops/sql-schema?table=dbo.PERSON')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -167,7 +167,7 @@ def test_sql_schema_refresh_route(client, monkeypatch):
                         lambda: {'table_count': 2,
                                  'captured_at': '2026-05-01T00:00:00+00:00',
                                  'persisted': False})
-    resp = client.post('/data-ops/sql-schema/refresh')
+    resp = client.post('/api/v1/data-ops/sql-schema/refresh')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -181,13 +181,13 @@ def test_sf_object_fields_route(client, monkeypatch):
         {'name': 'Id', 'label': 'Record ID', 'type': 'id'},
     ]}
     monkeypatch.setattr(soql_workbench, 'get_sf', lambda org: fake)
-    resp = client.get('/data-ops/sf-object-fields?object=Account')
+    resp = client.get('/api/v1/data-ops/sf-object-fields?object=Account')
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
 
 
 def test_sf_object_fields_requires_object(client):
-    resp = client.get('/data-ops/sf-object-fields')
+    resp = client.get('/api/v1/data-ops/sf-object-fields')
     assert resp.status_code == 400
 
 
@@ -195,7 +195,7 @@ def test_sql_schema_refresh_error_returns_500(client, monkeypatch):
     import services.sql_schema as ss
     monkeypatch.setattr(ss, 'refresh_schema',
                         lambda: (_ for _ in ()).throw(RuntimeError('odbc down')))
-    resp = client.post('/data-ops/sql-schema/refresh')
+    resp = client.post('/api/v1/data-ops/sql-schema/refresh')
     assert resp.status_code == 500
     assert resp.get_json()['success'] is False
 

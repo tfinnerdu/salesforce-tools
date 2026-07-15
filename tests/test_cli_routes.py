@@ -24,7 +24,7 @@ class TestMetadata:
         monkeypatch.setattr(route.cli_metadata, 'list_objects',
                             lambda org: [{'name': 'Account', 'label': 'Account',
                                           'custom': False, 'queryable': True}])
-        resp = client.get('/cli/objects')
+        resp = client.get('/api/v1/cli/objects')
         assert resp.status_code == 200
         body = resp.get_json()
         assert body['success'] is True
@@ -33,7 +33,7 @@ class TestMetadata:
     def test_fields_envelope(self, client, monkeypatch):
         monkeypatch.setattr(route.cli_metadata, 'describe_fields',
                             lambda org, obj: {'object': obj, 'fields': []})
-        resp = client.get('/cli/objects/Account/fields')
+        resp = client.get('/api/v1/cli/objects/Account/fields')
         assert resp.status_code == 200
         assert resp.get_json()['data']['object'] == 'Account'
 
@@ -41,7 +41,7 @@ class TestMetadata:
         def _boom(org):
             raise RuntimeError('no creds for org')
         monkeypatch.setattr(route.cli_metadata, 'list_objects', _boom)
-        resp = client.get('/cli/objects')
+        resp = client.get('/api/v1/cli/objects')
         assert resp.status_code == 502
         body = resp.get_json()
         assert body['success'] is False
@@ -54,17 +54,17 @@ class TestFls:
         monkeypatch.setattr(route.cli_fls, 'read_field_fls',
                             lambda org, obj, field: {'object': obj, 'field': f'{obj}.{field}',
                                                      'parents': [], 'summary': {'suggested_editable': False}})
-        resp = client.get('/cli/fls?org=dev&object=Case&field=X__c')
+        resp = client.get('/api/v1/cli/fls?org=dev&object=Case&field=X__c')
         assert resp.status_code == 200
         assert resp.get_json()['data']['field'] == 'Case.X__c'
 
     def test_fls_requires_object_and_field(self, client):
-        resp = client.get('/cli/fls?org=dev&object=Case')
+        resp = client.get('/api/v1/cli/fls?org=dev&object=Case')
         assert resp.status_code == 400
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
     def test_fls_rejects_unknown_org(self, client):
-        resp = client.get('/cli/fls?org=nope&object=Case&field=X__c')
+        resp = client.get('/api/v1/cli/fls?org=nope&object=Case&field=X__c')
         assert resp.status_code == 400
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
@@ -85,7 +85,7 @@ class TestGenerate:
         return plan
 
     def test_generate_returns_all_snippets(self, client):
-        resp = client.post('/cli/generate', json=self._plan())
+        resp = client.post('/api/v1/cli/generate', json=self._plan())
         assert resp.status_code == 200
         d = resp.get_json()['data']
         for key in ('install', 'login', 'project', 'retrieve', 'deploy_dry_run',
@@ -98,7 +98,7 @@ class TestGenerate:
     def test_generate_flip_toggles_backup_verify(self, client):
         plan = self._plan()
         plan['fields'][0]['mode'] = 'flip'
-        d = client.post('/cli/generate', json=plan).get_json()['data']
+        d = client.post('/api/v1/cli/generate', json=plan).get_json()['data']
         assert d['has_flips'] is True
         assert '--target-metadata-dir ./_backup' in d['backup']
         assert 'ForEach-Object' in d['verify']
@@ -106,7 +106,7 @@ class TestGenerate:
     def test_generate_rejects_bad_field(self, client):
         plan = self._plan()
         plan['fields'][0]['api_name'] = 'SIS_ID'  # missing __c
-        resp = client.post('/cli/generate', json=plan)
+        resp = client.post('/api/v1/cli/generate', json=plan)
         assert resp.status_code == 400
         body = resp.get_json()
         assert body['success'] is False and body['code'] == 'INVALID_INPUT'
@@ -116,7 +116,7 @@ class TestGenerate:
         plan = self._plan()
         plan['human_permset'] = {'api_name': 'Case_Assistance_Fields',
                                  'label': 'Case Assistance Fields', 'editable': True}
-        d = client.post('/cli/generate', json=plan).get_json()['data']
+        d = client.post('/api/v1/cli/generate', json=plan).get_json()['data']
         assert d['has_human_permset'] is True
         assert 'PermissionSet:Case_Assistance_Fields' in d['members']
         assert 'PermissionSet:Case_Assistance_Fields' in d['deploy_full']
@@ -128,14 +128,14 @@ class TestGenerate:
         plan = self._plan()
         plan['human_permset'] = {'api_name': 'Case_Assistance_Fields', 'editable': True,
                                  'readonly_companion': True}
-        d = client.post('/cli/generate', json=plan).get_json()['data']
+        d = client.post('/api/v1/cli/generate', json=plan).get_json()['data']
         assert 'PermissionSet:Case_Assistance_Fields' in d['members']
         assert 'PermissionSet:Case_Assistance_Fields_ReadOnly' in d['members']
         # integration + edit + read-only = 3 assign lines
         assert d['assign'].count('sf org assign permset') == 3
 
     def test_generate_includes_source_dir_deploy(self, client):
-        d = client.post('/cli/generate', json=self._plan()).get_json()['data']
+        d = client.post('/api/v1/cli/generate', json=self._plan()).get_json()['data']
         assert d['deploy_dir'] == 'sf project deploy start --source-dir force-app -o DoaneUAT'
 
     def test_generate_permset_for_existing_fields_only(self, client):
@@ -143,7 +143,7 @@ class TestGenerate:
         plan = {'alias': 'DoaneUAT', 'fields': [], 'permset': {},
                 'human_permset': {'api_name': 'Case_Assistance_Fields', 'editable': False},
                 'existing_fields': ['Case.Group_Information__c', 'Case.Occurrence_Date__c']}
-        d = client.post('/cli/generate', json=plan).get_json()['data']
+        d = client.post('/api/v1/cli/generate', json=plan).get_json()['data']
         assert d['has_human_permset'] is True
         # deploy is permission-set only (no CustomField members)
         assert 'CustomField:' not in d['deploy_full']
@@ -153,7 +153,7 @@ class TestGenerate:
         plan = self._plan()
         plan['human_permset'] = {'api_name': 'PS'}
         plan['existing_fields'] = ['NotQualified']  # no Object.Field dot
-        resp = client.post('/cli/generate', json=plan)
+        resp = client.post('/api/v1/cli/generate', json=plan)
         assert resp.status_code == 400
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
@@ -171,12 +171,12 @@ class TestRecordType:
            '</RecordType>\n')
 
     def test_recordtype_picklists(self, client):
-        resp = client.post('/cli/recordtype/picklists', json={'rt_xml': self._RT})
+        resp = client.post('/api/v1/cli/recordtype/picklists', json={'rt_xml': self._RT})
         assert resp.status_code == 200
         assert resp.get_json()['data']['picklists'] == ['Priority']
 
     def test_recordtype_new_block(self, client):
-        resp = client.post('/cli/recordtype', json={
+        resp = client.post('/api/v1/cli/recordtype', json={
             'rt_xml': self._RT, 'field': 'Type_of_Assistance__c',
             'values': ['Academic', 'Financial'], 'default': 'Academic'})
         assert resp.status_code == 200
@@ -185,12 +185,12 @@ class TestRecordType:
         assert '<picklist>Type_of_Assistance__c</picklist>' in d['xml']
 
     def test_recordtype_requires_metadata(self, client):
-        resp = client.post('/cli/recordtype', json={'rt_xml': 'nope', 'field': 'X__c', 'values': ['A']})
+        resp = client.post('/api/v1/cli/recordtype', json={'rt_xml': 'nope', 'field': 'X__c', 'values': ['A']})
         assert resp.status_code == 400
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
     def test_generate_includes_recordtype_snippets(self, client):
-        d = client.post('/cli/generate', json={
+        d = client.post('/api/v1/cli/generate', json={
             'alias': 'DoaneUAT', 'fields': [], 'permset': {}, 'recordtype_name': 'Case.Advisee_Case'
         }).get_json()['data']
         assert 'RecordType:Case.Advisee_Case' in d['recordtype_retrieve']
@@ -199,7 +199,7 @@ class TestRecordType:
 
 class TestRecipes:
     def test_recipes_envelope(self, client):
-        resp = client.post('/cli/recipes', json={
+        resp = client.post('/api/v1/cli/recipes', json={
             'object': 'Account', 'fields': ['Name', 'SIS_ID__c'], 'alias': 'DoaneUAT'})
         assert resp.status_code == 200
         d = resp.get_json()['data']
@@ -209,7 +209,7 @@ class TestRecipes:
         assert 'CustomObject:Account' in d['retrieve_object']
 
     def test_recipes_placeholders_when_empty(self, client):
-        d = client.post('/cli/recipes', json={}).get_json()['data']
+        d = client.post('/api/v1/cli/recipes', json={}).get_json()['data']
         assert '<Object>' in d['describe'] and '<alias>' in d['describe']
 
 
@@ -230,13 +230,13 @@ class TestLayout:
               '</Layout>\n')
 
     def test_layout_sections(self, client):
-        resp = client.post('/cli/layout/sections', json={'layout_xml': self._LAYOUT})
+        resp = client.post('/api/v1/cli/layout/sections', json={'layout_xml': self._LAYOUT})
         assert resp.status_code == 200
         secs = resp.get_json()['data']['sections']
         assert secs[0]['label'] == 'Case Information' and secs[0]['has_editable_column'] is True
 
     def test_layout_new_section(self, client):
-        resp = client.post('/cli/layout', json={
+        resp = client.post('/api/v1/cli/layout', json={
             'layout_xml': self._LAYOUT, 'new_section': 'Case Assistance',
             'fields': ['Case.Group_Information__c'], 'behavior': 'Edit'})
         assert resp.status_code == 200
@@ -246,18 +246,18 @@ class TestLayout:
         assert d['added'] == ['Group_Information__c']
 
     def test_layout_requires_layout_xml(self, client):
-        resp = client.post('/cli/layout', json={'layout_xml': 'not a layout', 'new_section': 'X',
+        resp = client.post('/api/v1/cli/layout', json={'layout_xml': 'not a layout', 'new_section': 'X',
                                                 'fields': ['A__c']})
         assert resp.status_code == 400
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
     def test_layout_all_present_is_400(self, client):
-        resp = client.post('/cli/layout', json={
+        resp = client.post('/api/v1/cli/layout', json={
             'layout_xml': self._LAYOUT, 'new_section': 'X', 'fields': ['OwnerId']})
         assert resp.status_code == 400  # OwnerId already on the layout
 
     def test_generate_includes_layout_snippets(self, client):
-        d = client.post('/cli/generate', json={
+        d = client.post('/api/v1/cli/generate', json={
             'alias': 'DoaneUAT', 'fields': [], 'permset': {}, 'layout_name': 'Case-Case Layout'
         }).get_json()['data']
         assert 'Layout:Case-Case Layout' in d['layout_retrieve']
@@ -272,7 +272,7 @@ class TestPackage:
                         'type': 'Text', 'length': 36, 'externalId': True, 'unique': True}],
             'permset': {},
         }
-        resp = client.post('/cli/package', json=plan)
+        resp = client.post('/api/v1/cli/package', json=plan)
         assert resp.status_code == 200
         assert resp.mimetype == 'application/zip'
         assert 'attachment' in resp.headers['Content-Disposition']
@@ -280,7 +280,7 @@ class TestPackage:
         assert 'force-app/main/default/objects/Account/fields/SIS_ID__c.field-meta.xml' in zf.namelist()
 
     def test_package_empty_is_400(self, client):
-        resp = client.post('/cli/package', json={'fields': [], 'permset': {}})
+        resp = client.post('/api/v1/cli/package', json={'fields': [], 'permset': {}})
         assert resp.status_code == 400
         assert resp.get_json()['code'] == 'INVALID_INPUT'
 
@@ -288,7 +288,7 @@ class TestPackage:
         plan = {'project': 'p', 'alias': 'DoaneUAT', 'fields': [], 'permset': {},
                 'human_permset': {'api_name': 'Case_Assistance_Fields', 'editable': True},
                 'existing_fields': ['Case.Group_Information__c']}
-        resp = client.post('/cli/package', json=plan)
+        resp = client.post('/api/v1/cli/package', json=plan)
         assert resp.status_code == 200
         zf = zipfile.ZipFile(io.BytesIO(resp.data))
         names = zf.namelist()
@@ -303,7 +303,7 @@ class TestPackage:
                 'human_permset': {'api_name': 'Case_Assistance_Fields', 'editable': True,
                                   'readonly_companion': True},
                 'existing_fields': ['Case.Group_Information__c']}
-        resp = client.post('/cli/package', json=plan)
+        resp = client.post('/api/v1/cli/package', json=plan)
         assert resp.status_code == 200
         names = zipfile.ZipFile(io.BytesIO(resp.data)).namelist()
         assert 'force-app/main/default/permissionsets/Case_Assistance_Fields.permissionset-meta.xml' in names
@@ -312,3 +312,25 @@ class TestPackage:
         ro = zipfile.ZipFile(io.BytesIO(resp.data)).read(
             'force-app/main/default/permissionsets/Case_Assistance_Fields_ReadOnly.permissionset-meta.xml').decode()
         assert '<editable>false</editable>' in ro and '<editable>true</editable>' not in ro
+
+
+class TestLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/cli/objects', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/cli/objects')
+
+    def test_old_path_redirect_is_followable(self, client, monkeypatch):
+        monkeypatch.setattr(route.cli_metadata, 'list_objects', lambda org: [])
+        resp = client.get('/cli/objects', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
+
+    def test_old_path_post_redirect_preserves_method(self, client, monkeypatch):
+        # 308 preserves method+body -- a POST to the old path must still reach
+        # the real handler as a POST, not get downgraded to GET.
+        monkeypatch.setattr(route.cli_script, 'command_recipes',
+                            lambda obj, fields, alias: {'describe': 'x'})
+        resp = client.post('/cli/recipes', json={'object': 'Account'}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

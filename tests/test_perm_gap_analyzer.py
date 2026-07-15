@@ -153,7 +153,7 @@ def test_compare_summary_has_required_keys():
 
 def test_perm_gap_list_route_returns_200(client):
     with patch('services.perm_gap_analyzer.get_sf', return_value=_list_sf()):
-        resp = client.get('/impact/perm-gap/list')
+        resp = client.get('/api/v1/impact/perm-gap/list')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -164,7 +164,7 @@ def test_perm_gap_list_route_returns_200(client):
 def test_perm_gap_compare_valid_ids_returns_200(client):
     with patch('services.perm_gap_analyzer.get_sf', return_value=_compare_sf()):
         resp = client.post(
-            '/impact/perm-gap/compare',
+            '/api/v1/impact/perm-gap/compare',
             data=json.dumps({'ps_a': _PS_A, 'ps_b': _PS_B}),
             content_type='application/json',
         )
@@ -176,7 +176,7 @@ def test_perm_gap_compare_valid_ids_returns_200(client):
 
 def test_perm_gap_compare_missing_ps_a_returns_400(client):
     resp = client.post(
-        '/impact/perm-gap/compare',
+        '/api/v1/impact/perm-gap/compare',
         data=json.dumps({'ps_b': _PS_B}),
         content_type='application/json',
     )
@@ -187,7 +187,7 @@ def test_perm_gap_compare_missing_ps_a_returns_400(client):
 
 def test_perm_gap_compare_same_ids_returns_400(client):
     resp = client.post(
-        '/impact/perm-gap/compare',
+        '/api/v1/impact/perm-gap/compare',
         data=json.dumps({'ps_a': _PS_A, 'ps_b': _PS_A}),
         content_type='application/json',
     )
@@ -203,10 +203,27 @@ def test_perm_gap_compare_exception_returns_500(client):
         side_effect=Exception('SF unavailable'),
     ):
         resp = client.post(
-            '/impact/perm-gap/compare',
+            '/api/v1/impact/perm-gap/compare',
             data=json.dumps({'ps_a': _PS_A, 'ps_b': _PS_B}),
             content_type='application/json',
         )
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
+
+
+# ---------------------------------------------------------------------------
+# Legacy redirect
+# ---------------------------------------------------------------------------
+
+class TestImpactLegacyRedirect:
+    def test_old_path_redirects_to_versioned_path(self, client):
+        resp = client.get('/impact/perm-gap/list', follow_redirects=False)
+        assert resp.status_code == 308
+        assert resp.headers['Location'].endswith('/api/v1/impact/perm-gap/list')
+
+    def test_old_path_redirect_is_followable(self, client):
+        with patch('services.perm_gap_analyzer.get_sf', return_value=_list_sf()):
+            resp = client.get('/impact/perm-gap/list', follow_redirects=True)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True

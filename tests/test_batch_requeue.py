@@ -34,20 +34,19 @@ def test_requeue_batch_error_mentions_org():
 def test_requeue_route_returns_500(session_client):
     """requeue_batch always raises, so the route returns 500 with success:False."""
     resp = session_client.post(
-        '/migration/errors/requeue',
+        '/api/v1/migration/errors/requeue',
         json={'batch_id': 'batch-001'},
         content_type='application/json',
     )
     assert resp.status_code == 500
     data = resp.get_json()
     assert data['success'] is False
-    assert data['data'] is None
     assert data['error']
 
 
 def test_requeue_route_missing_batch_id(session_client):
     resp = session_client.post(
-        '/migration/errors/requeue',
+        '/api/v1/migration/errors/requeue',
         json={},
         content_type='application/json',
     )
@@ -58,5 +57,5 @@ def test_requeue_route_missing_batch_id(session_client):
 
 
 def test_requeue_route_method_not_allowed(session_client):
-    resp = session_client.get('/migration/errors/requeue')
+    resp = session_client.get('/api/v1/migration/errors/requeue')
     assert resp.status_code == 405
