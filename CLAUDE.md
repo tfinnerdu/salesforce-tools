@@ -18,19 +18,26 @@ Flask web app at `https://du-int.doane.edu/prod/sf-mission-control`. Houses all 
 
 ## Tabs and their routes
 
-| Tab | URL prefix | Blueprints |
-|---|---|---|
-| Migration | `/migration` | `migration_bp` |
-| Validation | `/validation` | `validation_bp` |
-| SOQL | `/soql` | `soql_bp` |
-| Schema | `/schema` | `schema_bp` |
-| Data Ops | `/data-ops` | `data_ops_bp` |
-| Scenarios | `/scenarios` | `scenarios_bp` |
-| Key Maps | `/key-maps` | `key_map_bp` |
-| CLI | `/cli` | `cli_bp` |
-| Settings | `/settings` | `settings_bp` |
+| Tab | Page prefix (HTML) | API prefix (JSON) | Blueprints |
+|---|---|---|---|
+| Migration | `/migration` | `/api/v1/migration` | `migration_bp` / `migration_api_bp` |
+| Validation | `/validation` | `/api/v1/validation` | `validation_bp` / `validation_api_bp` |
+| SOQL | `/soql` | `/api/v1/soql` | `soql_bp` / `soql_api_bp` |
+| Schema | `/schema` | `/api/v1/schema` | `schema_bp` / `schema_api_bp` |
+| Data Ops | `/data-ops` | `/api/v1/data-ops` | `data_ops_bp` / `data_ops_api_bp` |
+| Scenarios | `/scenarios` | `/api/v1/scenarios` | `scenarios_bp` / `scenarios_api_bp` |
+| Key Maps | `/key-maps` | `/api/v1/key-maps` | `key_map_bp` / `key_map_api_bp` |
+| CLI | `/cli` | `/api/v1/cli` | `cli_bp` / `cli_api_bp` |
+| Settings | `/settings` | `/api/v1/settings` | `settings_bp` / `settings_api_bp` |
+| Observe | `/observe` | `/api/v1/observe` | `observe_bp` / `observe_api_bp` |
+| Logs | `/logs` | `/api/v1/logs` | `logs_bp` / `logs_api_bp` |
+| Impact | `/impact` | `/api/v1/impact` | `impact_bp` / `impact_api_bp` |
+| Admin | `/admin` | `/api/v1/admin` | `admin_bp` / `admin_api_bp` |
+| Deploy | `/deploy` | `/api/v1/deploy` | `deploy_bp` / `deploy_api_bp` |
+| Dashboard | `/dashboard` | `/api/v1/dashboard` | `dashboard_bp` / `dashboard_api_bp` |
+| Meta (shared picker) | — | `/api/v1/meta` | `meta_bp` (redirect shell only) / `meta_api_bp` |
 
-**API routes live UNDER the blueprint prefix**, not at `/api/v1/`. Example: `POST /migration/readiness/run` (not `/api/v1/migration/readiness/run`). The blueprint prefix IS the namespace.
+**JSON data/action routes live under `/api/v1/<tab>/...`**; HTML page routes stay unversioned at the plain `/<tab>/...` prefix — per the Doane standard, page routes are intentionally excluded from the version namespace. Example: `POST /api/v1/migration/readiness/run` (not `/migration/readiness/run`, which now 308-redirects there). Every blueprint file defines both a `<name>_bp` (HTML) and a `<name>_api_bp` (JSON) — see `utils/responses.register_legacy_json_redirect` for the redirect mechanism. Full contract at `/swagger` (`static/openapi.yaml`).
 
 ## Provider pattern
 
@@ -56,7 +63,8 @@ db.py                psycopg2 connection, init_db(), db_available()
 sf_provider.py       SF client factory + Bulk API / DML helpers + MockSalesforce (SHOW_MOCK)
 conductor_provider.py Conductor client + MockConductorClient (SHOW_MOCK)
 scheduler.py         APScheduler daily readiness job
-routes/              One blueprint file per tab
+routes/              One file per tab, each defining a `<name>_bp` (HTML pages,
+                     unversioned) and a `<name>_api_bp` (JSON, /api/v1/<tab>)
 services/            Business logic, one module per feature
   audit.py                 Shared AuditEvent dataclass + emit() — structured
                            stdout JSON line + best-effort audit_events row
@@ -131,7 +139,9 @@ services/            Business logic, one module per feature
                            or existing section) — pure string surgery, org-to-org
   cli_recordtype.py        CLI tab: make a picklist field's values available on a
                            pasted record-type XML — pure string surgery, org-to-org
-utils/responses.py   Shared API helpers: error_response() envelope + request_id
+utils/responses.py   Shared API helpers: error_response()/ok() envelope,
+                     request_id, register_legacy_json_redirect() (the 308
+                     shim from a pre-/api/v1 path to its new home)
 templates/           Jinja2, all extend base.html
 static/css/          mission-control.css (Doane brand)
 static/js/           mission-control.js (MC.* namespace, vanilla JS)

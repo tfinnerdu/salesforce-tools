@@ -716,29 +716,31 @@ pins this against the real Conductor migration artifacts.
 ## Regression Checks (run after any change)
 
 1. `GET /api/v1/health` returns 200; `GET /api/v1/health/deep` returns 200 with a `checks` dict; `GET /health` 308-redirects
-2. `POST /migration/readiness/run` returns `success: true` with checks array
-3. `GET /validation/external-ids/run` returns list with Account entry
-4. `POST /soql/run` with `{"query": "SELECT Id FROM Account LIMIT 1"}` returns records
-5. `POST /schema/org-diff/run` with `{"compare_org": "prod"}` returns objects dict
+2. `POST /api/v1/migration/readiness/run` returns `success: true` with checks array
+3. `GET /api/v1/validation/external-ids/run` returns list with Account entry
+4. `POST /api/v1/soql/run` with `{"query": "SELECT Id FROM Account LIMIT 1"}` returns records
+5. `POST /api/v1/schema/org-diff/run` with `{"compare_org": "prod"}` returns objects dict
 6. Navigation — all 6 tabs load without 500
 7. Org switch updates session and badge
 8. `GET /data-ops/` redirects (302) to `/data-ops/import`
 9. `GET /migration/velocity` — chart renders, spinner resolves (no infinite spin)
-10. `GET /admin/permissions/sets` and `/admin/automation/validation-rules` return
+10. `GET /api/v1/admin/permissions/sets` and `/api/v1/admin/automation/validation-rules` return
     `success: true`
-11. `POST /data-ops/export/run` with a SOQL body returns a `text/csv` attachment
-12. `GET /data-ops/tune/rules` returns 8 standardization rules
-13. `POST /data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
-14. `POST /data-ops/backup/run` with `{"objects": ["Account"]}` returns `success: true` with an object count
-15. `POST /schema/metadata-diff/run` with `{"compare_org": "prod"}` returns `success: true` with `total_differences > 0`
-16. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "TEST001"}` returns `success: true` with `total_fields > 0`
-17. `POST /schema/inspect/run` with `{"object": "Account", "record_id": "12345", "external_id_field": "SIS_ID__c"}` returns `lookup_mode: "external_id:SIS_ID__c"`
-18. `pytest tests/ -q` — full suite green (1,586 tests as of this writing; re-run
+11. `POST /api/v1/data-ops/export/run` with a SOQL body returns a `text/csv` attachment
+12. `GET /api/v1/data-ops/tune/rules` returns 8 standardization rules
+13. `POST /api/v1/data-ops/match/run` with object/where/compare_fields/block_field returns candidate pairs
+14. `POST /api/v1/data-ops/backup/run` with `{"objects": ["Account"]}` returns `success: true` with an object count
+15. `POST /api/v1/schema/metadata-diff/run` with `{"compare_org": "prod"}` returns `success: true` with `total_differences > 0`
+16. `POST /api/v1/schema/inspect/run` with `{"object": "Account", "record_id": "TEST001"}` returns `success: true` with `total_fields > 0`
+17. `POST /api/v1/schema/inspect/run` with `{"object": "Account", "record_id": "12345", "external_id_field": "SIS_ID__c"}` returns `lookup_mode: "external_id:SIS_ID__c"`
+18. `pytest tests/ -q` — full suite green (1,620 tests as of this writing; re-run
     `--collect-only -q` for the current count rather than trusting this number —
     it drifts every session)
 19. `pytest tests/characterization/ -q` — Tooling API, route, Tune-rule, Soundex, health/mock-signal/error-envelope/k8s-manifest/env-var, ContactPoint-invariant, and CLI-artifact contracts intact
-20. `GET /cli` returns 200 and `GET /cli/objects` returns `success: true` with an object list
-21. `POST /cli/generate` with a field plan returns all snippet keys; `POST /cli/package` returns an `application/zip` attachment
-22. `POST /cli/clone-object/plan` for a real object returns `success: true` with `fields`/`skipped`/`counts`; `POST /cli/clone-object/package` returns an `application/zip` attachment
-23. `POST /cli/access-mirror/plan` without a `justification` returns 400; with one (≥10 chars) returns `success: true` with `matched`/`unmatched`/`skipped_locked`/`high_privilege_excluded` and `counts`
+20. `GET /cli` returns 200 and `GET /api/v1/cli/objects` returns `success: true` with an object list
+21. `POST /api/v1/cli/generate` with a field plan returns all snippet keys; `POST /api/v1/cli/package` returns an `application/zip` attachment
+22. `POST /api/v1/cli/clone-object/plan` for a real object returns `success: true` with `fields`/`skipped`/`counts`; `POST /api/v1/cli/clone-object/package` returns an `application/zip` attachment
+23. `POST /api/v1/cli/access-mirror/plan` without a `justification` returns 400; with one (≥10 chars) returns `success: true` with `matched`/`unmatched`/`skipped_locked`/`high_privilege_excluded` and `counts`
 24. `GET /api/v1/health` returns 200 with `status: "ok"`; `GET /api/v1/health/deep` returns 200 with a `checks` dict and a `mock` key matching `SHOW_MOCK`; `GET /health` 308-redirects to `/api/v1/health`
+25. Every pre-versioning JSON path (e.g. `POST /cli/generate`, `POST /migration/readiness/run`) still 308-redirects to its `/api/v1/...` equivalent, preserving method — confirms old integrations/scripts/bookmarks keep working during the transition
+26. `GET /swagger` loads the Swagger UI and lists the `/api/v1/...` paths from `static/openapi.yaml`

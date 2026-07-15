@@ -35,28 +35,31 @@ curl http://localhost:5000/api/v1/health
 curl http://localhost:5000/api/v1/health/deep
 
 -- Check migration readiness (mock) --
-curl -X POST http://localhost:5000/migration/readiness/run
+curl -X POST http://localhost:5000/api/v1/migration/readiness/run
 
 -- Check batch status (mock) --
-curl "http://localhost:5000/migration/batch/status?workflow_name=EDA_Person_Sync"
+curl "http://localhost:5000/api/v1/migration/batch/status?workflow_name=EDA_Person_Sync"
 
 -- Check reconciler errors (mock) --
-curl "http://localhost:5000/migration/reconciler/errors?workflow_name=EDA_Person_Sync&hours_back=24"
+curl "http://localhost:5000/api/v1/migration/reconciler/errors?workflow_name=EDA_Person_Sync&hours_back=24"
 
 -- Run validation scans --
-curl -X POST http://localhost:5000/validation/duplicates/scan
-curl http://localhost:5000/validation/external-ids/run
-curl http://localhost:5000/validation/contactpoints/scan
+curl -X POST http://localhost:5000/api/v1/validation/duplicates/scan
+curl http://localhost:5000/api/v1/validation/external-ids/run
+curl http://localhost:5000/api/v1/validation/contactpoints/scan
 
 -- SOQL run --
-curl -X POST http://localhost:5000/soql/run \
+curl -X POST http://localhost:5000/api/v1/soql/run \
   -H "Content-Type: application/json" \
   -d '{"query":"SELECT Id, Name FROM Account WHERE IsPersonAccount = true LIMIT 10"}'
 
 -- Schema diff --
-curl -X POST http://localhost:5000/schema/org-diff/run \
+curl -X POST http://localhost:5000/api/v1/schema/org-diff/run \
   -H "Content-Type: application/json" \
   -d '{"compare_org":"prod","objects":["Account"]}'
+
+-- API docs (Swagger UI) --
+open http://localhost:5000/swagger
 
 -- Docker build --
 -- Image name uses dots not hyphens (Doane's Docker Hub org doesn't handle

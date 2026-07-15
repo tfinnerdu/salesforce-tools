@@ -889,7 +889,7 @@ specific matrix yet.
 | Manual-procedure-documented | 41+ templates + 11+ JS files + `start-local.ps1` | 26 procedures cover every JS-driven UI flow plus the local-dev launcher |
 | Structurally exempt | 1 line | `app.py` `__main__` guard |
 
-**Test suite: 1,586 tests passing** (`pytest tests/ --collect-only -q`). This
+**Test suite: 1,620 tests passing** (`pytest tests/ --collect-only -q`). This
 count drifts every session — treat any hardcoded count in a doc (including
 this one) as a snapshot, not a live fact; re-collect before trusting it.
 
