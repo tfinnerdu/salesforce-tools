@@ -479,7 +479,7 @@ def test_soql_run_exception_returns_500(client):
         'routes.soql.soql_workbench.run_query',
         side_effect=Exception("query error"),
     ):
-        resp = client.post('/soql/run', json={'query': 'SELECT Id FROM Account'})
+        resp = client.post('/api/v1/soql/run', json={'query': 'SELECT Id FROM Account'})
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -490,7 +490,7 @@ def test_soql_objects_exception_returns_500(client):
         'routes.soql.soql_workbench.list_objects',
         side_effect=Exception("objects error"),
     ):
-        resp = client.get('/soql/objects')
+        resp = client.get('/api/v1/soql/objects')
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -501,7 +501,7 @@ def test_soql_object_fields_exception_returns_500(client):
         'routes.soql.soql_workbench.list_fields',
         side_effect=Exception("fields error"),
     ):
-        resp = client.get('/soql/objects/Account/fields')
+        resp = client.get('/api/v1/soql/objects/Account/fields')
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
@@ -512,7 +512,7 @@ def test_soql_saved_get_succeeds(client):
         'routes.soql.soql_workbench.get_saved_queries',
         return_value=[{'id': 1, 'name': 'My Query', 'query': 'SELECT Id FROM Account'}],
     ):
-        resp = client.get('/soql/saved')
+        resp = client.get('/api/v1/soql/saved')
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -524,21 +524,21 @@ def test_soql_saved_get_exception_returns_500(client):
         'routes.soql.soql_workbench.get_saved_queries',
         side_effect=Exception("get saved failed"),
     ):
-        resp = client.get('/soql/saved')
+        resp = client.get('/api/v1/soql/saved')
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
 
 
 def test_soql_saved_post_no_name_returns_400(client):
-    resp = client.post('/soql/saved', json={'query': 'SELECT Id FROM Account'})
+    resp = client.post('/api/v1/soql/saved', json={'query': 'SELECT Id FROM Account'})
     assert resp.status_code == 400
     d = resp.get_json()
     assert d['success'] is False
 
 
 def test_soql_saved_post_no_query_returns_400(client):
-    resp = client.post('/soql/saved', json={'name': 'My Query'})
+    resp = client.post('/api/v1/soql/saved', json={'name': 'My Query'})
     assert resp.status_code == 400
 
 
@@ -548,7 +548,7 @@ def test_soql_saved_post_succeeds(client):
         return_value={'id': 1, 'name': 'My Query', 'query': 'SELECT Id FROM Account'},
     ):
         resp = client.post(
-            '/soql/saved',
+            '/api/v1/soql/saved',
             json={'name': 'My Query', 'query': 'SELECT Id FROM Account'},
         )
     assert resp.status_code == 201
@@ -562,7 +562,7 @@ def test_soql_saved_post_exception_returns_500(client):
         side_effect=Exception("save failed"),
     ):
         resp = client.post(
-            '/soql/saved',
+            '/api/v1/soql/saved',
             json={'name': 'My Query', 'query': 'SELECT Id FROM Account'},
         )
     assert resp.status_code == 500
@@ -572,7 +572,7 @@ def test_soql_saved_post_exception_returns_500(client):
 
 def test_soql_saved_delete_succeeds(client):
     with patch('routes.soql.soql_workbench.delete_saved_query', return_value=None):
-        resp = client.delete('/soql/saved/42')
+        resp = client.delete('/api/v1/soql/saved/42')
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['success'] is True
@@ -584,14 +584,14 @@ def test_soql_saved_delete_exception_returns_500(client):
         'routes.soql.soql_workbench.delete_saved_query',
         side_effect=Exception("delete failed"),
     ):
-        resp = client.delete('/soql/saved/42')
+        resp = client.delete('/api/v1/soql/saved/42')
     assert resp.status_code == 500
     d = resp.get_json()
     assert d['success'] is False
 
 
 def test_soql_update_missing_fields_returns_400(client):
-    resp = client.post('/soql/update', json={'object_name': 'Account'})
+    resp = client.post('/api/v1/soql/update', json={'object_name': 'Account'})
     assert resp.status_code == 400
     d = resp.get_json()
     assert d['success'] is False
@@ -600,7 +600,7 @@ def test_soql_update_missing_fields_returns_400(client):
 def test_soql_update_succeeds(client):
     with patch('services.soql_workbench.get_sf', return_value=MagicMock()):
         resp = client.post(
-            '/soql/update',
+            '/api/v1/soql/update',
             json={
                 'object_name': 'Account',
                 'record_id': '001ABC',
@@ -619,7 +619,7 @@ def test_soql_update_exception_returns_500(client):
         side_effect=Exception("update failed"),
     ):
         resp = client.post(
-            '/soql/update',
+            '/api/v1/soql/update',
             json={
                 'object_name': 'Account',
                 'record_id': '001ABC',

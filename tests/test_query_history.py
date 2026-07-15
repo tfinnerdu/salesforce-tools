@@ -44,7 +44,7 @@ def test_get_query_history_db_unavailable_returns_empty():
 
 def test_get_history_route_200(client):
     with patch('db.db_available', return_value=False):
-        resp = client.get('/soql/history')
+        resp = client.get('/api/v1/soql/history')
     assert resp.status_code == 200
 
 
@@ -52,7 +52,7 @@ def test_get_history_route_200(client):
 
 def test_get_history_route_data_is_list(client):
     with patch('db.db_available', return_value=False):
-        resp = client.get('/soql/history')
+        resp = client.get('/api/v1/soql/history')
     body = resp.get_json()
     assert body['success'] is True
     assert isinstance(body['data'], list)
@@ -64,7 +64,7 @@ def test_delete_history_nonexistent_200(client):
     cm, _ = _make_cursor()
     with patch('db.db_available', return_value=True), \
          patch('db.get_cursor', cm):
-        resp = client.delete('/soql/history/999')
+        resp = client.delete('/api/v1/soql/history/999')
     assert resp.status_code == 200
     body = resp.get_json()
     assert body['success'] is True
@@ -104,7 +104,7 @@ def test_get_query_history_no_exception_when_db_unavailable():
 def test_get_history_route_exception_returns_500(client):
     with patch('services.soql_workbench.get_query_history',
                side_effect=RuntimeError('db exploded')):
-        resp = client.get('/soql/history')
+        resp = client.get('/api/v1/soql/history')
     assert resp.status_code == 500
     body = resp.get_json()
     assert body['success'] is False
@@ -117,7 +117,7 @@ def test_delete_history_returns_deleted_flag(client):
     cm, _ = _make_cursor()
     with patch('db.db_available', return_value=True), \
          patch('db.get_cursor', cm):
-        resp = client.delete('/soql/history/1')
+        resp = client.delete('/api/v1/soql/history/1')
     body = resp.get_json()
     assert body['success'] is True
     assert 'deleted' in body['data']
@@ -126,7 +126,7 @@ def test_delete_history_returns_deleted_flag(client):
 
 def test_delete_history_db_unavailable_returns_deleted_false(client):
     with patch('db.db_available', return_value=False):
-        resp = client.delete('/soql/history/42')
+        resp = client.delete('/api/v1/soql/history/42')
     body = resp.get_json()
     assert body['success'] is True
     assert body['data']['deleted'] is False

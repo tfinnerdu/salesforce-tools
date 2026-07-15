@@ -174,7 +174,7 @@ def test_soql_run_api(client):
     sf = _sf({'records': [{'attributes': {}, 'Id': '001', 'Name': 'Acme'}],
               'totalSize': 1, 'done': True})
     with patch('services.soql_workbench.get_sf', return_value=sf):
-        resp = client.post('/soql/run',
+        resp = client.post('/api/v1/soql/run',
                            json={'query': 'SELECT Id, Name FROM Account LIMIT 10'})
     assert resp.status_code == 200
     data = resp.get_json()
@@ -184,7 +184,7 @@ def test_soql_run_api(client):
 
 
 def test_soql_run_requires_query(client):
-    resp = client.post('/soql/run', json={})
+    resp = client.post('/api/v1/soql/run', json={})
     assert resp.status_code == 400
 
 
@@ -192,7 +192,7 @@ def test_soql_objects_api(client):
     sf = _sf(restful_result={'sobjects': [
         {'name': 'Account', 'label': 'Account', 'queryable': True, 'custom': False}]})
     with patch('services.soql_workbench.get_sf', return_value=sf):
-        resp = client.get('/soql/objects')
+        resp = client.get('/api/v1/soql/objects')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
@@ -205,7 +205,7 @@ def test_soql_object_fields_api(client):
         {'name': 'Name', 'label': 'Name', 'type': 'string', 'nillable': False,
          'externalId': False, 'calculated': False, 'picklistValues': []}]})
     with patch('services.soql_workbench.get_sf', return_value=sf):
-        resp = client.get('/soql/objects/Account/fields')
+        resp = client.get('/api/v1/soql/objects/Account/fields')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['success'] is True
