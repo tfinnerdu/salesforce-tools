@@ -58,6 +58,16 @@ def create_app() -> Flask:
         from flask import session
         session.setdefault('active_org', Config.DEFAULT_ORG)
 
+    @app.after_request
+    def _mock_mode_header(response):
+        # Third of the three required mock/live signals (navbar badge + this
+        # header + the health/deep "mock" key) — lets a non-browser caller
+        # (curl, a script, an Argo-triggered scheduled run) detect synthetic
+        # data without parsing the response body.
+        if Config.SHOW_MOCK:
+            response.headers['X-Mock-Mode'] = 'true'
+        return response
+
     @app.context_processor
     def inject_globals():
         from flask import session

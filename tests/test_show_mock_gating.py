@@ -336,3 +336,19 @@ class TestShowMockTemplateContext:
         with app.test_request_context('/'):
             app.update_template_context(ctx)
         assert ctx.get('show_mock_mode') is False
+
+
+class TestMockModeHeader:
+    """Third of the three required mock/live signals: X-Mock-Mode on every
+    response when SHOW_MOCK is on, so a non-browser caller can tell without
+    parsing the body."""
+
+    def test_x_mock_mode_header_present_when_show_mock_true(self, client, monkeypatch):
+        monkeypatch.setattr(Config, 'SHOW_MOCK', True)
+        resp = client.get('/api/v1/health')
+        assert resp.headers.get('X-Mock-Mode') == 'true'
+
+    def test_x_mock_mode_header_absent_when_show_mock_false(self, client, monkeypatch):
+        monkeypatch.setattr(Config, 'SHOW_MOCK', False)
+        resp = client.get('/api/v1/health')
+        assert 'X-Mock-Mode' not in resp.headers
