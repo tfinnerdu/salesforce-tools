@@ -345,3 +345,28 @@ def test_build_package_zip_profile_with_no_grants_is_dropped():
     with pytest.raises(ValueError):
         cs.build_package_zip('p', [], None, 'UAT',
                              profiles=[{'api_name': 'Empty'}])
+
+
+# ── build_package_zip: base_path threading (config hygiene) ──────────────────
+
+def test_readme_uses_configured_base_path_when_given():
+    fields = [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}]
+    data, _ = cs.build_package_zip('proj', fields, None, 'UAT',
+                                   base_path='C:\\Other\\Projects')
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        readme = zf.read('README.txt').decode()
+    assert 'C:\\Other\\Projects\\proj' in readme
+    assert 'C:\\Doane\\Code\\Salesforce-Projects' not in readme
+
+
+def test_readme_falls_back_to_default_base_path_when_not_given():
+    fields = [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}]
+    data, _ = cs.build_package_zip('proj', fields, None, 'UAT')
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        readme = zf.read('README.txt').decode()
+    assert 'C:\\Doane\\Code\\Salesforce-Projects\\proj' in readme
+
+
+def test_base_project_path_with_and_without_override():
+    assert cs.base_project_path('proj') == 'C:\\Doane\\Code\\Salesforce-Projects\\proj'
+    assert cs.base_project_path('proj', 'C:\\Other') == 'C:\\Other\\proj'

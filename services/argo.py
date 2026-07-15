@@ -13,12 +13,6 @@ from config import Config
 _CRON_FIELD = r'[\d*/,\-?LW#]+'
 _CRON_RE = re.compile(r'^\s*' + r'\s+'.join([_CRON_FIELD] * 5) + r'\s*$')
 
-DEFAULT_NAMESPACE = 'prod'
-DEFAULT_TIMEZONE = 'America/Chicago'
-DEFAULT_SECRET_NAME = 'sf-mission-control-secrets'
-DEFAULT_SECRET_KEY = 'scheduler-token'
-DEFAULT_IMAGE = 'curlimages/curl:8.10.1'
-
 
 def validate_cron(schedule: str) -> str:
     """Return the trimmed cron string, or raise ValueError if it isn't a
@@ -41,19 +35,28 @@ def _slug(name: str) -> str:
 
 
 def generate_cronworkflow(scenario_id: int, scenario_name: str, schedule: str, *,
-                          base_url: str = None, namespace: str = DEFAULT_NAMESPACE,
-                          timezone: str = DEFAULT_TIMEZONE,
-                          secret_name: str = DEFAULT_SECRET_NAME,
-                          secret_key: str = DEFAULT_SECRET_KEY,
-                          image: str = DEFAULT_IMAGE) -> str:
+                          base_url: str = None, namespace: str = None,
+                          timezone: str = None, secret_name: str = None,
+                          secret_key: str = None, image: str = None) -> str:
     """Render an Argo CronWorkflow that triggers a scenario on a schedule.
 
     The workflow curls the scheduled-run endpoint with the scheduler token
     pulled from a K8s secret. ``curl -f`` makes a non-2xx response fail the
     workflow, so a failed/partial run surfaces in the Argo UI; the app's own
     structured stdout log carries the per-step detail.
+
+    namespace/timezone/secret_name/secret_key/image default to Config.ARGO_*
+    (Doane-specific values, but env-overridable — Higher-Ed-agnostic posture,
+    same as the CLI tab's defaults). Resolved here rather than as literal
+    parameter defaults so a runtime Config change (or a test monkeypatch)
+    takes effect without needing this module reloaded.
     """
     schedule = validate_cron(schedule)
+    namespace = namespace or Config.ARGO_NAMESPACE
+    timezone = timezone or Config.ARGO_TIMEZONE
+    secret_name = secret_name or Config.ARGO_SECRET_NAME
+    secret_key = secret_key or Config.ARGO_SECRET_KEY
+    image = image or Config.ARGO_IMAGE
     base = (base_url or Config.PUBLIC_BASE_URL).rstrip('/')
     url = f'{base}/scenarios/{scenario_id}/scheduled-run'
     # K8s object names are DNS-1123: max 253, but keep it short and readable.

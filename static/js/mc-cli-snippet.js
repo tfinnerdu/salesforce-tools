@@ -1069,6 +1069,7 @@ MC.cliClone = {
           include_high_privilege: this._highPriv(),
           project: (document.getElementById('cliProject')?.value || '').trim(),
           alias: (document.getElementById('cliAlias')?.value || '').trim(),
+          base_path: (document.getElementById('cliBasePath')?.value || '').trim(),
         }),
       });
       if (!resp.ok) {

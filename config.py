@@ -100,3 +100,13 @@ class Config:
     CLI_DEFAULT_ALIAS = os.environ.get('CLI_DEFAULT_ALIAS', 'EC-SB')
     CLI_DEFAULT_PROJECT = os.environ.get('CLI_DEFAULT_PROJECT', 'doane-sf')
     CLI_DEFAULT_PERMSET = os.environ.get('CLI_DEFAULT_PERMSET', 'SF_Tools_Importer')
+    # Argo CronWorkflow defaults (services/argo.py) + APScheduler timezone
+    # (scheduler.py) — env-overridable so a peer institution's cluster
+    # namespace/timezone/secret-naming convention doesn't require a Python
+    # source edit (Higher-Ed-agnostic posture, same as the CLI defaults above).
+    ARGO_NAMESPACE = os.environ.get('ARGO_NAMESPACE', 'prod')
+    ARGO_TIMEZONE = os.environ.get('ARGO_TIMEZONE', 'America/Chicago')
+    ARGO_SECRET_NAME = os.environ.get('ARGO_SECRET_NAME', 'sf-mission-control-secrets')
+    ARGO_SECRET_KEY = os.environ.get('ARGO_SECRET_KEY', 'scheduler-token')
+    ARGO_IMAGE = os.environ.get('ARGO_IMAGE', 'curlimages/curl:8.10.1')
+    SCHEDULER_TIMEZONE = os.environ.get('SCHEDULER_TIMEZONE', 'America/Chicago')

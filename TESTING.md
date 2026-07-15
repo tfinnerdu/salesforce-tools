@@ -75,7 +75,7 @@ the Observe / Logs / Impact / Deploy tabs).
 | `app.py` | Unit-tested | Exercised by every route test via the `app` fixture; the `__main__` guard line is Compile-verified |
 | `config.py` | Unit-tested | `test_contracts.py` + broad use across the suite |
 | `db.py` | Unit-tested | `test_merge_history.py`, `test_query_history.py` (psycopg2 / cursor mocked) |
-| `scheduler.py` | Unit-tested | Scheduler init tests (`BackgroundScheduler` mocked) |
+| `scheduler.py` | Unit-tested | `test_scheduler.py` (`BackgroundScheduler` mocked) |
 | `sf_provider.py` | Unit-tested | `get_sf` exercised via `unittest.mock` doubles patched per-test; includes the no-credentials `RuntimeError` path. The `Config.SHOW_MOCK=true` branch (returns `MockSalesforce` for any org) exists for manual UI / demo use; tests cover the real-path branch by patching the factory. |
 | `conductor_provider.py` | Unit-tested | `get_conductor_client` exercised via `unittest.mock` doubles patched per-test; `responses` mocks all Conductor HTTP; includes the missing-config `RuntimeError` path. The `Config.SHOW_MOCK=true` branch (returns `MockConductorClient`) exists for manual UI / demo use; tests cover the real-path branch by patching the factory. |
 

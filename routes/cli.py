@@ -408,6 +408,7 @@ def api_package():
     payload = request.get_json(silent=True) or {}
     project = (payload.get('project') or '').strip()
     alias = (payload.get('alias') or '').strip()
+    base_path = (payload.get('base_path') or Config.CLI_PROJECT_BASE_PATH).strip()
     try:
         fields = _validate_fields(payload.get('fields') or [])
         existing = _existing_fields_from(payload)
@@ -425,7 +426,7 @@ def api_package():
         zip_bytes, filename = cli_script.build_package_zip(
             project, fields, permset or None, alias,
             extra_permsets=humans or None, object_shells=object_shells or None,
-            layouts=layouts or None, tabs=tabs or None)
+            layouts=layouts or None, tabs=tabs or None, base_path=base_path)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:
@@ -583,6 +584,7 @@ def api_clone_object_package():
     obj = (payload.get('object') or '').strip()
     project = (payload.get('project') or '').strip()
     alias = (payload.get('alias') or '').strip()
+    base_path = (payload.get('base_path') or Config.CLI_PROJECT_BASE_PATH).strip()
     include_shell = bool(payload.get('include_shell'))
     include_permset = bool(payload.get('include_permset'))
     include_tab = bool(payload.get('include_tab'))
@@ -624,7 +626,7 @@ def api_clone_object_package():
         permset = _clone_permset(obj, fields, include_tab) if (include_permset and fields) else None
         zip_bytes, filename = cli_script.build_package_zip(
             project or obj, fields, permset, alias, object_shells=object_shells,
-            tabs=tabs, extra_permsets=extra_permsets, profiles=profiles)
+            tabs=tabs, extra_permsets=extra_permsets, profiles=profiles, base_path=base_path)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     except Exception as exc:

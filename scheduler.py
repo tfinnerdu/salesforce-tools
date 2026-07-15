@@ -33,7 +33,8 @@ def _nightly_backup_run(app) -> None:
 
 def init_scheduler(app) -> None:
     global _scheduler
-    _scheduler = BackgroundScheduler(timezone='America/Chicago')
+    from config import Config
+    _scheduler = BackgroundScheduler(timezone=Config.SCHEDULER_TIMEZONE)
     _scheduler.add_job(
         _daily_readiness_run,
         trigger='cron',
@@ -43,7 +44,6 @@ def init_scheduler(app) -> None:
         id='daily_readiness',
         replace_existing=True,
     )
-    from config import Config
     if Config.BACKUP_ENABLED:
         _scheduler.add_job(
             _nightly_backup_run,

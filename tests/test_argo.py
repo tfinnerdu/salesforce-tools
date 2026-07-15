@@ -60,3 +60,27 @@ class TestGenerateCronWorkflow:
         wf_name = name_line.split('name:')[1].strip()
         assert len(wf_name) <= 52
         assert not wf_name.endswith('-')
+
+
+class TestConfigDrivenDefaults:
+    """namespace/timezone/secret_name/secret_key/image default to Config.ARGO_*
+    -- resolved at call time so a Config change (or peer-institution env
+    override) takes effect without needing this module reloaded."""
+
+    def test_defaults_come_from_config(self, monkeypatch):
+        monkeypatch.setattr(Config, 'ARGO_NAMESPACE', 'staging')
+        monkeypatch.setattr(Config, 'ARGO_TIMEZONE', 'America/New_York')
+        monkeypatch.setattr(Config, 'ARGO_SECRET_NAME', 'other-secrets')
+        monkeypatch.setattr(Config, 'ARGO_SECRET_KEY', 'other-key')
+        monkeypatch.setattr(Config, 'ARGO_IMAGE', 'curlimages/curl:9.0.0')
+        out = argo.generate_cronworkflow(1, 'X', '0 0 * * *')
+        assert 'namespace: staging' in out
+        assert 'timezone: "America/New_York"' in out
+        assert 'name: other-secrets' in out
+        assert 'key: other-key' in out
+        assert 'image: curlimages/curl:9.0.0' in out
+
+    def test_explicit_kwargs_override_config(self, monkeypatch):
+        monkeypatch.setattr(Config, 'ARGO_NAMESPACE', 'staging')
+        out = argo.generate_cronworkflow(1, 'X', '0 0 * * *', namespace='dev')
+        assert 'namespace: dev' in out

@@ -358,7 +358,10 @@ its schedule, Argo POSTs `/scenarios/<id>/scheduled-run` with the
 set, runs the scenario with its stored org, and logs one structured summary
 line to stdout (the Argo-visible notification). A non-clean run returns HTTP 500
 so `curl -f` fails and Argo flags the workflow. Blank `SCHEDULER_TOKEN` disables
-scheduled runs entirely.
+scheduled runs entirely. The generated YAML's namespace/timezone/secret name+key/
+curl image default to `Config.ARGO_*` (Doane values, env-overridable — config
+hygiene fix: these used to be hardcoded module constants in `services/argo.py`
+itself); `scheduler.py`'s own APScheduler timezone is `Config.SCHEDULER_TIMEZONE`.
 
 ## Shared object picker
 

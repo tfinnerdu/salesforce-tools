@@ -382,6 +382,19 @@ def test_new_object_bad_api_name_rejected(client):
     assert resp.status_code == 400
 
 
+def test_package_respects_custom_base_path(client):
+    resp = client.post('/cli/package', data=json.dumps({
+        'project': 'p', 'alias': 'UAT',
+        'fields': [{'object': 'Foo__c', 'api_name': 'Bar__c', 'label': 'Bar', 'type': 'Text'}],
+        'base_path': 'C:\\Other\\Projects',
+    }), content_type='application/json')
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        readme = zf.read('README.txt').decode()
+    assert 'C:\\Other\\Projects' in readme
+    assert 'C:\\Doane\\Code\\Salesforce-Projects' not in readme
+
+
 def test_package_includes_pasted_layout(client):
     resp = client.post('/cli/package', data=json.dumps({
         'project': 'p', 'alias': 'UAT', 'fields': [],
@@ -487,3 +500,25 @@ def test_route_package_with_shell(client):
     assert resp.status_code == 200
     with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
         assert any(n.endswith('Accommodation__c.object-meta.xml') for n in zf.namelist())
+
+
+def test_route_clone_package_respects_custom_base_path(client):
+    with patch('services.cli_clone.get_sf', return_value=_sf()):
+        resp = client.post('/cli/clone-object/package', data=json.dumps({
+            'object': 'Accommodation__c', 'base_path': 'C:\\Other\\Projects'}),
+            content_type='application/json')
+    assert resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        readme = zf.read('README.txt').decode()
+    assert 'C:\\Other\\Projects' in readme
+    assert 'C:\\Doane\\Code\\Salesforce-Projects' not in readme
+
+
+def test_route_clone_package_defaults_base_path_to_config(client):
+    with patch('services.cli_clone.get_sf', return_value=_sf()):
+        resp = client.post('/cli/clone-object/package',
+                           data=json.dumps({'object': 'Accommodation__c'}),
+                           content_type='application/json')
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
+        readme = zf.read('README.txt').decode()
+    assert 'C:\\Doane\\Code\\Salesforce-Projects' in readme
