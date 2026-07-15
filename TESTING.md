@@ -212,7 +212,6 @@ a Jinja error.
 | `static/js/mc-validation-snippet.js` | Manual-procedure-documented | Procedures 2–4 |
 | `static/js/mc-schema-snippet.js` | Manual-procedure-documented | Procedures 6, 7 |
 | `static/js/mc-data-ops-snippet.js` | Manual-procedure-documented | Procedures 8, 10–14, 19, 20 |
-| `static/js/mc-logs-snippet.js` | Manual-procedure-documented | Logs tab flows |
 | `static/js/mc-observe-snippet.js` | Manual-procedure-documented | Observe tab flows |
 | `static/js/mc-impact-snippet.js` | Manual-procedure-documented | Impact tab flows |
 | `static/js/mc-admin-snippet.js` | Manual-procedure-documented | Procedures 15, 16 |
@@ -307,15 +306,14 @@ the worst individual check.
 **Goal:** Verify the duplicate radar scan runs and the merge action completes.
 
 1. Navigate to `/validation/duplicates`.
-2. Click **Scan for Duplicates**.
-3. Confirm four strategy cards appear: Duplicate SIS ID, Duplicate Name + Birthdate,
-   Duplicate Email, Duplicate Ethos GUID.
-4. Expand a strategy card that shows `count > 0` — confirm the records table renders
-   with IDs.
-5. Check two records in the table and click **Merge Selected**.
-6. Confirm a confirmation modal appears listing master and victim IDs.
-7. Click **Confirm Merge**.
-8. Observe the success toast notification. The merged victim row should disappear or
+2. Click **Run Scan**.
+3. Confirm the results table renders one row per strategy (five strategies: Same
+   SIS ID, Same Name + Birthdate, Same Email, Same Ethos GUID, Fuzzy Name), each
+   with a duplicate count, sample IDs, and a status badge.
+4. On a strategy row with `count > 0`, click **Merge** — confirm the merge modal
+   opens prefilled with Master/Victim Record IDs from that row's sample IDs.
+5. Tick the acknowledgement checkbox and click **Confirm Merge**.
+6. Observe the success toast notification. The merged victim row should disappear or
    be marked as merged.
 
 **Expected:** Scan completes within 5 seconds. Merge returns success and updates the
@@ -344,12 +342,13 @@ connected org's actual data for `SIS_ID__c` and `Ethos_Guid__c`.
 **Goal:** Verify the ContactPoint broken-link scan renders per-type results.
 
 1. Navigate to `/validation/contactpoints`.
-2. Click **Scan ContactPoints**.
+2. Click **Scan Now**.
 3. Confirm three sections appear: ContactPointEmail, ContactPointPhone,
    ContactPointAddress.
-4. Each section shows: total count, missing ParentId count, missing IndividualId
-   count, status badge, and sample IDs.
-5. Click on a sample ID — confirm it is copyable (click-to-copy or a link).
+4. Each section shows: Missing Parent count, Wrong Parent Type count (a non-null
+   ParentId that isn't an Account), Missing Individual count, Total Records, and
+   sample IDs.
+5. Click on a sample ID — confirm it is a deep link to the connected org.
 
 **Expected:** All three CP types render. Missing counts match the connected org's
 actual ContactPoint data.
@@ -871,7 +870,7 @@ relying on it for the team's first onboarding.
 **Known gap, stated plainly rather than papered over:** the File Classification
 Matrix above currently has 14 route rows and 49 service rows, but the repo
 actually has 17 route files and 63 service files as of this writing — the CLI
-tab (`routes/cli.py`, `routes/meta.py`, and roughly a dozen `services/cli_*.py`
+tab (`routes/cli.py`, `routes/meta.py`, and seven `services/cli_*.py`
 modules, built across several sessions after this matrix was last fully
 reconciled) is real, tested (see `tests/test_cli_*.py` and
 `tests/characterization/test_cli_*characterization.py`), and documented in
@@ -882,7 +881,7 @@ specific matrix yet.
 
 | Bucket | Count | Notes |
 |---|---|---|
-| Unit-tested | 6 core + 13 of 17 routes + 47 of 63 services (matrix rows; see gap above) | Every *itemized* route and service module has a test exercising it |
+| Unit-tested | 6 core + 13 of 17 routes + 48 of 63 services (matrix rows; see gap above) | Every *itemized* route and service module has a test exercising it |
 | Contract-pinned | `test_contracts.py` + 13 characterization specs (`tests/characterization/`) | Mock-data invariants, Tooling API contracts, route/health/error-envelope/mock-signal/env-var/k8s-manifest contracts, CLI-artifact byte-for-byte pins, Tune-rule and Soundex transformations, the ContactPoint-parent "known-bad" invariant |
 | Compile-verified | `routes/__init__.py`, `services/__init__.py`, `static/css/mission-control.css`, `Dockerfile`, `requirements.txt` | Declarative — the toolchain validates them |
 | Compile-verified + Contract-pinned | `k8s/manifest.yaml` | `kubectl apply --dry-run` validates; required fields pinned in `test_k8s_manifest_characterization.py` |

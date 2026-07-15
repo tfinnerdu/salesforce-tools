@@ -26,6 +26,8 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
 6. [Schema](#schema)
    - [Crosswalk Diff](#crosswalk-diff)
    - [Org Diff](#org-diff)
+   - [Org Metadata Diff](#org-metadata-diff)
+   - [Record Inspector](#record-inspector)
    - [Field Usage](#field-usage)
    - [Data Dictionary](#data-dictionary)
    - [Apex Code Search](#apex-code-search)
@@ -39,6 +41,7 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
    - [Bulk Delete](#bulk-delete)
    - [Bulk Reassign](#bulk-reassign)
    - [Join Builder](#join-builder)
+   - [Data Backup](#data-backup)
    - [Bulk Update](#bulk-update)
    - [Record Lock Detector](#record-lock-detector)
    - [Bulk API Job History](#bulk-api-job-history)
@@ -61,8 +64,8 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
 11. [Admin](#admin)
     - [Scheduled Jobs](#scheduled-jobs)
     - [Test Coverage](#test-coverage)
-    - [Deploy History](#deploy-history)
-    - [Users](#users)
+    - [Deployment History](#deployment-history)
+    - [User Audit](#user-audit)
     - [Integrations](#integrations)
     - [Platform Events](#platform-events)
     - [Record Types](#record-types)
@@ -77,6 +80,7 @@ For developers, migration engineers, and admins working on the Doane Ed Cloud mi
     - [Automation & Sharing](#automation--sharing)
 12. [Deploy](#deploy)
 13. [Settings](#settings)
+14. [CLI](#cli)
 
 ---
 
@@ -172,28 +176,26 @@ The Dashboard is the home page — a single-screen health summary across all too
 
 **URL:** `/migration/readiness`
 
-The Readiness scorecard answers "are we ready to go live?" before each migration milestone. It runs 8 checks against the active org and scores each one.
+The Readiness scorecard answers "are we ready to go live?" before each migration milestone. It runs 6 checks against the active org and scores each one.
 
 **How to use it:**
 1. Select the org from the card dropdown.
 2. Click **Run Now**.
-3. Review each check row — green (≥95%), amber (80–94%), red (<80%).
+3. Review each check row — green (100%, or 0 duplicate groups for Duplicate SIS IDs), amber (90–99%, or up to 25 duplicate groups), red (below 90%, more than 25 duplicate groups, or a query failure).
 4. Click any row to see raw record count details.
 
 **Checks explained:**
 
 | Check | What it validates | Why it matters |
 |---|---|---|
-| SIS_ID__c coverage | % of PersonAccounts with a Colleague student ID | Required for matching during upsert |
-| Ethos GUID coverage | % linked to Ethos identity | Required for LDM reconciliation |
-| ContactPoint parents | Emails/phones/addresses with valid Account + Individual | Broken parents cause FIELD_INTEGRITY_EXCEPTION |
-| Duplicate PersonAccounts | Records sharing the same name or SIS_ID | Duplicates cause DUPLICATE_VALUE on upsert |
-| Individual links | PersonAccounts with a related Individual record | Required by the Person Account model |
-| Required fields | Records missing FirstName, LastName, or RecordType | Blank required fields fail validation rules |
-| Email format | PersonEmail values with invalid format | Bad emails block ContactPointEmail creation |
-| Phone format | Phone numbers with non-standard formatting | Prevents clean ContactPointPhone creation |
+| SIS ID Coverage | % of PersonAccounts with a Colleague student ID (`SIS_ID__c`) | Required for matching during upsert |
+| Ethos GUID Coverage | % linked to Ethos identity (`Ethos_Guid__c`) | Required for LDM reconciliation |
+| ContactPoint Parent Links | % of Email/Phone/Address ContactPoints with a non-null ParentId | Broken parents cause FIELD_INTEGRITY_EXCEPTION |
+| Required Fields | % of PersonAccounts with FirstName, LastName, and RecordType populated | Blank required fields fail validation rules |
+| Duplicate SIS IDs | Number of `SIS_ID__c` values shared by more than one PersonAccount | Duplicates cause DUPLICATE_VALUE on upsert |
+| Individual Links | % of Email/Phone/Address ContactPoints with a non-null IndividualId | Required by the Person Account model |
 
-The **Overall %** at the bottom is a composite score — below 90% indicates the org is not ready for a production migration push. Scores are stored in PostgreSQL and charted historically on the Observe → Data Quality Trends section.
+The **Overall %** at the bottom is a composite score — a red result on any single check pulls the overall status to red. Scores are stored in PostgreSQL and charted historically on the Observe → Data Quality Trends section.
 
 ---
 
@@ -217,7 +219,7 @@ Pulls failed Conductor workflow executions and groups them by error type so you 
 |---|---|
 | Error type | Salesforce API error code (e.g., `DUPLICATE_VALUE`, `FIELD_INTEGRITY_EXCEPTION`) |
 | Count | Number of workflows that failed with this error |
-| Severity | HIGH (blocks migration) / LOW (safe to retry) |
+| Severity | HIGH (blocks migration) / MEDIUM (needs a look) / LOW (safe to retry) |
 | Cause | Plain-English explanation of what went wrong |
 | Suggested fix | Actionable next step |
 | SIS IDs | Expandable list of Colleague person IDs affected |
@@ -264,10 +266,10 @@ A 21-item go-live checklist stored in PostgreSQL so progress persists across ses
 
 | Category | Example items |
 |---|---|
-| Data Quality | SIS_ID coverage ≥95%, no duplicate PersonAccounts, all ContactPoints valid |
-| Integrations | Named Credentials verified, Connected Apps reviewed, Remote Sites active |
-| Permissions | Permission sets assigned to integration user, FLS reviewed |
-| Testing | All Apex tests passing ≥75%, regression suite baselined |
+| Data Quality | SIS ID coverage ≥99%, no duplicate PersonAccounts, zero orphaned ContactPoints |
+| Integrations | Conductor connection verified, Named Credentials confirmed, Remote Site Settings active |
+| Permissions | Migration Admin permission set assigned, sysadmin count reviewed |
+| Testing | Apex test coverage ≥75%, regression suite baselined |
 | Go-Live | Maintenance window scheduled, rollback plan documented, stakeholders notified |
 
 The progress bar on the Dashboard widget reflects this checklist.
@@ -307,17 +309,19 @@ Scans for PersonAccount records that appear to be the same person — exact exte
 
 **How to use it:**
 1. Select the org and click **Run Scan**.
-2. Review duplicate groups — each group shows the matching records.
-3. Select the record to **keep** using the radio button.
-4. Click **Merge** → confirm in the modal.
+2. Review the results table — one row per strategy, with the duplicate count, sample record IDs, and a status badge.
+3. Click **Merge** on a strategy row — opens the merge modal prefilled with the strategy's first two sample IDs as the Master (kept) and Victim (merged & deleted) Record IDs.
+4. Adjust the Master/Victim Record IDs if needed, tick the acknowledgement checkbox, then click **Confirm Merge**.
 
-**Match types:**
+**Match types (5 strategy cards):**
 
 | Type | Logic |
 |---|---|
-| Exact SIS_ID | Two records share the same `SIS_ID__c` |
-| Exact Ethos GUID | Two records share the same `Ethos_Guid__c` |
-| Fuzzy name | Last + first name within edit distance 1 (catches typos) |
+| Same SIS ID | Two records share the same `SIS_ID__c` |
+| Same Name + Birthdate | Two records share the same Name and `PersonBirthdate` |
+| Same Email | Two records share the same `PersonEmail` |
+| Same Ethos GUID | Two records share the same `Ethos_Guid__c` |
+| Fuzzy Name | Name within edit distance ≤2 (Wagner-Fischer), compared within the same 3-character name prefix group — catches typos (e.g. "Johnson" vs "Jonhson") |
 
 > **Warning:** Merge is irreversible. A confirmation dialog with an acknowledgement checkbox guards the action. Always verify the records in Salesforce before confirming.
 
@@ -327,14 +331,14 @@ Scans for PersonAccount records that appear to be the same person — exact exte
 
 **URL:** `/validation/external-ids`
 
-Reports what percentage of PersonAccounts have each external ID field populated.
+Reports what percentage of records have each external ID field populated, across five tracked objects: PersonAccounts (`SIS_ID__c` + `Ethos_Guid__c`), the three ContactPoint objects (`SIS_ID__c`), and `IndividualApplication` (`SIS_ID__c` + `Ethos_Guid__c`).
 
 **How to use it:** Select the org and click **Run Report**.
 
 | Field | Purpose | Threshold |
 |---|---|---|
-| `SIS_ID__c` | Colleague person ID — required for upsert matching | ≥95% green |
-| `Ethos_Guid__c` | Ethos LDM GUID — required for cross-system reconciliation | ≥95% green |
+| `SIS_ID__c` | Colleague person ID — required for upsert matching | 100% green, ≥90% amber, below 90% red |
+| `Ethos_Guid__c` | Ethos LDM GUID — required for cross-system reconciliation | 100% green, ≥90% amber, below 90% red |
 
 Each row shows total records, records with the field populated, coverage %, and a color-coded badge.
 
@@ -344,20 +348,17 @@ Each row shows total records, records with the field populated, coverage %, and 
 
 **URL:** `/validation/contactpoints`
 
-Checks that all ContactPoint records have valid parent links to both an `Account` and an `Individual`.
+Checks that `ContactPointEmail`, `ContactPointPhone`, and `ContactPointAddress` records have valid parent links to both an `Account` (via `ParentId`) and an `Individual` (via `IndividualId`) — including records that are parented, but to the *wrong* object (a `ParentId` whose 3-character prefix is `003`, i.e. a Contact, instead of `001` for Account). That wrongly-typed case used to report green under an older null-only check.
 
 **How to use it:** Select the org and click **Run Scan**. Review broken records grouped by ContactPoint type.
 
-**Checks performed:**
+**Checks performed (per ContactPoint type — Email, Phone, Address):**
 
 | Check | Description |
 |---|---|
-| ContactPointEmail → Account | Email's ParentId points to a valid PersonAccount |
-| ContactPointEmail → Individual | Email's IndividualId points to a valid Individual |
-| ContactPointPhone → Account | Phone parent validation |
-| ContactPointPhone → Individual | Phone Individual validation |
-| ContactPointAddress → Account | Address parent validation |
-| PersonAccount → Individual | PersonAccount has a linked Individual |
+| Missing Parent | `ParentId` is null — the record is completely orphaned |
+| Parented to the wrong object | `ParentId` is non-null but doesn't start with `001` (Account) — typically a Contact (`003`) |
+| Missing Individual | `IndividualId` is null |
 
 Broken ContactPoint parents cause `FIELD_INTEGRITY_EXCEPTION` errors during migration and must be resolved before a batch can succeed.
 
@@ -367,13 +368,13 @@ Broken ContactPoint parents cause `FIELD_INTEGRITY_EXCEPTION` errors during migr
 
 **URL:** `/validation/completeness`
 
-Checks 10 migration-critical fields across all PersonAccounts and reports the fill rate for each.
+Checks 10 fixed, migration-critical (object, field) pairs — spanning PersonAccounts, Business Accounts, the three ContactPoint objects, and Individual — and reports the fill rate for each.
 
 **How to use it:** Select the org and click **Run Check**.
 
-**Fields checked:** `FirstName`, `LastName`, `PersonEmail`, `Phone`, `RecordTypeId`, `SIS_ID__c`, `Ethos_Guid__c`, `PersonBirthdate`, `MailingStreet`, `MailingCity`
+**Fields checked:** PersonAccount `SIS_ID__c`, `Ethos_Guid__c`, `PersonEmail`, `PersonBirthdate`, `Phone`; Business Account `BillingStreet`; `ContactPointEmail.EmailAddress`; `ContactPointPhone.TelephoneNumber`; `ContactPointAddress.Street`; `Individual.FirstName`
 
-Each field shows: total records, non-null count, % complete, status badge (green ≥95%, amber ≥75%, red <75%). Formula and system fields are automatically skipped.
+Each row shows the object, field, label, total records, populated count, missing count, fill %, and a status badge (green ≥95%, amber ≥75%, red <75%).
 
 ---
 
@@ -389,11 +390,12 @@ Finds records that exist in Salesforce but are disconnected from their required 
 
 | Check | Orphan condition |
 |---|---|
-| ContactPointEmail | `ParentId` → non-existent Account |
-| ContactPointEmail | `IndividualId` → non-existent Individual |
-| ContactPointPhone | Same Account + Individual checks |
-| ContactPointAddress | Same Account + Individual checks |
-| PersonAccount | Missing linked Individual record |
+| ContactPointEmail — missing Account | `ParentId` is null |
+| ContactPointPhone — missing Account | `ParentId` is null |
+| ContactPointAddress — missing Account | `ParentId` is null |
+| ContactPointEmail — missing Individual | `IndividualId` is null |
+| ContactPointPhone — missing Individual | `IndividualId` is null |
+| Person Account — no linked Individual | `IndividualId` is null on the PersonAccount |
 
 Each card shows the orphan count and sample record IDs (with Salesforce deeplinks).
 
@@ -780,7 +782,7 @@ Changes the Owner of every record matching a WHERE clause.
 
 ### Join Builder
 
-**URL:** `/data-ops/join-builder`
+**URL:** `/data-ops/join`
 
 Builds and executes join queries combining Salesforce data with your SQL Server (Colleague) database for cross-system reconciliation.
 
@@ -1127,9 +1129,9 @@ Rows below 75% are highlighted in red (Salesforce deployment requires ≥75% ove
 
 ---
 
-### Deploy History
+### Deployment History
 
-**URL:** `/admin` → Deploy History tab
+**URL:** `/admin` → Deployment History tab
 
 Lists recent metadata deployments to the org.
 
@@ -1139,9 +1141,9 @@ Use this to find recent deployments that may have introduced regressions, and to
 
 ---
 
-### Users
+### User Audit
 
-**URL:** `/admin` → Users tab
+**URL:** `/admin` → User Audit tab
 
 Audit of active users in the org.
 

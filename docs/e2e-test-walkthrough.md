@@ -189,15 +189,14 @@ Each row reflects the connected org's actual data.
 2. Click "Run Scan"
 
 **Expected:**
-- One strategy card per match type — Same SIS_ID, Same Name+DOB, Same Email,
-  Same Ethos GUID — each with a count and color-coded status from the connected
-  org's data
+- One strategy row per match type — Same SIS_ID, Same Name+DOB, Same Email,
+  Same Ethos GUID, Fuzzy Name (edit distance ≤2) — each with a count and
+  color-coded status from the connected org's data
 
 3. Click "Merge" on a row
 4. Verify the merge modal opens with master/victim ID fields and an
    acknowledgement checkbox; the confirm button stays disabled until it is ticked
 5. Tick the checkbox and click Confirm — verify success toast
-6. Click "Export CSV" — CSV downloads with strategy results
 
 ---
 
@@ -232,6 +231,8 @@ Each row reflects the connected org's actual data.
 **Expected:**
 - Three cards: Email, Phone, Address
 - Each shows "Missing Parent: X" with red badge if > 0
+- Each shows "Wrong Parent Type: X" (non-null ParentId that isn't an Account) with
+  red badge if > 0
 - Each shows "Missing Individual: X" with red badge if > 0
 - Total issues banner shows combined count
 

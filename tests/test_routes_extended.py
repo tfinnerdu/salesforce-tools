@@ -535,7 +535,7 @@ def test_soql_saved_get_exception_returns_500(client):
 
 
 def test_soql_saved_post_no_name_returns_400(client):
-    resp = client.post('/api/v1/soql/saved', json={'query': 'SELECT Id FROM Account'})
+    resp = client.post('/api/v1/soql/saved', json={'soql': 'SELECT Id FROM Account'})
     assert resp.status_code == 400
     d = resp.get_json()
     assert d['success'] is False
@@ -547,6 +547,24 @@ def test_soql_saved_post_no_query_returns_400(client):
 
 
 def test_soql_saved_post_succeeds(client):
+    # Real frontend contract: MC.soql.saveQuery() posts {name, soql} — not
+    # {name, query}. A prior mismatch here (route only read 'query') meant
+    # every save from the UI silently 400'd; this pins the real body shape.
+    with patch(
+        'routes.soql.soql_workbench.save_query',
+        return_value={'id': 1, 'name': 'My Query', 'query': 'SELECT Id FROM Account'},
+    ):
+        resp = client.post(
+            '/api/v1/soql/saved',
+            json={'name': 'My Query', 'soql': 'SELECT Id FROM Account'},
+        )
+    assert resp.status_code == 201
+    d = resp.get_json()
+    assert d['success'] is True
+
+
+def test_soql_saved_post_accepts_legacy_query_key(client):
+    # Backward-compat fallback (mirrors api_run's body.get('soql', body.get('query', ''))).
     with patch(
         'routes.soql.soql_workbench.save_query',
         return_value={'id': 1, 'name': 'My Query', 'query': 'SELECT Id FROM Account'},
@@ -567,7 +585,7 @@ def test_soql_saved_post_exception_returns_500(client):
     ):
         resp = client.post(
             '/api/v1/soql/saved',
-            json={'name': 'My Query', 'query': 'SELECT Id FROM Account'},
+            json={'name': 'My Query', 'soql': 'SELECT Id FROM Account'},
         )
     assert resp.status_code == 500
     d = resp.get_json()

@@ -94,7 +94,7 @@ def api_saved_post():
     user_key = request.remote_addr
     body = request.get_json(silent=True) or {}
     name = body.get('name', '').strip()
-    query = body.get('query', '').strip()
+    query = body.get('soql', body.get('query', '')).strip()
     if not name or not query:
         return error_response('name and query are required', 'INVALID_INPUT', 400)
     try:
