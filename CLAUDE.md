@@ -374,6 +374,20 @@ free-typeable — the picker is assistive, not restrictive, so an object the
 describe doesn't return can still be typed by hand. The org picker reloads the
 page on change, so the per-org cache needs no explicit invalidation.
 
+## Health endpoints
+
+`GET /api/v1/health` — liveness, no dependency calls, always 200 while the process
+is alive. `GET /api/v1/health/deep` — readiness, real dependency probes; body
+carries `mock` (mirrors `SHOW_MOCK`, the machine-readable mock/live signal) and a
+`checks` dict. Postgres is treated as **non-critical** on purpose: most tabs
+(SOQL, Schema, Migration reporting, Data Ops DML) don't touch it at all, only
+Scenarios/Key Maps/saved queries/audit persistence do, and with a single replica
+and no leader election in `scheduler.py`, a hard 503 on a DB blip would take the
+whole app offline for what's really a partial-feature outage — so a DB outage
+reports 200/`degraded`, never 503. Bare `GET /health` is deprecated and
+308-redirects to `/api/v1/health`; `routes/health.py`. Contract pinned in
+`tests/characterization/test_health_contract_characterization.py`.
+
 ## Confirmation dialogs
 
 Every state-changing UI action (SF writes, bulk DML, Conductor reruns, trigger-bypass changes, log/trace-flag deletes) is gated by a confirmation modal. The shared primitive is `MC.confirm()` in `mission-control.js`; most buttons opt in declaratively via a `data-mc-confirm` attribute, intercepted by a capture-phase guard. Conditional cases (anonymizer live run, bulk-update live run) call `MC.confirm()` directly.

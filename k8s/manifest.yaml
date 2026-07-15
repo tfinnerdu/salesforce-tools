@@ -20,7 +20,7 @@ spec:
         - name: regcred
       containers:
         - name: sf-mission-control
-          image: doaneu/sf-mission-control:latest
+          image: doaneu/sf.mission.control:1.1.0
           ports:
             - containerPort: 5000
           env:
@@ -89,13 +89,13 @@ spec:
                   key: SECRET_KEY
           livenessProbe:
             httpGet:
-              path: /health
+              path: /api/v1/health
               port: 5000
             initialDelaySeconds: 15
             periodSeconds: 30
           readinessProbe:
             httpGet:
-              path: /health
+              path: /api/v1/health/deep
               port: 5000
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -124,6 +124,11 @@ kind: IngressRoute
 metadata:
   name: sf-mission-control
   namespace: prod
+  annotations:
+    # Must match the Service port (80), not the container port (5000) — a
+    # mismatch here means the mesh destination has no endpoints and the edge
+    # returns "not found" even though the pod itself is healthy.
+    ingress.kubernetes.io/custom-request-headers: "l5d-dst-override:sf-mission-control.prod.svc.cluster.local:80"
 spec:
   entryPoints:
     - websecure
@@ -131,7 +136,7 @@ spec:
     - match: Host(`du-int.doane.edu`) && PathPrefix(`/prod/sf-mission-control`)
       kind: Rule
       middlewares:
-        - name: prod-sf-mission-control-prefix
+        - name: sf-mission-control-prefix
       services:
         - name: sf-mission-control
           port: 80
@@ -141,7 +146,11 @@ spec:
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
-  name: prod-sf-mission-control-prefix
+  # Unqualified name — Traefik builds the cross-provider reference as
+  # <namespace>-<name>@kubernetescrd automatically (resolves to
+  # prod-sf-mission-control-prefix@kubernetescrd). Naming this resource itself
+  # "prod-sf-mission-control-prefix" doubles to "prod-prod-" and silently fails.
+  name: sf-mission-control-prefix
   namespace: prod
 spec:
   stripPrefix:

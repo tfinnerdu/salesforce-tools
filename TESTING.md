@@ -84,7 +84,7 @@ the Observe / Logs / Impact / Deploy tabs).
 | File | Bucket | Backed by |
 |---|---|---|
 | `routes/__init__.py` | Compile-verified | Empty package marker |
-| `routes/health.py` | Unit-tested | `test_routes.py` |
+| `routes/health.py` | Unit-tested + Contract-pinned | `test_routes.py`, `characterization/test_health_contract_characterization.py` |
 | `routes/migration.py` | Unit-tested | `test_routes_extended.py`, `test_migration_velocity.py`, `test_preflight_checklist.py`, `test_batch_requeue.py` |
 | `routes/validation.py` | Unit-tested | `test_duplicate_radar.py`, `test_merge_history.py`, `test_orphan_scanner.py`, `test_field_completeness.py`, `test_external_id_coverage.py`, `test_contactpoint_scanner.py` |
 | `routes/soql.py` | Unit-tested | `test_soql_workbench.py`, `test_query_history.py`, `test_routes_extended.py` |

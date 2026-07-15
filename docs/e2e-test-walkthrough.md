@@ -32,20 +32,39 @@ card-header shows a `MOCK DATA` chip — see **Mock/Live Signal** below.
 
 ---
 
-## Health Endpoint
+## Health Endpoints
 
-**URL:** `GET /health`
+Liveness and readiness are split per the Doane health-endpoint standard. Bare
+`GET /health` is deprecated — it 308-redirects to `/api/v1/health`.
+
+**Liveness — `GET /api/v1/health`** (polling-safe, no dependency calls)
 
 **Steps:**
-1. `curl http://localhost:5000/health`
+1. `curl http://localhost:5000/api/v1/health`
 
 **Expected:**
 ```json
-{"status": "ok", "service": "sf-mission-control", "version": "1.0.0", "uptime_seconds": 1.23, "db_status": "unavailable"}
+{"status": "ok", "service": "sf-mission-control", "version": "1.0.0", "uptime_seconds": 1.23}
 ```
-- `status` is `"ok"` or `"degraded"` — never 500
+- `status` is always the literal string `"ok"` — this endpoint never touches the DB, so it can't reflect DB state
 - `"sf-mission-control"` service name is always present
 - `uptime_seconds` increases on successive calls
+
+**Readiness — `GET /api/v1/health/deep`** (real dependency probes; for CI gates / admin diagnostics, not automated polling)
+
+**Steps:**
+1. `curl http://localhost:5000/api/v1/health/deep`
+
+**Expected:**
+```json
+{"status": "ok", "service": "sf-mission-control", "version": "1.0.0", "uptime_seconds": 1.23,
+ "mock": false, "checks": {"database": {"status": "ok", "latency_ms": 4}}}
+```
+- `status` is `"ok"` or `"degraded"` — never 500. Postgres is treated as non-critical for this app (most tabs work without it; only Scenarios/Key Maps/saved queries/audit persistence need it), so a DB outage degrades rather than fails the readiness check — see `routes/health.py` for the reasoning.
+- `mock` mirrors `Config.SHOW_MOCK` — the machine-readable mock/live signal for monitoring.
+- `checks.database` reports per-dependency status + latency.
+
+**Legacy — `GET /health`**: redirects (308) to `/api/v1/health`. Kept for one transition cycle; don't add new integrations against it.
 
 ---
 
@@ -664,7 +683,7 @@ pins this against the real Conductor migration artifacts.
 
 ## Regression Checks (run after any change)
 
-1. `GET /health` returns 200
+1. `GET /api/v1/health` returns 200; `GET /api/v1/health/deep` returns 200 with a `checks` dict; `GET /health` 308-redirects
 2. `POST /migration/readiness/run` returns `success: true` with checks array
 3. `GET /validation/external-ids/run` returns list with Account entry
 4. `POST /soql/run` with `{"query": "SELECT Id FROM Account LIMIT 1"}` returns records

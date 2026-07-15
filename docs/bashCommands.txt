@@ -30,8 +30,9 @@ open htmlcov/index.html
 -- DB init (manual) --
 python -c "from db import init_db; init_db()"
 
--- Check health endpoint --
-curl http://localhost:5000/health
+-- Check health endpoints --
+curl http://localhost:5000/api/v1/health
+curl http://localhost:5000/api/v1/health/deep
 
 -- Check migration readiness (mock) --
 curl -X POST http://localhost:5000/migration/readiness/run
@@ -58,7 +59,11 @@ curl -X POST http://localhost:5000/schema/org-diff/run \
   -d '{"compare_org":"prod","objects":["Account"]}'
 
 -- Docker build --
-docker build -t doaneu/sf-mission-control:latest .
+-- Image name uses dots not hyphens (Doane's Docker Hub org doesn't handle
+-- hyphens) and is version-pinned, not :latest, so Argo can detect changes.
+-- Bump the tag (and config.py's Config.VERSION) together on every release.
+docker build -t doaneu/sf.mission.control:1.1.0 .
+docker push doaneu/sf.mission.control:1.1.0
 
 -- K8s deploy --
 kubectl apply -f k8s/manifest.yaml -n prod

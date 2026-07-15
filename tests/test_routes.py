@@ -44,13 +44,28 @@ def _conductor():
 
 # ── health / root ─────────────────────────────────────────────────────────────
 
-def test_health_returns_200(client):
-    resp = client.get('/health')
+def test_health_legacy_path_redirects(client):
+    resp = client.get('/health', follow_redirects=False)
+    assert resp.status_code == 308
+    assert resp.headers['Location'].endswith('/api/v1/health')
+
+
+def test_health_liveness_returns_200(client):
+    resp = client.get('/api/v1/health')
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['service'] == 'sf-mission-control'
-    assert data['status'] in ('ok', 'degraded')
+    assert data['status'] == 'ok'
     assert 'uptime_seconds' in data
+
+
+def test_health_readiness_returns_200(client):
+    resp = client.get('/api/v1/health/deep')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['status'] in ('ok', 'degraded')
+    assert 'mock' in data
+    assert 'database' in data['checks']
 
 
 def test_root_redirects_to_dashboard(client):
