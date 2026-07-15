@@ -139,9 +139,22 @@ k8s/manifest.yaml   Deployment + IngressRoute + Middleware + TLS
 ## Running locally
 
 ```powershell
-.\start-local.ps1           # normal
-.\start-local.ps1 -ForceDeps # force pip reinstall
+.\start-local.ps1             # normal — backgrounds Python, waits for /api/v1/health, then stays attached
+.\start-local.ps1 -Foreground # run attached, logs stream in-line instead of to file only
+.\start-local.ps1 -Port 5010  # override port
+.\start-local.ps1 -SkipDeps   # skip the pip install check
+.\start-local.ps1 -ForceDeps  # force pip reinstall
+.\start-local.ps1 -Debug      # verbose + FLASK_DEBUG=1
+.\start-local.ps1 -Help       # print usage and exit
 ```
+
+No `-Wipe`/`-Reseed`/`-NoSeed` — there's no local-file DB to wipe or fixture
+data to seed (Postgres tables persist via `CREATE TABLE IF NOT EXISTS`;
+`SHOW_MOCK=true` is how you get demoable data instead). Unsets
+`WERKZEUG_RUN_MAIN`/`WERKZEUG_SERVER_FD` before launching (required — a
+hub-launched or nested-Flask-reloader parent can leave these set, which kills
+the child with `WinError 10038`) and probes `/api/v1/health` before reporting
+ready, dumping the last 30 lines of `.hub-logs\app.err` on failure.
 
 Or directly:
 ```bash

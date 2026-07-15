@@ -219,7 +219,8 @@ a Jinja error.
 | `static/css/mission-control.css` | Compile-verified | Declarative stylesheet — the browser parses and renders it |
 | `Dockerfile` | Compile-verified | `docker build` validates; no executable logic |
 | `requirements.txt` | Compile-verified | `pip install -r requirements.txt` validates |
-| `k8s/manifest.yaml` | Compile-verified | `kubectl apply --dry-run` validates; Traefik enforces the IngressRoute |
+| `k8s/manifest.yaml` | Compile-verified + Contract-pinned | `kubectl apply --dry-run` validates; required fields (namespace, secretKeyRef shape, probes, Service port, Linkerd annotation, middleware naming, TLS/issuer) pinned in `characterization/test_k8s_manifest_characterization.py` |
+| `start-local.ps1` | Manual-procedure-documented | Procedure 26 — Windows-only, can't run headlessly in this Linux CI |
 
 ### Characterization tests (`tests/characterization/`)
 
@@ -793,6 +794,51 @@ no-credentials path errors cleanly when `SHOW_MOCK=false`.
 mock mode and disappear in live mode. With `SHOW_MOCK=false` and missing
 credentials, the app boots but data-loading routes return a clean error envelope
 rather than falling back to synthetic data.
+
+---
+
+### Procedure 26 — Local Dev Launcher (`start-local.ps1`)
+
+**Goal:** Verify the launcher brings the app up cleanly in its default
+configuration, gates on a real health check, and exits cleanly on failure.
+Windows-only (`pwsh`/`powershell.exe`); can't be exercised headlessly in CI,
+hence manual-procedure rather than unit-tested.
+
+**Preconditions:** Python + `pip` on PATH; no `.venv` present (to exercise the
+auto-create path) or an existing one (to exercise the reuse path); `.env`
+present with at least `SECRET_KEY` set.
+
+1. **Zero-arg default.** From a fresh clone, run `.\start-local.ps1` with no
+   flags. Confirm: `.venv` is created if absent: dependencies install on first
+   run; `.hub-logs\app.log`/`app.err` are created and wiped; the script prints
+   `Starting SF Mission Control on http://<LAN-IP>:5000`; after a few seconds
+   it prints `Healthy. Logs: ...` and the terminal stays attached (Ctrl+C stops
+   the app).
+2. **Health gate actually gates.** Temporarily rename `routes/health.py` (or
+   otherwise break `/api/v1/health`) and re-run. Confirm the script reports
+   `ERROR: service did not respond on /api/v1/health within 30s.`, prints the
+   last lines of `app.err`, kills the child process, and exits non-zero rather
+   than hanging or reporting success. Restore the file afterward.
+3. **`-Foreground` streams inline.** Run `.\start-local.ps1 -Foreground` —
+   confirm Flask's own stdout/stderr appear directly in the terminal (not just
+   in `.hub-logs`), and Ctrl+C stops it immediately.
+4. **`-Port` override.** Run `.\start-local.ps1 -Port 5010` — confirm the
+   printed URL and the health probe both target `5010`, and
+   `http://localhost:5010/api/v1/health` responds.
+5. **`-Help` and `-SkipDeps`.** Run `.\start-local.ps1 -Help` — confirm usage
+   prints and the script exits without starting anything. Run
+   `.\start-local.ps1 -SkipDeps` with a populated `.venv` — confirm no
+   `pip install` runs (compare wall-clock time / watch for the "Installing
+   dependencies..." line, which should NOT appear).
+
+**Expected:** The script never reports success without a real 200 from
+`/api/v1/health`, never leaves an orphaned Python process behind on failure,
+and every flag does what its `-Help` text says.
+
+**Last verified against:** v1.1.0 (this launcher revision — Werkzeug isolation
++ health-probe wait loop + standard flag vocabulary added; not yet re-verified
+on a live Windows box by a human, since this session's environment is
+Linux-only. Re-verify before relying on it for the team's first onboarding.)
 
 ---
 
