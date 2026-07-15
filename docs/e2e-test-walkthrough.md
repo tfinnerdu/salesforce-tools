@@ -295,7 +295,7 @@ Each row reflects the connected org's actual data.
 - FERPA Date: coverage matches (green)
 - Street: coverage shown
 
-6. Click a gap row — modal opens with sample record IDs
+6. Click a gap row — drill-down panel opens below the results table with sample record IDs
 
 ---
 

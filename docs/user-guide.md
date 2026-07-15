@@ -136,7 +136,7 @@ Any action that changes data — Salesforce writes, bulk delete / modify / reass
 
 ### Navigation
 
-The top nav contains all tabs: **Dashboard · Migration · Validation · SOQL · Schema · Data Ops · Logs · Observe · Impact · Admin · Deploy · Settings**. The active tab is underlined in amber.
+The top nav contains all tabs: **Dashboard · Migration · Validation · SOQL · Schema · Data Ops · Scenarios · Key Maps · Logs · Observe · Impact · Admin · Deploy · CLI · Settings**. The active tab is underlined in amber.
 
 ### Salesforce Deep Links
 
@@ -153,20 +153,20 @@ lookup fields alike.
 
 The Dashboard is the home page — a single-screen health summary across all tools. All eight widgets load in parallel when the page opens.
 
-**How to use it:** Open it as your daily morning check before starting migration work. Each widget has a **View Details →** footer link to navigate to the full feature page.
+**How to use it:** Open it as your daily morning check before starting migration work. Each widget has its own footer link (e.g. **Run Check →**, **View Batches →**, **Open Checklist →**) to navigate to the full feature page.
 
 ### Widgets
 
 | Widget | What it shows |
 |---|---|
-| **Readiness Score** | Latest composite readiness % with a color-coded badge (green ≥90%, amber 80–89%, red <80%) |
+| **Pre-Go-Live Readiness** | Latest composite readiness % with a color-coded badge (green ≥90%, amber 70–89%, red <70%) |
 | **API Limits** | Top 3 governor limits closest to their threshold — name, % used, mini progress bar |
-| **Validation Checks** | Quick-links to the 5 validation sub-tabs with a brief description of each |
-| **Migration Batches** | Last 3 batch runs — workflow name, status badge, records processed |
-| **Test Coverage** | Org-wide Apex test coverage % with pass/fail counts |
-| **Pre-flight Progress** | Progress bar showing how many of the 21 pre-flight checklist items are complete |
-| **Recent Audit Trail** | Last 5 Setup Audit Trail entries — who changed what and when |
-| **Org Health Score** | Letter grade (A–F) computed from readiness + preflight percentages |
+| **Data Validation** | Quick-links to the 5 validation sub-tabs (Duplicate Radar, External IDs, Contact Points, Field Completeness, Orphaned Records), each with a status badge |
+| **Migration Batches** | Aggregate counts across recent batches — Total, Completed, In Progress, Failed |
+| **Apex Test Coverage** | Org-wide Apex test coverage — classes passing / total (≥75% threshold), with a warning if any class is below it |
+| **Pre-flight Checklist** | Progress bar showing how many of the 21 pre-flight checklist items are complete, broken down by the 5 categories |
+| **Recent Changes** | Last 5 Setup Audit Trail entries — section, action, and how long ago |
+| **Org Health** | Letter grade (A/B/C/D) computed from readiness + preflight percentages |
 
 ---
 
@@ -181,8 +181,7 @@ The Readiness scorecard answers "are we ready to go live?" before each migration
 **How to use it:**
 1. Select the org from the card dropdown.
 2. Click **Run Now**.
-3. Review each check row — green (100%, or 0 duplicate groups for Duplicate SIS IDs), amber (90–99%, or up to 25 duplicate groups), red (below 90%, more than 25 duplicate groups, or a query failure).
-4. Click any row to see raw record count details.
+3. Review each check row — green (100%, or 0 duplicate groups for Duplicate SIS IDs), amber (90–99%, or up to 25 duplicate groups), red (below 90%, more than 25 duplicate groups, or a query failure). Each row's detail column shows the raw record counts behind the percentage.
 
 **Checks explained:**
 
@@ -233,10 +232,9 @@ Pulls failed Conductor workflow executions and groups them by error type so you 
 Live dashboard for a running Conductor migration batch.
 
 **How to use it:**
-1. Enter the **Workflow Name** (e.g., `EDA_Person_Sync`).
-2. Select the time window.
-3. Click **Load Status**.
-4. Click **Refresh** to poll for new data.
+1. Enter the **Workflow Name** (e.g., `EDA_Person_Sync`) and optionally a **Start Time**.
+2. Click **Load Status**.
+3. Toggle **Auto-refresh (15s)** to poll for new data, instead of a manual refresh.
 
 | Element | Description |
 |---|---|
@@ -259,8 +257,7 @@ A 21-item go-live checklist stored in PostgreSQL so progress persists across ses
 1. Review items grouped into 5 categories.
 2. Click the checkbox next to each item to mark it complete — saves immediately.
 3. The progress bar at the top updates in real time.
-4. Click **+ Add Item** to add a custom item.
-5. Click the trash icon to remove a custom item.
+4. Click **Print Checklist** for a printable copy.
 
 **Default categories:**
 
@@ -411,12 +408,13 @@ Audit log of all duplicate merges performed through Duplicate Radar. Stored in P
 
 | Column | Description |
 |---|---|
-| Merged At | Timestamp of the merge operation |
-| Kept Record | Salesforce ID of the record that was retained |
-| Merged IDs | IDs of records that were absorbed |
-| Merge Count | Number of records eliminated |
+| Date | Timestamp of the merge operation |
+| Master ID | Salesforce ID of the record that was retained |
+| Victim ID | Salesforce ID of the record that was absorbed |
+| Bypass | Whether Bypass Triggers was active during the merge |
+| Status | Whether the merge succeeded or errored |
 
-The stats summary shows total merges performed and total records eliminated across all sessions.
+The stats summary shows Total Merges, Successful, Failed, and Bypass Used counts across all sessions.
 
 ---
 
@@ -429,20 +427,19 @@ A full SOQL query editor with result display, history, and saved queries.
 **How to use it:**
 1. Type a SOQL query in the text area (e.g., `SELECT Id, Name FROM Account LIMIT 10`).
 2. Select the target org.
-3. Click **Run** (or press `Ctrl+Enter`).
+3. Click **Run** (or **Run All Pages** to page past the 2,000-row SOQL limit).
 4. Results display in a sortable table.
-5. Click **Export CSV** to download results.
-6. Click **Copy** to copy results as JSON.
+5. Click **Download CSV** to save the results.
 
 **Saved Queries:**
-- Click **Save** to store the current query with a name.
-- Click a saved query to load it into the editor.
-- Click the trash icon to delete a saved query.
+- Click **Save Query** to store the current query — you're prompted for a name.
+- Select a saved query from the dropdown to load it into the editor.
+- With a saved query selected, click **Delete** to remove it.
 
 **Query History:**
-- Click **History** to open the last 25 queries (per org, stored in PostgreSQL).
+- Click the **Recent Queries** panel header to expand the last 25 queries you ran in this org (stored in PostgreSQL).
 - Click any entry to reload it into the editor.
-- Click the trash icon to remove a history entry.
+- Click the ✕ next to an entry to remove it from history.
 
 **Object Explorer:**
 - Type an object name to see its available fields.
@@ -885,8 +882,8 @@ Use this after a migration batch to verify all bulk operations completed cleanly
 Lists and inspects Apex debug logs for the active org.
 
 **How to use it:**
-1. Select a **time range** (Last 15 min / 1 hour / 6 hours / custom).
-2. Toggle **Auto-refresh** to poll for new logs every 30 seconds.
+1. Select a **time range** (All available / Last 15 min / 1 hour / 6 hours / 24 hours / custom).
+2. Toggle **Auto-refresh** to poll for new logs every 10 seconds.
 3. Click a log row to open the detail panel.
 4. Click **Delete** on a row to remove a single log.
 5. Click **Delete All Logs** to clear all debug logs.
@@ -901,11 +898,11 @@ The detail panel shows: log header (user, duration, heap size, CPU time), parsed
 
 **URL:** `/logs` → Flow Errors tab
 
-Lists recent Flow interview failures from `FlowExecutionErrorEvent` records.
+Lists recent Flow interview failures — `FlowInterview` records with `InterviewStatus = 'Error'` (a Data API object; it has no `ErrorMessage` field to show).
 
 **How to use it:** Click **Refresh** to fetch recent failures.
 
-**Columns:** Flow API Name · Error Message · Fault Message · Occurred At.
+**Columns:** Flow · Element · Status · Created.
 
 Use this to catch flows failing silently during migration data loads — Flow errors don't appear in Apex logs.
 
@@ -915,13 +912,13 @@ Use this to catch flows failing silently during migration data loads — Flow er
 
 **URL:** `/logs` → CPU Summary tab
 
-Aggregates CPU time across recent debug logs to identify the most expensive Apex executions.
+Shows `DurationMilliseconds` from the `ApexLog` metadata for the 20 most recent logs, without downloading each log body — a quick way to spot slow transactions.
 
 **How to use it:** Click **Refresh**.
 
-**Columns:** Class/Trigger name · Total CPU ms · Call count · Average ms per call.
+**Columns:** User · Operation · Duration (ms) · Log Size · Status.
 
-Sorted by total CPU descending — use this to find hotspots before a high-volume migration batch to avoid CPU governor limit errors.
+Logs over 5 seconds are highlighted amber; a non-Success status is highlighted red. Use this to spot slow transactions before a high-volume migration batch, without downloading full log bodies.
 
 ---
 
@@ -938,7 +935,7 @@ Click **Refresh** to load active flags. Expired flags are grayed out.
 1. Select **Entity Type** (User or Apex Class).
 2. Start typing a name — matching options appear in the dropdown.
 3. Select a **Debug Level** (determines which log categories are captured).
-4. Select **Duration** (15 min to 24 hours).
+4. Select **Duration** (15 minutes, 30 minutes, 1 hour, 2 hours, or until midnight).
 5. Click **Create Trace Flag**.
 
 **Quick action:** Click **⚡ Trace Me (30 min)** to immediately create a 30-minute FINEST trace flag for the current user.
@@ -1013,7 +1010,7 @@ Live COUNT() snapshot for the 12 most important migration objects.
 
 **How to use it:** Select the org and click **Refresh**.
 
-Objects included: `Account` · `ContactPointEmail` · `ContactPointPhone` · `ContactPointAddress` · `Individual` · `Lead` · `Contact` · `Opportunity` · `Case` · `Task` · `Event` · `User`.
+Objects included: Person Accounts · Business Accounts · `ContactPointEmail` · `ContactPointPhone` · `ContactPointAddress` · `Individual` · `Campaign` · `CampaignMember` · `Task` · `Event` · `Case` · `Opportunity`.
 
 The ↗ icon in the Actions column opens a pre-built SOQL query for that object in the SOQL Workbench.
 
@@ -1043,11 +1040,16 @@ An object with 100% drift (0 records in target) is always red regardless of thre
 
 **URL:** `/impact`
 
-Searches all Apex classes and triggers to find every reference to a given field — essential before renaming or deleting a field.
+Searches Validation Rules, active Flows, and Reports for references to a given field — essential before renaming or deleting a field. Not an Apex code search (see Apex Code Search under Schema for that).
 
 **How to use it:** Select the org, enter the Object and Field API Name, then click **Scan**.
 
-Each result shows: file name, file type (Class / Trigger), matching line, and a link to open the file in Salesforce Setup. Use this before any schema change to understand the full blast radius.
+Three accordion sections:
+- **Validation Rules** — rules (via the Tooling API) whose error condition formula contains the field name: Object, Rule Name, Description, Error Message.
+- **Active Flows** — every active flow in the org, flagged "Manual review required": the REST API doesn't expose flow XML, so this lists all active flows rather than confirming which ones actually reference the field.
+- **Reports** — a count of reports in the org, with the same manual-review caveat.
+
+Use this before any schema change to understand the blast radius — keeping in mind the Flow and Report sections are leads to check manually, not confirmed matches.
 
 ---
 
@@ -1055,13 +1057,13 @@ Each result shows: file name, file type (Class / Trigger), matching line, and a 
 
 **URL:** `/impact` → Permissions tab
 
-Shows all permission sets in the org and the object/field permissions each one grants.
+Field-centric permission audit — for an object (and optionally one field), shows which permission sets grant Read/Edit access to each of its fields.
 
-**How to use it:** Select the org and click **Load Permission Sets**. Click a permission set name to expand it.
+**How to use it:** Enter an **Object API Name** (and optionally a **Field API Name** to narrow to one field), then click **Audit**.
 
-Shows: object permissions (Read / Create / Edit / Delete / View All / Modify All) and field permissions (Read / Edit).
+The results table lists one row per field with the permission sets granting Read access and the permission sets granting Edit access. Entering a specific field additionally shows an access-detail table: Permission Set · Read · Edit · Users.
 
-Use this to verify the integration user's permission set grants access to all migration objects and fields before go-live.
+Use this to verify the integration user's permission set grants access to all migration fields before go-live.
 
 ---
 
@@ -1078,9 +1080,9 @@ Saves and re-runs SOQL-based test suites to catch data regressions between migra
 4. Click **Save Suite**.
 
 **How to use it — running:**
-1. Select a saved suite and click **Run Suite**.
+1. In the saved suites table, click **Run** on a suite.
 2. Results show Pass (matches expected) or Fail (differs from expected/baseline).
-3. Click **Save as Baseline** to store current results as the new expected values.
+3. Click **Set Baseline** on a suite to store current results as the new expected values.
 
 Example assertion: "Account with SIS_ID__c should return exactly 4,312 records." A regression on this suite means a migration step accidentally wiped or duplicated records.
 
@@ -1092,7 +1094,7 @@ Example assertion: "Account with SIS_ID__c should return exactly 4,312 records."
 
 Compares two permission sets and shows exactly which object and field permissions differ.
 
-**How to use it:** Select the org, load permission sets, select Permission Set A and B, then click **Compare**.
+**How to use it:** Opening the tab auto-loads the org's permission sets into the two dropdowns; select Permission Set A and B, then click **Compare**.
 
 **Output sections:**
 - **Only in A** — permissions granted by A but not B
@@ -1111,7 +1113,7 @@ Use this to audit whether the integration user's permission set has all the same
 
 Lists all Apex scheduled jobs (`CronTrigger`) in the org.
 
-**Columns:** Job Name · Apex class · State (Active/Deleted/Paused) · Next fire time · Previous fire time · Time zone · Cron expression.
+**Columns:** Name · Type (Scheduled Apex / Data Export / Unknown) · State (Waiting / Acquired / Executing / Complete / Deleted / Paused / Error / Blocked) · Next Fire · Previous Fire · Triggered (times triggered) · Cron.
 
 Use this to verify the daily readiness scheduler is active and to check for jobs that conflict with migration batch windows.
 
@@ -1171,9 +1173,11 @@ Use this before go-live to confirm all integration credentials point to producti
 
 **URL:** `/admin` → Platform Events tab
 
-Lists all Platform Event channels and their current subscribers.
+Two tables: Platform Event Channels, and their Subscriptions (Channel Members).
 
-**Columns:** Event API name · Label · Subscribers (Apex triggers, flows, or external CometD subscriptions).
+**Platform Event Channels columns:** Label · API Name · Description.
+
+**Subscriptions (Channel Members) columns:** Name · Channel · Subscriber Type (Flow, Apex Trigger, or Process Builder).
 
 Use this to understand what fires when migration records are inserted or updated, and to identify platform event subscribers that may add unexpected overhead to high-volume batches.
 
@@ -1185,7 +1189,7 @@ Use this to understand what fires when migration records are inserted or updated
 
 Lists all record types for all objects in the org.
 
-**Columns:** Object · Record Type name · API name · Active status · Default.
+**Columns:** SObject · Name · Developer Name · Active · Count (record count, shown for Account/Opportunity/Case/Campaign/Contact).
 
 Use this to verify the `PersonAccount` record type is active and correctly named before migration upserts — the record type ID is required on every Account insert.
 
@@ -1195,7 +1199,7 @@ Use this to verify the `PersonAccount` record type is active and correctly named
 
 **URL:** `/admin` → Email Templates tab
 
-Lists all email templates with their folder, type, and last-modified date.
+Lists all email templates with their folder, subject, encoding, active status, and last-modified date. A search box filters by name, folder, or subject.
 
 Use this to find templates that reference fields being renamed or removed during migration, and to confirm template availability before go-live if any migration workflows trigger email notifications.
 
@@ -1207,9 +1211,9 @@ Use this to find templates that reference fields being renamed or removed during
 
 Shows the Salesforce Setup Audit Trail — every Setup change made in the org within the selected window.
 
-**How to use it:** Select the number of days to look back (1 / 7 / 30) and click **Refresh**.
+**How to use it:** Select the number of days to look back (1 / 7 / 14 / 30) and click **Refresh**. A search box filters by section, user, or detail.
 
-**Columns:** Action · Section (what area of Setup changed) · Modified by · Date/time.
+**Columns:** Date · By · Section (what area of Setup changed) · Action · Detail.
 
 Use this to answer "what changed in this org recently?" after an unexpected migration failure or behavior change.
 
@@ -1225,12 +1229,16 @@ Live view of the Apex async job queue (`AsyncApexJob`) — shows Batch Apex, Que
 
 | Column | Description |
 |---|---|
-| Job Type | BatchApex / Queueable / Scheduled / Future |
-| Apex Class | The class being executed |
-| Status | Green = Completed · Amber = Processing · Red = Failed |
+| Class | The Apex class being executed |
+| Type | BatchApex / Queueable / ScheduledApex / Future |
+| Status | Blue = Processing · Amber = Queued · Green = Completed · Red = Failed |
 | Progress | Items Processed / Total Items |
+| Errors | Error count for the job |
+| By | Who submitted the job |
+| Started | When the job was created |
 | Duration | Elapsed time |
-| Extended Status | Hover on failed rows for the error message |
+
+Hover the Status badge on a row with extended status (e.g. a failure) to see the error message.
 
 Use this to monitor long-running batch jobs during migration and to verify no jobs are stuck in a Queued state that would block your batch from starting.
 
@@ -1240,9 +1248,9 @@ Use this to monitor long-running batch jobs during migration and to verify no jo
 
 **URL:** `/admin` → Login History tab
 
-Shows recent login activity for the org.
+Shows the last 200 login history events for the org, with a filter box (IP, platform, or status) and summary badges (total, failed, unique IPs, unique users).
 
-**Columns:** User · Login time · Login type · Source IP · Status (Success/Failed) · Failure reason.
+**Columns:** Time · IP · Platform · Login Type · Browser · Status (Success/Failed).
 
 Failed logins are highlighted in red. Use this to verify the integration user is successfully authenticating and to identify credential issues before a migration run.
 
@@ -1362,12 +1370,10 @@ read-only.
 Builds a Salesforce `package.xml` change set manifest from a selected list of metadata components.
 
 **How to use it:**
-1. Select the **Component Type** (ApexClass, CustomObject, CustomField, etc.).
-2. Select the org to query available components from.
-3. Click **Load Components** to fetch the list.
-4. Check the components to include.
-5. Click **Generate Package** to produce the `package.xml`.
-6. Copy the XML or download it for use with `sf project deploy` or the Metadata API.
+1. Pick a component-type tab — Classes, Triggers, Fields, Flows, Perm Sets, or Val Rules (`ApexClass`, `ApexTrigger`, `CustomField`, `Flow`, `PermissionSet`, `ValidationRule` — queried from the active org).
+2. Click **Load <Type>** to fetch that type's components, then check the ones to include (or use **Select All** / **Clear**). Selections accumulate across tabs in the **Selected Components** sidebar.
+3. Click **Generate Package** to produce the `package.xml`.
+4. Copy the XML or download it for use with `sf project deploy` or the Metadata API.
 
 A pre-deployment checklist is generated alongside the package — standard items to verify before deploying (backup taken, tests passing, maintenance window scheduled, etc.).
 
@@ -1381,23 +1387,24 @@ Configures org connections, trigger bypass behavior, and API collection runners.
 
 ### Org Connection Test
 
-Select an org and click **Test Connection** to verify that the credentials in your environment variables are valid. Returns the org ID, instance URL, and API version on success, or a detailed error message on failure.
+Select an org and click **Test Connection** to verify that the credentials in your environment variables are valid — it runs a trivial `SELECT Id FROM Account LIMIT 1` query. Returns a record count and the instance URL on success, or a detailed error message on failure.
 
 ### Bypass Triggers
 
-When `SF_BYPASS_SETTING` is configured in your environment, this toggle flips the checkbox field on your Hierarchy Custom Setting that disables triggers for the integration user. Use this before a bulk migration DML run to prevent triggers from firing on every record. The toggle asks for confirmation before it changes the setting.
+This toggle sets a per-session flag (it does not itself write to Salesforce) and asks for confirmation before changing it. When on, and `SF_BYPASS_SETTING`/`SF_BYPASS_FIELD` are configured, subsequent writes that check the flag (SOQL inline edit, Duplicate Radar merge) flip your Hierarchy Custom Setting's bypass field to `true` on Salesforce immediately before the write and restore it to `false` immediately after — so triggers are disabled only for the duration of that write, not left on.
 
-> **Important:** Always re-enable triggers after the migration run completes. Leaving bypass active in production can cause data integrity issues and missed automations.
+> **Important:** Turn the toggle back off once you're done with writes that need the bypass. Leaving it on for the rest of your session means every subsequent bypass-aware write in that session skips triggers, which can cause data integrity issues and missed automations if left on into unrelated work.
 
 ### API Collections
 
-Stores and runs Postman-style API request collections against your Salesforce orgs.
+Imports and runs Postman v2.1 collection files against your Salesforce orgs. Collections are built in Postman (or hand-written as Postman JSON) and imported here — there's no in-app request builder.
 
 **How to use it:**
-1. Click **New Collection** and give it a name.
-2. Add requests — each has a method (GET / POST / PATCH / DELETE), URL, optional headers, and optional body.
-3. Click **Run Collection** to execute all requests in sequence.
-4. Results show status code, response time, and response body for each request.
+1. Choose a Postman collection `.json` file and click **Import**.
+2. The collection appears in the table (Collection Name · Requests · Last Run · Last Status).
+3. Click **Run** on a collection to execute all its requests in sequence.
+4. Results list each request's name with a color-coded status-code badge (green for 2xx, red otherwise), plus a toast summarizing how many passed.
+5. Click **Delete** to remove a collection (asks for confirmation).
 
 Collections are stored in PostgreSQL and shared across all sessions. Use this for smoke-testing integration endpoints after a deployment, or verifying Named Credential callouts are working correctly against a specific org.
 
