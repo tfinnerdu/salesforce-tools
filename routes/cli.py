@@ -479,6 +479,18 @@ def _target_org(payload) -> str:
     return tgt
 
 
+def _require_justification(payload) -> str:
+    """A short reason is required before reading/mirroring another org's
+    security posture (mirror_access) — a real, server-side-enforced control,
+    not just a client-side modal. Raises ValueError if missing or too short."""
+    just = (payload.get('justification') or '').strip()
+    if len(just) < 10:
+        raise ValueError(
+            'A short justification (at least 10 characters) is required before '
+            'reading or mirroring another org\'s security posture.')
+    return just
+
+
 def _target_object_names(target_org: str):
     """The target org's sObject API-name set, for the Lookup-resolution check, or
     None if it can't be read — callers then fail *open* (don't drop lookups)."""
@@ -494,7 +506,10 @@ def _target_object_names(target_org: str):
 @cli_bp.route('/access-mirror/plan', methods=['POST'])
 def api_access_mirror_plan():
     """Preview which source-org profiles / permission sets grant access to an
-    object, and which of those names exist in the target (matched vs unmatched)."""
+    object, and which of those names exist in the target (matched vs unmatched).
+
+    Reads another org's full security posture, so a short justification is
+    required (server-enforced, not just a UI modal) and every call is audited."""
     payload = request.get_json(silent=True) or {}
     obj = (payload.get('object') or '').strip()
     if not obj:
@@ -502,11 +517,15 @@ def api_access_mirror_plan():
     try:
         source = _source_org(payload)
         target = _target_org(payload)
+        justification = _require_justification(payload)
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     cloned_fields = [f for f in (payload.get('cloned_fields') or []) if f]
+    include_high_privilege = bool(payload.get('include_high_privilege'))
     try:
-        return ok(cli_access_mirror.mirror_plan(source, target, obj, cloned_fields))
+        return ok(cli_access_mirror.mirror_plan(
+            source, target, obj, cloned_fields,
+            include_high_privilege=include_high_privilege, justification=justification))
     except Exception as exc:
         logger.exception('cli access-mirror plan failed for %s', obj)
         return error_response(str(exc), 'SF_ACCESS_READ_FAILED', 502)
@@ -519,11 +538,13 @@ def api_clone_object_plan():
     obj = (payload.get('object') or '').strip()
     include_shell = bool(payload.get('include_shell'))
     mirror_access = bool(payload.get('mirror_access'))
+    include_high_privilege = bool(payload.get('include_high_privilege'))
     if not obj:
         return error_response('object is required', 'INVALID_INPUT', 400)
     try:
         source = _source_org(payload)
         target = _target_org(payload) if mirror_access else None
+        justification = _require_justification(payload) if mirror_access else ''
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     # With a known target, skip cloning Lookups whose referenceTo object isn't there.
@@ -540,7 +561,9 @@ def api_clone_object_plan():
     if mirror_access:
         try:
             cloned_fields = [f'{obj}.{f["api_name"]}' for f in plan['fields']]
-            plan['mirror'] = cli_access_mirror.mirror_plan(source, target, obj, cloned_fields)
+            plan['mirror'] = cli_access_mirror.mirror_plan(
+                source, target, obj, cloned_fields,
+                include_high_privilege=include_high_privilege, justification=justification)
         except Exception:
             logger.exception('cli access-mirror preview failed for %s', obj)
             plan['mirror_error'] = 'Could not read access from the source/target org.'
@@ -564,11 +587,13 @@ def api_clone_object_package():
     include_permset = bool(payload.get('include_permset'))
     include_tab = bool(payload.get('include_tab'))
     mirror_access = bool(payload.get('mirror_access'))
+    include_high_privilege = bool(payload.get('include_high_privilege'))
     if not obj:
         return error_response('object is required', 'INVALID_INPUT', 400)
     try:
         source = _source_org(payload)
         target = _target_org(payload) if mirror_access else None
+        justification = _require_justification(payload) if mirror_access else ''
     except ValueError as exc:
         return error_response(str(exc), 'INVALID_INPUT', 400)
     # With a known target, skip cloning Lookups whose referenceTo object isn't there.
@@ -583,7 +608,9 @@ def api_clone_object_package():
         profiles = extra_permsets = None
         if mirror_access:
             cloned_fields = [f'{obj}.{f["api_name"]}' for f in fields]
-            mplan = cli_access_mirror.mirror_plan(source, target, obj, cloned_fields)
+            mplan = cli_access_mirror.mirror_plan(
+                source, target, obj, cloned_fields,
+                include_high_privilege=include_high_privilege, justification=justification)
             mprofiles, mpermsets = cli_access_mirror.split_grants(mplan['matched'])
             profiles = mprofiles or None
             extra_permsets = mpermsets or None

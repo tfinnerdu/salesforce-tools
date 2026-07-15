@@ -64,6 +64,22 @@ def test_read_field_fls_wrapper_uses_get_sf():
     gs.assert_called_once_with('eda')
 
 
+def test_read_field_fls_emits_audit_event():
+    # This reads which profiles/permission sets can see a field across the
+    # whole org -- a genuine security-posture export, so every call must be
+    # audited (see services/audit.py).
+    sf = _sf(_RECORDS)
+    with patch.object(cli_fls, 'get_sf', return_value=sf), \
+            patch('services.cli_fls.audit.emit') as emit:
+        cli_fls.read_field_fls('eda', 'Case', 'X__c')
+    emit.assert_called_once()
+    args, kwargs = emit.call_args
+    assert args[0] == 'FLS_READ'
+    assert args[1] == 'sf_field_permissions'
+    assert args[2] == 'eda:Case.X__c'
+    assert args[3] == 'success'
+
+
 def test_human_field_perms():
     fields = [{'object': 'Case', 'api_name': 'A__c'}, {'object': 'Case', 'api_name': 'B__c'}]
     edit = cli_fls.human_field_perms(fields, True)

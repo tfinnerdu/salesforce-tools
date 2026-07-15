@@ -205,6 +205,27 @@ def init_db() -> None:
     -- existing scenarios tables pick it up (init_db only CREATEs IF NOT EXISTS).
     ALTER TABLE scenarios
         ADD COLUMN IF NOT EXISTS schedule_approved BOOLEAN NOT NULL DEFAULT FALSE;
+
+    -- ── Audit events ───────────────────────────────────────────────────────
+    -- One row per services.audit.AuditEvent — the canonical shape (see
+    -- services/audit.py). Every state-changing operation, and every read of
+    -- sensitive security data (CLI FLS clone, access mirror), emits one row
+    -- here in addition to the always-on structured stdout log line.
+    CREATE TABLE IF NOT EXISTS audit_events (
+        id              SERIAL PRIMARY KEY,
+        action          VARCHAR(100) NOT NULL,
+        actor           VARCHAR(200) NOT NULL,
+        resource_type   VARCHAR(100) NOT NULL,
+        resource_id     VARCHAR(200),
+        outcome         VARCHAR(20) NOT NULL,
+        detail          JSONB DEFAULT '{}'::jsonb,
+        correlation_id  VARCHAR(64) NOT NULL,
+        occurred_at     TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_events_resource
+        ON audit_events (resource_type, resource_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_events_occurred
+        ON audit_events (occurred_at);
     """
     try:
         with get_cursor() as cur:

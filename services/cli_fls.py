@@ -10,6 +10,7 @@ FLS from a *source* org that may differ from the active working org.
 """
 import logging
 
+from services import audit
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,12 @@ def _soql_escape(value: str) -> str:
 
 def read_field_fls(org: str, sobject: str, field: str) -> dict:
     """Return the visibility (FLS) map for one field in `org`."""
-    return read_field_fls_from(get_sf(org), sobject, field)
+    result = read_field_fls_from(get_sf(org), sobject, field)
+    # This reads which profiles/permission sets can see a field across the
+    # whole org -- a genuine security-posture export, not a benign describe.
+    audit.emit('FLS_READ', 'sf_field_permissions', f'{org}:{sobject}.{field}', 'success',
+               detail={'parent_count': result['summary']['total']})
+    return result
 
 
 def read_field_fls_from(sf, sobject: str, field: str) -> dict:

@@ -899,7 +899,8 @@ MC.cliClone = {
     document.getElementById('btnClonePreview')?.addEventListener('click', () => this.preview());
     document.getElementById('btnClonePackage')?.addEventListener('click', () => this.download());
     ['cliCloneSourceOrg', 'cliCloneObject', 'cliCloneShell', 'cliClonePermset',
-     'cliCloneTab', 'cliCloneMirror', 'cliCloneTargetOrg'].forEach(id => {
+     'cliCloneTab', 'cliCloneMirror', 'cliCloneTargetOrg', 'cliCloneJustification',
+     'cliCloneHighPriv'].forEach(id => {
       const el = document.getElementById(id);
       el?.addEventListener('change', () => this._lock());
       el?.addEventListener('input', () => this._lock());
@@ -918,9 +919,11 @@ MC.cliClone = {
   _tab() { return document.getElementById('cliCloneTab')?.checked || false; },
   _mirror() { return document.getElementById('cliCloneMirror')?.checked || false; },
   _targetOrg() { return (document.getElementById('cliCloneTargetOrg')?.value || '').trim(); },
+  _justification() { return (document.getElementById('cliCloneJustification')?.value || '').trim(); },
+  _highPriv() { return document.getElementById('cliCloneHighPriv')?.checked || false; },
   _key() {
     return `${this._srcOrg()}|${this._obj()}|${this._shell()}|${this._permset()}`
-      + `|${this._tab()}|${this._mirror()}|${this._targetOrg()}`;
+      + `|${this._tab()}|${this._mirror()}|${this._targetOrg()}|${this._justification()}|${this._highPriv()}`;
   },
 
   _lock() {
@@ -931,11 +934,16 @@ MC.cliClone = {
   async preview() {
     const obj = this._obj();
     if (!obj) { MC.showToast('Enter a source object', 'warning'); return; }
+    if (this._mirror() && this._justification().length < 10) {
+      MC.showToast('Enter a short justification (10+ characters) before reading another org’s security posture.', 'warning');
+      return;
+    }
     MC.showSpinner();
     try {
       const data = await MC.api('/cli/clone-object/plan', 'POST',
         { object: obj, include_shell: this._shell(), source_org: this._srcOrg(),
-          mirror_access: this._mirror(), target_org: this._targetOrg() });
+          mirror_access: this._mirror(), target_org: this._targetOrg(),
+          justification: this._justification(), include_high_privilege: this._highPriv() });
       this._render(data);
       const btn = document.getElementById('btnClonePackage');
       // A tab or a matched access mirror is deployable even with no fields/shell.
@@ -993,13 +1001,16 @@ MC.cliClone = {
     }
     const c = m.counts;
     const locked = c.skipped_locked || 0;
+    const highPriv = c.high_privilege_excluded || 0;
     document.getElementById('cliCloneMirrorSummary').innerHTML =
       `<span class="badge bg-success me-1">${c.matched} matched</span>`
       + `<span class="badge bg-secondary me-1">${c.unmatched} not in target</span>`
       + (locked ? `<span class="badge bg-warning text-dark me-1">${locked} locked profile(s) skipped</span>` : '')
+      + (highPriv ? `<span class="badge bg-danger me-1">${highPriv} high-privilege excluded</span>` : '')
       + `<span class="text-muted">(${c.matched_profiles} profile(s), ${c.matched_permsets} permission set(s))</span>`;
-    // Two things worth flagging before deploy: unscoped field grants, and
-    // license-locked profiles that were auto-skipped (they can't deploy cleanly).
+    // Three things worth flagging before deploy: unscoped field grants,
+    // license-locked profiles that were auto-skipped, and high-privilege
+    // profiles (System Administrator, etc.) excluded pending explicit opt-in.
     const warns = [];
     if (m.scoped === false) {
       warns.push('Field grants are not scoped to the target’s fields (no field context) — review before deploying.');
@@ -1008,14 +1019,26 @@ MC.cliClone = {
       const names = (m.skipped_locked || []).map(x => x.name).join(', ');
       warns.push('Skipped license-locked/integration profiles (can’t deploy cleanly): ' + MC._escHtml(names) + '.');
     }
+    if (highPriv) {
+      const names = (m.high_privilege_excluded || []).map(x => x.name).join(', ');
+      warns.push('Excluded high-privilege profile(s) (tick "include high-privilege profiles" to mirror them): '
+        + MC._escHtml(names) + '.');
+    }
     if (warns.length) {
       warn.classList.remove('d-none');
       warn.innerHTML = warns.join('<br>');
     } else { warn.classList.add('d-none'); }
+    const hpWrap = document.getElementById('cliCloneMirrorHighPrivWrap');
+    if (hpWrap) {
+      hpWrap.classList.toggle('d-none', !highPriv);
+      document.getElementById('cliCloneMirrorHighPriv').innerHTML = (m.high_privilege_excluded || [])
+        .map(x => `<tr><td>${MC._escHtml(x.name)}</td><td>${MC._escHtml(x.type)}</td></tr>`).join('');
+    }
     document.getElementById('cliCloneMirrorMatched').innerHTML = (m.matched || []).map(x => {
       const obj = x.object_perms ? (x.object_perms.edit ? 'read/edit' : 'read') : '—';
+      const priv = x.high_privilege ? ' <span class="badge bg-danger">high-priv</span>' : '';
       const drop = x.dropped_fields ? ` <span class="text-muted">(−${x.dropped_fields})</span>` : '';
-      return `<tr><td>${MC._escHtml(x.name)}</td><td>${MC._escHtml(x.type)}</td>`
+      return `<tr><td>${MC._escHtml(x.name)}${priv}</td><td>${MC._escHtml(x.type)}</td>`
         + `<td>${obj}</td><td>${(x.field_perms || []).length}${drop}</td></tr>`;
     }).join('') || '<tr><td colspan="4" class="text-muted">None matched</td></tr>';
     document.getElementById('cliCloneMirrorUnmatched').innerHTML = (m.unmatched || []).map(x =>
@@ -1042,6 +1065,8 @@ MC.cliClone = {
           include_tab: this._tab(),
           mirror_access: this._mirror(),
           target_org: this._targetOrg(),
+          justification: this._justification(),
+          include_high_privilege: this._highPriv(),
           project: (document.getElementById('cliProject')?.value || '').trim(),
           alias: (document.getElementById('cliAlias')?.value || '').trim(),
         }),

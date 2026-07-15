@@ -21,6 +21,7 @@ references a field the target lacks — which would fail the whole deploy.
 """
 import logging
 
+from services import audit
 from sf_provider import get_sf
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,21 @@ LOCKED_PROFILES = frozenset({
 
 def _is_locked_profile(name: str) -> bool:
     return name in LOCKED_PROFILES
+
+
+# Profiles whose access is high-consequence to replicate cross-org (System
+# Administrator and equivalents). Distinct from LOCKED_PROFILES — this is a
+# governance gate, not a deploy-mechanics one. Excluded from a mirror by
+# default; the caller must explicitly opt in (include_high_privilege=True) to
+# include them, and they are always reported either way, never silently
+# dropped or silently included.
+HIGH_PRIVILEGE_PROFILES = frozenset({
+    'System Administrator',
+})
+
+
+def _is_high_privilege(name: str) -> bool:
+    return name in HIGH_PRIVILEGE_PROFILES
 
 
 def _parent_of(rec: dict):
@@ -193,7 +209,8 @@ def target_field_set(sf, object_name: str):
 
 
 def mirror_plan(source_org: str, target_org: str, object_name: str,
-                cloned_fields=None) -> dict:
+                cloned_fields=None, include_high_privilege: bool = False,
+                justification: str = '') -> dict:
     """Full mirror plan for one object.
 
     Reads the source org's per-parent access, checks each parent name against the
@@ -201,11 +218,21 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
     will exist in the target (cloned_fields ∪ fields already present). Returns:
 
       {object, source_org, target_org, target_object_exists, scoped,
-       matched:[{name, type, object_perms, field_perms, dropped_fields}],
-       unmatched:[{name, type}], counts:{...}}
+       matched:[{name, type, object_perms, field_perms, dropped_fields, high_privilege}],
+       unmatched:[{name, type}], skipped_locked:[...], high_privilege_excluded:[...],
+       counts:{...}}
 
     cloned_fields: `Object.Field` API names being deployed now (from the clone
     plan). Combined with the target's existing fields to form the allow-list.
+
+    This reads an entire org's cross-profile/permission-set security posture,
+    so every call emits an audit event (services.audit) — action
+    'ACCESS_MIRROR_PLAN', keyed on source_org->target_org:object, carrying the
+    caller-supplied justification. High-privilege profiles (System
+    Administrator and equivalents — HIGH_PRIVILEGE_PROFILES) are excluded from
+    `matched` by default; pass include_high_privilege=True to include them
+    (flagged `high_privilege: true` on their matched entry either way, never
+    silently folded in).
     """
     object_name = (object_name or '').strip()
     if not object_name:
@@ -222,7 +249,7 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
         allowed |= existing
     scoped = bool(allowed)
 
-    matched, unmatched, skipped_locked = [], [], []
+    matched, unmatched, skipped_locked, high_privilege_excluded = [], [], [], []
     for p in source['parents']:
         present = (p['name'] in catalog['profiles']) if p['type'] == 'Profile' \
             else (p['name'] in catalog['permission_sets'])
@@ -234,6 +261,10 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
         if p['type'] == 'Profile' and _is_locked_profile(p['name']):
             skipped_locked.append({'name': p['name'], 'type': p['type']})
             continue
+        high_priv = p['type'] == 'Profile' and _is_high_privilege(p['name'])
+        if high_priv and not include_high_privilege:
+            high_privilege_excluded.append({'name': p['name'], 'type': p['type']})
+            continue
         if scoped:
             kept = [fp for fp in p['field_perms'] if fp['field'] in allowed]
             dropped = len(p['field_perms']) - len(kept)
@@ -241,13 +272,29 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
             kept, dropped = p['field_perms'], 0
         entry = {'name': p['name'], 'type': p['type'],
                  'object_perms': p['object_perms'], 'field_perms': kept,
-                 'dropped_fields': dropped}
+                 'dropped_fields': dropped, 'high_privilege': high_priv}
         if p['type'] == 'PermissionSet':
             entry['label'] = catalog['permission_sets'].get(p['name'], p['name'])
         matched.append(entry)
 
     matched_profiles = [m for m in matched if m['type'] == 'Profile']
     matched_permsets = [m for m in matched if m['type'] == 'PermissionSet']
+    counts = {
+        'source_parents': len(source['parents']),
+        'matched': len(matched),
+        'matched_profiles': len(matched_profiles),
+        'matched_permsets': len(matched_permsets),
+        'unmatched': len(unmatched),
+        'skipped_locked': len(skipped_locked),
+        'high_privilege_excluded': len(high_privilege_excluded),
+    }
+
+    audit.emit(
+        'ACCESS_MIRROR_PLAN', 'sf_object_permissions',
+        f'{source_org}->{target_org}:{object_name}', 'success',
+        detail={**counts, 'justification': justification or ''},
+    )
+
     return {
         'object': object_name,
         'source_org': source_org,
@@ -257,14 +304,8 @@ def mirror_plan(source_org: str, target_org: str, object_name: str,
         'matched': matched,
         'unmatched': unmatched,
         'skipped_locked': skipped_locked,
-        'counts': {
-            'source_parents': len(source['parents']),
-            'matched': len(matched),
-            'matched_profiles': len(matched_profiles),
-            'matched_permsets': len(matched_permsets),
-            'unmatched': len(unmatched),
-            'skipped_locked': len(skipped_locked),
-        },
+        'high_privilege_excluded': high_privilege_excluded,
+        'counts': counts,
     }
 
 

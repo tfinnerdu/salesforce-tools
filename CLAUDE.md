@@ -58,6 +58,15 @@ conductor_provider.py Conductor client + MockConductorClient (SHOW_MOCK)
 scheduler.py         APScheduler daily readiness job
 routes/              One blueprint file per tab
 services/            Business logic, one module per feature
+  audit.py                 Shared AuditEvent dataclass + emit() — structured
+                           stdout JSON line + best-effort audit_events row
+                           (never raises; a DB failure only drops the persisted
+                           copy). actor resolves session['user'] when present,
+                           else 'system' — there is no login layer yet, so
+                           every event is 'system' today; current_actor() is
+                           the one place that upgrades once real identity
+                           lands. Every read of cross-org security posture
+                           (cli_fls, cli_access_mirror) emits one event.
   readiness_validator.py   §3 pre-go-live scorecard
   duplicate_radar.py       §5 duplicate PersonAccount scan
   batch_tracker.py         §6 migration batch progress
@@ -261,6 +270,20 @@ PermissionSet deploy is **additive** (upserts the named object/field perms,
 leaves the rest untouched), so this is safe on live metadata.
 `POST /cli/access-mirror/plan` previews matched vs unmatched; the clone
 `plan`/`package` fold it in when `mirror_access` is set.
+
+**Governance guardrails on the mirror.** Reading another org's full security
+posture is itself sensitive, so `mirror_access` requires a short **justification**
+string (≥10 chars, server-enforced in `routes/cli.py._require_justification` —
+not just a UI modal) and every plan/package call emits an `ACCESS_MIRROR_PLAN`
+audit event (`services/audit.py`) carrying it. High-privilege profiles
+(`cli_access_mirror.HIGH_PRIVILEGE_PROFILES`, currently `System Administrator`)
+are **excluded from `matched` by default** — reported in a separate
+`high_privilege_excluded` list, never silently folded in or silently dropped —
+and only ride into the package when the caller passes `include_high_privilege`;
+even then each matched entry is flagged `high_privilege: true` so the UI can
+call it out. This is distinct from `LOCKED_PROFILES` (a deploy-mechanics skip
+for profiles that reject the deploy outright) — high-privilege is a governance
+gate on profiles that *would* deploy fine but replicate admin-level access.
 
 **Command composer.** A bottom-of-tab utility (`POST /cli/recipes`,
 `cli_script.command_recipes`) that turns an object + field selection into
