@@ -79,7 +79,11 @@ services/            Business logic, one module per feature
                            / namespace auto-stripped); opt-in describe deep-scan
                            also finds standard fields (capped). Read-only.
   external_id_coverage.py  §10 SIS_ID__c / Ethos_Guid__c coverage
-  contactpoint_scanner.py  §11 broken ContactPoint parent links
+  contactpoint_scanner.py  §11 broken ContactPoint parent links — null
+                           ParentId/IndividualId AND wrongly-typed ParentId
+                           (parented to Contact, id prefix 003, instead of
+                           Account, 001 — Ed Cloud's load-bearing invariant;
+                           this used to report green under the null-only check)
   crosswalk_diff.py        §4 EDA→Ed Cloud field mapping diff
   join_builder.py          §14 SF↔SQL Server join query builder
   collection_manager.py    §13 Postman collection runner

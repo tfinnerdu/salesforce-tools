@@ -206,8 +206,14 @@ def _parse_mock_count(soql: str) -> int:
     # Distinguish != null (covered) from = null (missing)
     missing_null = ('= null' in soql_lower or '=null' in soql_lower) and '!=' not in soql_lower.split('null')[0][-3:]
     covered_notnull = '!= null' in soql_lower or '!=null' in soql_lower
+    # ContactPoint wrong-parent-type check: non-null ParentId that isn't an
+    # Account (id prefix 001) -- checked before the generic parentid branches
+    # below, since it also matches 'parentid' + covered_notnull.
+    wrong_parent_type = 'parentid' in soql_lower and covered_notnull and "not parentid like '001%'" in soql_lower
 
     if 'contactpointaddress' in soql_lower:
+        if wrong_parent_type:
+            return 18   # a small minority wrongly parented to Contact, not Account
         if 'parentid' in soql_lower and missing_null:
             return 3204   # broken parent links
         if 'individualid' in soql_lower and missing_null:
@@ -218,6 +224,8 @@ def _parse_mock_count(soql: str) -> int:
             return 3204 - 640
         return 3204
     if 'contactpointemail' in soql_lower:
+        if wrong_parent_type:
+            return 27
         if 'parentid' in soql_lower and missing_null:
             return 683
         if 'individualid' in soql_lower and missing_null:
@@ -228,6 +236,8 @@ def _parse_mock_count(soql: str) -> int:
             return 4100 - 820
         return 4100
     if 'contactpointphone' in soql_lower:
+        if wrong_parent_type:
+            return 9
         if 'parentid' in soql_lower and missing_null:
             return 633
         if 'individualid' in soql_lower and missing_null:

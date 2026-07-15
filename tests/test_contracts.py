@@ -448,6 +448,7 @@ class TestContactPointScannerContracts:
         result = self._scan(_count_sf(default=5))
         expected = sum(
             result[t]['missing_parent'] + result[t]['missing_individual']
+            + result[t]['wrong_parent_type']
             for t in ('ContactPointEmail', 'ContactPointPhone', 'ContactPointAddress')
         )
         assert result['total_issues'] == expected

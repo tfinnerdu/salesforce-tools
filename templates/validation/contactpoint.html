@@ -87,6 +87,17 @@
           <span id="cpEmailMissingParent" class="badge badge-green">—</span>
         </div>
         <div class="cp-stat-row">
+          <span>Wrong Parent Type
+            <span class="mc-info-icon"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="focus"
+                  tabindex="0"
+                  data-bs-title="Parented to the wrong object"
+                  data-bs-content="A non-null ParentId that isn't an Account (id prefix 001) — usually a Contact (003). Ed Cloud's load-bearing rule is ContactPoint parents to Account, never Contact; a wrongly-parented record used to report green under the missing-parent-only check.">ⓘ</span>
+          </span>
+          <span id="cpEmailWrongParentType" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
           <span>Missing Individual
             <span class="mc-info-icon"
                   data-bs-toggle="popover"
@@ -119,6 +130,10 @@
           <span id="cpPhoneMissingParent" class="badge badge-green">—</span>
         </div>
         <div class="cp-stat-row">
+          <span>Wrong Parent Type</span>
+          <span id="cpPhoneWrongParentType" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
           <span>Missing Individual</span>
           <span id="cpPhoneMissingIndividual" class="badge badge-green">—</span>
         </div>
@@ -142,6 +157,10 @@
         <div class="cp-stat-row">
           <span>Missing Parent</span>
           <span id="cpAddressMissingParent" class="badge badge-green">—</span>
+        </div>
+        <div class="cp-stat-row">
+          <span>Wrong Parent Type</span>
+          <span id="cpAddressWrongParentType" class="badge badge-green">—</span>
         </div>
         <div class="cp-stat-row">
           <span>Missing Individual</span>

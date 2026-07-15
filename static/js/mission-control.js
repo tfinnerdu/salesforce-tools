@@ -1156,8 +1156,9 @@ MC.contactpoints = {
       const info = data[key] || data[`ContactPoint${t.charAt(0).toUpperCase() + t.slice(1)}`] || {};
       const missingParent = info.missing_parent ?? info.missingParent ?? 0;
       const missingIndividual = info.missing_individual ?? info.missingIndividual ?? 0;
+      const wrongParentType = info.wrong_parent_type ?? info.wrongParentType ?? 0;
       const total = info.total ?? info.total_records ?? 0;
-      totalIssues += missingParent + missingIndividual;
+      totalIssues += missingParent + missingIndividual + wrongParentType;
 
       const capT = t.charAt(0).toUpperCase() + t.slice(1);
       const setVal = (id, val) => {
@@ -1171,6 +1172,7 @@ MC.contactpoints = {
         el.className = `badge ${val > 0 ? 'badge-red' : 'badge-green'}`;
       };
       setBadge(`cp${capT}MissingParent`, missingParent);
+      setBadge(`cp${capT}WrongParentType`, wrongParentType);
       setBadge(`cp${capT}MissingIndividual`, missingIndividual);
       setVal(`cp${capT}Total`, total);
 
@@ -1181,6 +1183,16 @@ MC.contactpoints = {
       if (sampleList && sampleIds.length > 0) {
         sampleList.innerHTML = sampleIds
           .map(id => `<div class="font-monospace small">${MC.sfLinkTag(String(id), `ContactPoint${capT}`)}</div>`)
+          .join('');
+        if (samplesDiv) samplesDiv.classList.remove('d-none');
+      }
+
+      // Wrong-parent-type sample IDs share the same show/hide toggle button
+      // pattern, appended below the missing-parent samples in the same list.
+      const wrongSampleIds = info.wrong_parent_sample_ids || [];
+      if (sampleList && wrongSampleIds.length > 0) {
+        sampleList.innerHTML += wrongSampleIds
+          .map(id => `<div class="font-monospace small text-danger">${MC.sfLinkTag(String(id), `ContactPoint${capT}`)} (wrong parent type)</div>`)
           .join('');
         if (samplesDiv) samplesDiv.classList.remove('d-none');
       }
