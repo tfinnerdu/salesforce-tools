@@ -1,19 +1,14 @@
 openapi: 3.0.3
 info:
-  title: SF Mission Control — CLI tab API
+  title: SF Mission Control — CLI tab API (historical, superseded)
   version: "1.0.0"
   description: >
-    Endpoints backing the CLI tab (Salesforce CLI script + metadata-package
-    generator). Read-only against Salesforce (describe only); generation is
-    pure. Routes live under the blueprint prefix `/cli` per this app's
-    convention (the blueprint prefix is the namespace).
-
-    NOTE (standards follow-up): the Doane service standard calls for data/action
-    endpoints under `/api/v1/` and a mounted `/swagger` UI. This app currently
-    namespaces by blueprint prefix across all ~15 tabs (see CLAUDE.md). This
-    spec documents the CLI contract as-shipped; adopting `/api/v1/` app-wide and
-    mounting flask-swagger-ui is tracked as a deliberate, separate pass rather
-    than forking one tab onto a divergent convention.
+    SUPERSEDED — kept for history, not mounted anywhere. This documented the
+    CLI tab's contract back when routes lived at `/cli/...` (pre-versioning).
+    The full, current, app-wide contract — every tab, at its `/api/v1/<tab>/...`
+    home — is `static/openapi.yaml`, served live at `/swagger`. The CLI tab's
+    old `/cli/...` paths still work (308-redirect to `/api/v1/cli/...`), but
+    new integrations should target the versioned paths directly.
 servers:
   - url: /cli
 components:

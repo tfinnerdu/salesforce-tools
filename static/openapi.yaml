@@ -1,0 +1,1889 @@
+openapi: 3.0.3
+info:
+  title: SF Mission Control API
+  version: "1.1.0"
+  description: >
+    JSON data/action routes live under `/api/v1/<tab>/...` (one prefix per
+    tab/blueprint, e.g. `/api/v1/cli`, `/api/v1/data-ops`). HTML page routes
+    (server-rendered Jinja2 templates, e.g. `GET /cli`, `GET /data-ops/import`)
+    are unversioned and intentionally excluded from this spec — it documents
+    the JSON contract only.
+
+    Pre-versioning JSON paths (e.g. the old `POST /cli/generate`) still work:
+    every page blueprint carries a catch-all that 308-redirects
+    `/<tab>/<subpath>` to `/api/v1/<tab>/<subpath>`, preserving method and body,
+    so existing integrations (frontend `MC.api` calls, CLI/Argo scripts) keep
+    working unmodified during the transition window
+    (`utils.responses.register_legacy_json_redirect`).
+
+    Two path-shape anomalies under Data Ops predate this pass and keep their
+    corrected (non-redundant) homes rather than becoming `/api/v1/data-ops/api/...`:
+    `GET /api/v1/data-ops/record-locks` and `GET /api/v1/data-ops/bulk-jobs`.
+servers:
+  - url: /
+    description: SF Mission Control (path-relative; same origin as the UI)
+components:
+  schemas:
+    Success:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: {}
+      required: [success, data]
+    Error:
+      type: object
+      description: Standards error envelope (superset of the app's {success,error}).
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
+        code: { type: string, example: INVALID_INPUT }
+        request_id: { type: string }
+      required: [success, error, code, request_id]
+tags:
+  - name: Health
+    description: Liveness/readiness probes. No auth, no dependency calls on the liveness path.
+  - name: Meta
+    description: Shared describe-driven object-picker source used by every tab's SObject input.
+  - name: Migration
+    description: Pre-go-live readiness scorecard, batch progress, Conductor error reconciliation, velocity, preflight checklist.
+  - name: Validation
+    description: Duplicate PersonAccount radar, external-ID coverage, ContactPoint integrity, field completeness, orphan scan, merge history.
+  - name: SOQL
+    description: SOQL Workbench — run queries, browse schema, saved queries, history, inline record edit.
+  - name: Schema
+    description: EDA→Ed Cloud crosswalk diff, org/metadata diff, field usage, field finder, data dictionary, Apex search, schema snapshots, record inspector.
+  - name: Data Ops
+    description: CSV import/export, bulk delete/modify/reassign, file migration, data backup, SQL Server↔Salesforce join builder, data tuning, fuzzy match, bulk update, record locks, bulk job history.
+  - name: Settings
+    description: Org connection tests, active-org switch, trigger-bypass toggle, Postman collection runner.
+  - name: Observe
+    description: Org limits, data-quality trends, storage breakdown, sandbox drift, cross-org counts, alert thresholds.
+  - name: Logs
+    description: Apex debug logs, flow/process errors, trace flags and debug levels.
+  - name: Impact
+    description: Field impact scan, permission auditing, regression test suites, permission-set gap analysis.
+  - name: Admin
+    description: Org configuration inventory — scheduled jobs, coverage, deploy history, users, integrations, platform events, record types, email templates, audit trail, job queue, login history, custom metadata/settings, permissions, automation inventory, data anonymizer.
+  - name: Deploy
+    description: Change Set Builder — list deployable components and generate a package.
+  - name: Dashboard
+    description: Mission Control home page summary stats.
+  - name: Scenarios
+    description: Multi-step Data Ops pipelines — CRUD, run, run history, Argo scheduling, tags.
+  - name: Key Maps
+    description: Source → Salesforce Key Map engine — CRUD, FK lookups, family/variant routing, preview, CSV export.
+  - name: CLI
+    description: Salesforce CLI script + metadata-package generator — describe, field-level security clone, record type/layout paste-and-inject, snippet + package generation, object clone, access mirror.
+paths:
+  # ── Health ────────────────────────────────────────────────────────────────
+  /api/v1/health:
+    get:
+      summary: "Liveness probe — no dependency calls, always 200 while the process is alive."
+      tags: [Health]
+      responses:
+        "200": { description: "{status, service, version, uptime_seconds}", content: { application/json: { schema: { type: object } } } }
+  /api/v1/health/deep:
+    get:
+      summary: "Readiness probe — real dependency checks. Postgres is non-critical: a DB outage reports 200/\"degraded\", never 503."
+      tags: [Health]
+      responses:
+        "200": { description: "{status, service, version, uptime_seconds, mock, checks}", content: { application/json: { schema: { type: object } } } }
+  # ── Meta ──────────────────────────────────────────────────────────────────
+  /api/v1/meta/objects:
+    get:
+      summary: "The org's SObjects with capability flags (queryable/layoutable/createable/updateable/deletable) — shared source for every tab's object picker."
+      tags: [Meta]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "502": { description: "Salesforce describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Migration ─────────────────────────────────────────────────────────────
+  /api/v1/migration/readiness/run:
+    post:
+      summary: "Run the full pre-go-live readiness scorecard and persist the result."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Readiness check failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/readiness/history:
+    get:
+      summary: "Recent readiness run history (most recent 30)."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "History query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/batches/recent:
+    get:
+      summary: "Recent migration batches — feeds the dashboard Batches widget."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Recent batches query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/batch/status:
+    get:
+      summary: "Conductor workflow batch status plus failure reasons."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Batch status query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/batch/rerun:
+    post:
+      summary: "Rerun one or more Conductor workflows by id."
+      tags: [Migration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ids], properties: { ids: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "workflow_ids is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Rerun failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/reconciler/errors:
+    get:
+      summary: "Categorize recent Conductor failures by error type."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Categorization failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/errors/requeue:
+    post:
+      summary: "Requeue a failed migration batch."
+      tags: [Migration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [batch_id], properties: { batch_id: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "batch_id required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Requeue failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/reconciler/rerun:
+    post:
+      summary: "Rerun workflows by SIS id / workflow id."
+      tags: [Migration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sis_ids], properties: { sis_ids: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "workflow_ids is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Rerun failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/velocity/data:
+    get:
+      summary: "Migration velocity time-series data (records/day)."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Velocity query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/preflight/items:
+    get:
+      summary: "List (seeding defaults on first call) the pre-go-live checklist items."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Checklist query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/preflight/toggle:
+    post:
+      summary: "Toggle a preflight checklist item's checked state."
+      tags: [Migration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [id], properties: { id: { type: integer }, checked: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "id required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Toggle failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/migration/preflight/progress:
+    get:
+      summary: "Preflight checklist completion percentage."
+      tags: [Migration]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Progress query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Validation ────────────────────────────────────────────────────────────
+  /api/v1/validation/duplicates/scan:
+    post:
+      summary: "Scan for duplicate PersonAccount records."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Scan failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/duplicates/merge:
+    post:
+      summary: "Merge a duplicate PersonAccount pair (master keeps id, victim is merged in)."
+      tags: [Validation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [master_id, victim_id], properties: { master_id: { type: string }, victim_id: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "master_id and victim_id are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Merge failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/external-ids/run:
+    get:
+      summary: "SIS_ID__c / Ethos_Guid__c external-id coverage report."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Coverage run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/contactpoints/scan:
+    get:
+      summary: "Scan for broken ContactPoint parent links (null or wrongly-typed ParentId/IndividualId)."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Scan failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/completeness/run:
+    get:
+      summary: "Field completeness (population rate) report."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Completeness run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/orphans/scan:
+    get:
+      summary: "Scan for orphaned records (dangling lookups)."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Scan failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/merge-history/list:
+    get:
+      summary: "List past PersonAccount merges."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "History query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/validation/merge-history/stats:
+    get:
+      summary: "Merge history summary stats."
+      tags: [Validation]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Stats query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── SOQL ──────────────────────────────────────────────────────────────────
+  /api/v1/soql/run:
+    post:
+      summary: "Execute a SOQL query (optionally paging through all results)."
+      tags: [SOQL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [soql], properties: { soql: { type: string }, all_pages: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "query is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Query execution failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/objects:
+    get:
+      summary: "List queryable SObjects."
+      tags: [SOQL]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Object list failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/objects/{name}/fields:
+    get:
+      summary: "List fields for a queryable SObject."
+      tags: [SOQL]
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Field describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/saved:
+    get:
+      summary: "List this user's saved queries."
+      tags: [SOQL]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Saved query list failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: "Save a query."
+      tags: [SOQL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, query], properties: { name: { type: string }, query: { type: string } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "name and query are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Save failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/saved/{query_id}:
+    delete:
+      summary: "Delete a saved query."
+      tags: [SOQL]
+      parameters:
+        - { in: path, name: query_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/history:
+    get:
+      summary: "Query run history for this user/org."
+      tags: [SOQL]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "History query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/history/{history_id}:
+    delete:
+      summary: "Delete a query history entry."
+      tags: [SOQL]
+      parameters:
+        - { in: path, name: history_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/soql/update:
+    post:
+      summary: "Inline-edit a single record's field value from query results."
+      tags: [SOQL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object_name, record_id, field_name], properties: { object_name: { type: string }, record_id: { type: string }, field_name: { type: string }, value: {  } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object_name, record_id and field_name are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Update failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Schema ────────────────────────────────────────────────────────────────
+  /api/v1/schema/crosswalk/upload:
+    post:
+      summary: "Upload and parse an EDA→Ed Cloud field-mapping CSV."
+      tags: [Schema]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "No file uploaded / Empty filename", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Parse failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/crosswalk/run:
+    post:
+      summary: "Run a live crosswalk field-mapping check against the active org."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { mappings: { type: array, items: { type: object } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Live check failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/field-usage/run:
+    post:
+      summary: "Scan an object's field population/usage."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sobject], properties: { sobject: { type: string }, fields: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "sobject required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Usage scan failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/field-finder/run:
+    post:
+      summary: "Find which objects have a given field — inverse of the Data Dictionary."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [field], properties: { field: { type: string }, include_standard: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "field required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Lookup failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/data-dictionary/run:
+    post:
+      summary: "Full field catalog (Data Dictionary) for an object."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sobject], properties: { sobject: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "sobject required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Catalog build failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/apex-search/run:
+    post:
+      summary: "Search Apex classes/triggers for a text pattern."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [pattern], properties: { pattern: { type: string }, case_sensitive: { type: boolean }, include_classes: { type: boolean }, include_triggers: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "pattern required / pattern must be at least 2 characters", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Search failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/snapshots/list:
+    get:
+      summary: "List saved schema snapshots."
+      tags: [Schema]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/snapshots/take:
+    post:
+      summary: "Take a new schema snapshot of an object."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { sobject: { type: string }, label: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Snapshot failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/snapshots/diff:
+    get:
+      summary: "Diff two schema snapshots by id."
+      tags: [Schema]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "invalid snapshot ids", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Diff failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/snapshots/{snap_id}:
+    delete:
+      summary: "Delete a schema snapshot."
+      tags: [Schema]
+      parameters:
+        - { in: path, name: snap_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/org-diff/run:
+    post:
+      summary: "Diff schema (fields) for a set of objects between two orgs."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { compare_org: { type: string }, objects: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid org/object selection", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Diff failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/metadata-diff/run:
+    post:
+      summary: "Diff selected metadata types between two orgs."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { compare_org: { type: string }, types: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid org/type selection", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Diff failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/schema/inspect/run:
+    post:
+      summary: "Fetch and inspect one record by Id or an external-id field."
+      tags: [Schema]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, record_id], properties: { object: { type: string }, record_id: { type: string }, external_id_field: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and record_id are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Inspect failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Data Ops ──────────────────────────────────────────────────────────────
+  /api/v1/data-ops/import/fields:
+    post:
+      summary: "SF object fields for the CSV import field-mapping UI."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object], properties: { object: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Field describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/import/validate:
+    post:
+      summary: "Validate a CSV upload against SF schema — no writes."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "csv_file and object are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Validation failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/file-migration/plan:
+    post:
+      summary: "Dry-run an org-to-org (or in-place) File/Attachment migration from an uploaded crosswalk."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "source and target are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Plan build failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/file-migration/run:
+    post:
+      summary: "Execute the File/Attachment migration (streams bytes source→target, relinks parents)."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "source and target are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Migration failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/import/execute:
+    post:
+      summary: "Execute a CSV import via the Bulk API."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "csv_file and object are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Import failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/import/download-errors:
+    post:
+      summary: "Download an import run's error rows as a CSV file."
+      tags: [Data Ops]
+      responses:
+        "200": { description: CSV file, content: { text/csv: { schema: { type: string } } } }
+  /api/v1/data-ops/delete/preview:
+    post:
+      summary: "Preview records matching a bulk-delete filter — no writes."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause], properties: { object: { type: string }, where_clause: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and where_clause required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/delete/execute:
+    post:
+      summary: "Execute a bulk delete matching a SOQL filter."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause], properties: { object: { type: string }, where_clause: { type: string }, bypass_triggers: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and where_clause required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/modify/preview:
+    post:
+      summary: "Preview a bulk single-field update — no writes."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause, field], properties: { object: { type: string }, where_clause: { type: string }, field: { type: string }, value: {  } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object, where_clause, and field required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/modify/execute:
+    post:
+      summary: "Execute a bulk multi-field update matching a SOQL filter."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause, field_updates], properties: { object: { type: string }, where_clause: { type: string }, field_updates: { type: object }, bypass_triggers: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object, where_clause, and field_updates required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Update failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/reassign/users:
+    get:
+      summary: "Search users for bulk ownership reassignment."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "User search failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/reassign/preview:
+    post:
+      summary: "Preview a bulk ownership reassignment — no writes."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause], properties: { object: { type: string }, where_clause: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and where_clause required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/reassign/execute:
+    post:
+      summary: "Execute a bulk ownership reassignment."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause, new_owner_id], properties: { object: { type: string }, where_clause: { type: string }, new_owner_id: { type: string }, bypass_triggers: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object, where_clause, and new_owner_id required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Reassign failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/export/run:
+    post:
+      summary: "Run a SOQL query and stream the results as a CSV download."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [soql], properties: { soql: { type: string }, filename: { type: string }, all_pages: { type: boolean } } }
+      responses:
+        "200": { description: CSV file, content: { text/csv: { schema: { type: string } } } }
+        "400": { description: "soql required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Export failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/backup/objects:
+    get:
+      summary: "Default object list for the data-backup tool."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+  /api/v1/data-ops/backup/run:
+    post:
+      summary: "Run a manual data backup for a set of objects (or the defaults)."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { objects: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Backup failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/backup/list:
+    get:
+      summary: "List past backup runs."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/backup/{run_id}/download:
+    get:
+      summary: "Download a backup run's archive as a zip."
+      tags: [Data Ops]
+      parameters:
+        - { in: path, name: run_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Zip archive, content: { application/zip: { schema: { type: string, format: binary } } } }
+        "404": { description: "Backup run not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Archive build failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/sql-schema:
+    get:
+      summary: "Cached SQL Server schema — table list, or one table's columns with ?table=."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Schema read failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/sql-schema/refresh:
+    post:
+      summary: "Re-introspect and cache the SQL Server schema."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Refresh failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/sf-object-fields:
+    get:
+      summary: "Field list for one SF object — Join Builder field checker."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object param required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Field describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/tune/rules:
+    get:
+      summary: "List data-standardization (tune) rules."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Rules list failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/tune/preview:
+    post:
+      summary: "Preview data-tuning changes for a filtered record set — no writes."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause, field_rules], properties: { object: { type: string }, where_clause: { type: string }, field_rules: { type: object } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object, where_clause, and field_rules required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/tune/execute:
+    post:
+      summary: "Apply data-tuning rules to a filtered record set."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause, field_rules], properties: { object: { type: string }, where_clause: { type: string }, field_rules: { type: object }, bypass_triggers: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object, where_clause, and field_rules required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Tune failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/match/run:
+    post:
+      summary: "Fuzzy duplicate-match scan over a filtered record set."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, where_clause, compare_fields, block_field], properties: { object: { type: string }, where_clause: { type: string }, compare_fields: { type: array, items: { type: string } }, block_field: { type: string }, threshold: { type: number } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object, where_clause, compare_fields, and block_field required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Match run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/join/build:
+    post:
+      summary: "Build a SQL Server ↔ Salesforce join query pair from field selections (no execution)."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sql_table, sf_object], properties: { sql_table: { type: string }, sf_object: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "sql_table and sf_object are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Build failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/join/run:
+    post:
+      summary: "Execute a SQL Server ↔ Salesforce join and merge the results."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { sql_query: { type: string }, soql_query: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "sql_query and soql_query are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Join failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/bulk-update/preview:
+    post:
+      summary: "Preview a bulk field update by SOQL filter — no writes."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sobject, where_clause], properties: { sobject: { type: string }, where_clause: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "sobject and where_clause required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/bulk-update/execute:
+    post:
+      summary: "Execute (or dry-run) a bulk field update by SOQL filter."
+      tags: [Data Ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sobject, where_clause, field], properties: { sobject: { type: string }, where_clause: { type: string }, field: { type: string }, value: {  }, dry_run: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid update parameters / sobject, where_clause, and field required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Update failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/record-locks:
+    get:
+      summary: "List currently locked records (optionally filtered by object)."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Lock query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/data-ops/bulk-jobs:
+    get:
+      summary: "Bulk API job history."
+      tags: [Data Ops]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Job history query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Settings ──────────────────────────────────────────────────────────────
+  /api/v1/settings/org/{name}/test:
+    get:
+      summary: "Test connectivity to a configured org."
+      tags: [Settings]
+      parameters:
+        - { in: path, name: name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "502": { description: "Connection test failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/settings/bypass-triggers:
+    post:
+      summary: "Toggle the session trigger-bypass flag used by DML operations."
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { enabled: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+  /api/v1/settings/org/switch:
+    post:
+      summary: "Switch the active org (session-scoped)."
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [org], properties: { org: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "org is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/settings/collections:
+    get:
+      summary: "List saved Postman collections."
+      tags: [Settings]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: "Create/import a Postman collection (multipart file upload or JSON body)."
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, collection_json], properties: { name: { type: string }, collection_json: { type: object } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "name and collection_json are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Import failed / Create failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/settings/collections/{col_id}/run:
+    post:
+      summary: "Run a saved collection."
+      tags: [Settings]
+      parameters:
+        - { in: path, name: col_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { env_overrides: { type: object } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/settings/collections/{col_id}:
+    delete:
+      summary: "Delete a saved collection."
+      tags: [Settings]
+      parameters:
+        - { in: path, name: col_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Observe ───────────────────────────────────────────────────────────────
+  /api/v1/observe/limits:
+    get:
+      summary: "Org API/storage limits snapshot."
+      tags: [Observe]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Limits query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/observe/trends:
+    get:
+      summary: "Data-quality trend history (?days=)."
+      tags: [Observe]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Trends query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/observe/record-counts:
+    get:
+      summary: "Storage/record-count breakdown by object."
+      tags: [Observe]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Record count query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/observe/sandbox-drift:
+    get:
+      summary: "Compare a baseline org against a target org for configuration drift."
+      tags: [Observe]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Drift check failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/observe/cross-org:
+    get:
+      summary: "Record counts across multiple orgs (?orgs=csv)."
+      tags: [Observe]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Cross-org query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/observe/thresholds:
+    get:
+      summary: "Get configured limit alert thresholds."
+      tags: [Observe]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Threshold query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: "Set an amber/red alert threshold for a limit."
+      tags: [Observe]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [limit_name, amber_pct, red_pct], properties: { limit_name: { type: string }, amber_pct: { type: number }, red_pct: { type: number } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "limit_name and numeric amber_pct/red_pct required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Set failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/observe/thresholds/{limit_name}:
+    delete:
+      summary: "Delete an alert threshold."
+      tags: [Observe]
+      parameters:
+        - { in: path, name: limit_name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Logs ──────────────────────────────────────────────────────────────────
+  /api/v1/logs/apex:
+    get:
+      summary: "List Apex debug logs (optional ?since= ISO datetime)."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Log list failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/apex/delete-all:
+    delete:
+      summary: "Delete all Apex debug logs."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/apex/{log_id}:
+    get:
+      summary: "Fetch and parse one Apex debug log body."
+      tags: [Logs]
+      parameters:
+        - { in: path, name: log_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Log fetch failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      summary: "Delete one Apex debug log."
+      tags: [Logs]
+      parameters:
+        - { in: path, name: log_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/apex/cpu-summary:
+    get:
+      summary: "CPU time summary across recent debug logs."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Summary failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/stream/subscribe:
+    post:
+      summary: "Stub for a future Salesforce Streaming API / CometD bridge — not yet implemented."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "501": { description: "Real-time streaming not yet implemented", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/flows:
+    get:
+      summary: "List Flow error events."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Flow error query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/process-exceptions:
+    get:
+      summary: "List process/batch exceptions."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/trace-flags:
+    get:
+      summary: "List active trace flags."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: "Create a trace flag for a user/entity."
+      tags: [Logs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [entity_id, debug_level_id], properties: { entity_id: { type: string }, entity_type: { type: string }, debug_level_id: { type: string }, duration_minutes: { type: integer } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "entity_id and debug_level_id required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Create failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/trace-flags/debug-levels:
+    get:
+      summary: "List debug level definitions."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/trace-flags/users:
+    get:
+      summary: "Search users for trace-flag assignment (?q=)."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Search failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/trace-flags/delete-expired:
+    delete:
+      summary: "Delete all expired trace flags."
+      tags: [Logs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/logs/trace-flags/{flag_id}:
+    delete:
+      summary: "Delete one trace flag."
+      tags: [Logs]
+      parameters:
+        - { in: path, name: flag_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Impact ────────────────────────────────────────────────────────────────
+  /api/v1/impact/field-scan:
+    get:
+      summary: "Scan where a field is referenced (layouts, flows, validation rules, etc.)."
+      tags: [Impact]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and field params are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Scan failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/permissions:
+    get:
+      summary: "Field-level access summary for an object."
+      tags: [Impact]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object param is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Audit failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/permissions/field:
+    get:
+      summary: "Field-level access summary for one field."
+      tags: [Impact]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and field params are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Summary failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/assignments:
+    get:
+      summary: "Permission set / profile assignment counts."
+      tags: [Impact]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Assignment query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/regression:
+    get:
+      summary: "List saved regression test suites."
+      tags: [Impact]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: "Save a new regression test suite."
+      tags: [Impact]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, assertions], properties: { name: { type: string }, assertions: { type: array, items: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "name is required / assertions must be an array", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Save failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/regression/{suite_id}/run:
+    post:
+      summary: "Run a regression suite against the active org."
+      tags: [Impact]
+      parameters:
+        - { in: path, name: suite_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Suite not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/regression/{suite_id}/baseline:
+    post:
+      summary: "Save the suite's current results as its baseline."
+      tags: [Impact]
+      parameters:
+        - { in: path, name: suite_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Suite not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Baseline save failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/perm-gap/list:
+    get:
+      summary: "List permission sets for gap comparison."
+      tags: [Impact]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/impact/perm-gap/compare:
+    post:
+      summary: "Compare two permission sets."
+      tags: [Impact]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ps_a, ps_b], properties: { ps_a: { type: string }, ps_b: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "ps_a and ps_b required / Select two different permission sets", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Compare failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Admin ─────────────────────────────────────────────────────────────────
+  /api/v1/admin/scheduled-jobs:
+    get:
+      summary: "Scheduled Apex jobs (CronTrigger)."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/test-coverage:
+    get:
+      summary: "Apex test coverage summary."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/deploy-history:
+    get:
+      summary: "Recent metadata deploy history."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/users:
+    get:
+      summary: "User audit — active/inactive, license usage."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/integrations:
+    get:
+      summary: "Connected-app / integration inventory."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/platform-events:
+    get:
+      summary: "Platform event definitions and usage."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/record-types:
+    get:
+      summary: "Record type inventory."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/email-templates:
+    get:
+      summary: "Email template inventory."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/audit-trail:
+    get:
+      summary: "Setup audit trail entries (?days=)."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/job-queue:
+    get:
+      summary: "Apex async job queue (AsyncApexJob, ?limit=)."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/login-history:
+    get:
+      summary: "User login history."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/custom-metadata:
+    get:
+      summary: "List custom metadata types."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/custom-metadata/{type_name}/records:
+    get:
+      summary: "List records of a custom metadata type."
+      tags: [Admin]
+      parameters:
+        - { in: path, name: type_name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/custom-settings:
+    get:
+      summary: "List custom settings."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/custom-settings/{setting_name}/records:
+    get:
+      summary: "List records of a custom setting."
+      tags: [Admin]
+      parameters:
+        - { in: path, name: setting_name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/permissions/sets:
+    get:
+      summary: "List permission sets."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/permissions/users:
+    get:
+      summary: "Search users for permission auditing (?q=)."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Search failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/permissions/user/{user_id}:
+    get:
+      summary: "Permission detail for one user."
+      tags: [Admin]
+      parameters:
+        - { in: path, name: user_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/permissions/set/{pset_id}:
+    get:
+      summary: "Detail for one permission set."
+      tags: [Admin]
+      parameters:
+        - { in: path, name: pset_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/permissions/object-matrix:
+    get:
+      summary: "Object-level permission matrix (?object=)."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object param required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/permissions/field-matrix:
+    get:
+      summary: "Field-level permission matrix (?object=)."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object param required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/automation/validation-rules:
+    get:
+      summary: "List validation rules."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/automation/flows:
+    get:
+      summary: "List Flows."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/automation/triggers:
+    get:
+      summary: "List Apex triggers."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/automation/sharing-model:
+    get:
+      summary: "Org-wide sharing model summary."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/anonymizer/objects:
+    get:
+      summary: "List objects supported by the data anonymizer."
+      tags: [Admin]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/anonymizer/preview:
+    post:
+      summary: "Preview anonymization changes for an object/fields."
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object], properties: { object: { type: string }, fields: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/anonymizer/run:
+    post:
+      summary: "Run (or dry-run) the data anonymizer."
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, fields], properties: { object: { type: string }, fields: { type: array, items: { type: string } }, dry_run: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and fields are required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Deploy ────────────────────────────────────────────────────────────────
+  /api/v1/deploy/components:
+    get:
+      summary: "List deployable components of a metadata type (Change Set Builder)."
+      tags: [Deploy]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Unsupported component type", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/deploy/generate:
+    post:
+      summary: "Build a deployable package from selected components."
+      tags: [Deploy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [components], properties: { components: { type: array, items: { type: object } }, api_version: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "components is required", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Package build failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Dashboard ─────────────────────────────────────────────────────────────
+  /api/v1/dashboard/summary:
+    get:
+      summary: "Quick stats for the dashboard title bar (readiness/preflight percentages) — DB-only, no SF calls."
+      tags: [Dashboard]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Summary query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Scenarios ─────────────────────────────────────────────────────────────
+  /api/v1/scenarios/list:
+    get:
+      summary: "List saved scenarios (with tags)."
+      tags: [Scenarios]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/get/{scenario_id}:
+    get:
+      summary: "One scenario's detail plus tags."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Scenario not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Get failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/create:
+    post:
+      summary: "Create a new scenario (name/description/steps)."
+      tags: [Scenarios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, steps], properties: { name: { type: string }, description: { type: string }, steps: { type: array, items: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid scenario definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Create failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/update/{scenario_id}:
+    post:
+      summary: "Update a scenario's steps/metadata."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, description: { type: string }, steps: { type: array, items: { type: object } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid scenario definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: "Scenario not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Update failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}:
+    delete:
+      summary: "Delete a scenario."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Scenario not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}/run:
+    post:
+      summary: "Execute every step of a scenario in order (synchronous, gated by MC.confirm client-side)."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Scenario has no runnable steps", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}/runs:
+    get:
+      summary: "Run history for a scenario."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "History query failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}/approve:
+    post:
+      summary: "Set/clear the schedule_approved sign-off that permits Argo scheduling."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { approved: { type: boolean } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Scenario not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Approve failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}/argo-manifest:
+    post:
+      summary: "Generate an Argo CronWorkflow YAML for this scenario and a cron schedule."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { schedule: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid cron schedule", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: "Scenario not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Manifest generation failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}/scheduled-run:
+    post:
+      summary: "Token-authed headless trigger for Argo (X-MC-Scheduler-Token). Runs an *approved* scenario; a non-clean run returns 500 so `curl -f` fails."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "401": { description: "Missing/invalid scheduler token", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "403": { description: "Scenario is not approved for scheduled runs", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: "Scenario not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Run completed with a non-success status / Run failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/tags:
+    get:
+      summary: "List all tags."
+      tags: [Scenarios]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      summary: "Create a tag."
+      tags: [Scenarios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string }, color: { type: string } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid tag name", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Create failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/tags/{tag_id}:
+    delete:
+      summary: "Delete a tag."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: tag_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/scenarios/{scenario_id}/tags/{tag_id}:
+    post:
+      summary: "Attach a tag to a scenario."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+        - { in: path, name: tag_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid tag/scenario id", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Attach failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      summary: "Detach a tag from a scenario."
+      tags: [Scenarios]
+      parameters:
+        - { in: path, name: scenario_id, required: true, schema: { type: string } }
+        - { in: path, name: tag_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid tag/scenario id", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Detach failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── Key Maps ──────────────────────────────────────────────────────────────
+  /api/v1/key-maps/list:
+    get:
+      summary: "List saved key maps."
+      tags: [Key Maps]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "500": { description: "List failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/get/{key_map_id}:
+    get:
+      summary: "Get one key map with its FK lookups, families, and variants."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Key map not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Get failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/create:
+    post:
+      summary: "Create a key map."
+      tags: [Key Maps]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, target_sobject], properties: { name: { type: string }, description: { type: string }, target_sobject: { type: string } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid key map definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Create failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/update/{key_map_id}:
+    post:
+      summary: "Update a key map's name/description/target object."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, description: { type: string }, target_sobject: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid key map definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: "Key map not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Update failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/{key_map_id}:
+    delete:
+      summary: "Delete a key map."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Key map not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/{key_map_id}/fk-lookups:
+    post:
+      summary: "Add an FK-resolution rule to a key map."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [source_column, target_field, lookup_sobject], properties: { source_column: { type: string }, target_field: { type: string }, lookup_sobject: { type: string }, lookup_field: { type: string } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid FK lookup definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Add failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/fk-lookups/{lookup_id}:
+    delete:
+      summary: "Delete an FK lookup rule."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: lookup_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "FK lookup not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/{key_map_id}/families:
+    post:
+      summary: "Add a routing family to a key map."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string }, routing: { type: object } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid family definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Add failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/families/{family_id}:
+    delete:
+      summary: "Delete a routing family."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: family_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Family not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/families/{family_id}/variants:
+    post:
+      summary: "Add a variant to a family."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: family_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string }, overlay: { type: object }, applies_when: { type: object } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid variant definition", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Add failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/variants/{variant_id}:
+    delete:
+      summary: "Delete a variant."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: variant_id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "404": { description: "Variant not found", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Delete failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/{key_map_id}/preview:
+    post:
+      summary: "Ingest a source spec, expand through the key map, and return a capped preview — read-only."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [source], properties: { source: { type: object } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid source or key map", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Preview failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/key-maps/{key_map_id}/export:
+    post:
+      summary: "Run the expansion and stream the full output as a CSV download."
+      tags: [Key Maps]
+      parameters:
+        - { in: path, name: key_map_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [source], properties: { source: { type: object } } }
+      responses:
+        "200": { description: CSV file, content: { text/csv: { schema: { type: string } } } }
+        "400": { description: "Invalid source or key map", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Export failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  # ── CLI ───────────────────────────────────────────────────────────────────
+  /api/v1/cli/objects:
+    get:
+      summary: "List SObjects in the active org (describe-driven picker source)."
+      tags: [CLI]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "502": { description: "Salesforce describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/objects/{object_name}/fields:
+    get:
+      summary: "Describe one object's fields (drives flip prefill + validation)."
+      tags: [CLI]
+      parameters:
+        - { in: path, name: object_name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "502": { description: "Salesforce describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/fls:
+    get:
+      summary: "Read a reference field's field-level security (visibility) from a source org."
+      tags: [CLI]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "object and field are required, or unknown org", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "502": { description: "Salesforce FLS read failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/recordtype/picklists:
+    post:
+      summary: "List the picklist fields already governed by a pasted RecordType."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { rt_xml: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Not a RecordType", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/recordtype:
+    post:
+      summary: "Make a picklist field's values available on a pasted RecordType; returns modified metadata."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { rt_xml: { type: string }, field: { type: string }, values: { type: array, items: { type: string } }, default: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid input / not a RecordType / all values present", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/recipes:
+    post:
+      summary: "Describe-driven sf command recipes for an object (describe/query/count/retrieve)."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { object: { type: string }, fields: { type: array, items: { type: string } }, alias: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+  /api/v1/cli/layout/sections:
+    post:
+      summary: "List the sections of a pasted Layout (with editable-column flag) for the picker."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { layout_xml: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Not a Layout", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/layout:
+    post:
+      summary: "Add fields to a pasted Layout (new or existing section); returns the modified metadata."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { layout_xml: { type: string }, fields: { type: array, items: { type: string } }, behavior: { type: string, enum: [Edit, Readonly, Required] }, section: { type: string }, new_section: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid input / not a Layout / all fields already present", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/generate:
+    post:
+      summary: "Generate all sf-CLI command snippets for a field/permission-set plan (pure; no SF write)."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [fields], properties: { alias: { type: string }, fields: { type: array, items: { type: object } }, permset: { type: object } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Invalid plan", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/package:
+    post:
+      summary: "Build the force-app metadata package as a downloadable zip."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [fields], properties: { alias: { type: string }, fields: { type: array, items: { type: object } }, permset: { type: object } } }
+      responses:
+        "200": { description: Zip archive, content: { application/zip: { schema: { type: string, format: binary } } } }
+        "400": { description: "Nothing to package / invalid input", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/access-mirror/plan:
+    post:
+      summary: "Read a source org's object+field access and match it to same-named profiles/permission sets in the target."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object, justification], properties: { object: { type: string }, source_org: { type: string }, target_org: { type: string }, justification: { type: string }, cloned_fields: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Missing object, unknown org, or justification too short", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "502": { description: "Salesforce access read failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/clone-object/plan:
+    post:
+      summary: "Describe a source-org object into a clone plan (fields, per-field skip reasons, optional shell)."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object], properties: { object: { type: string }, source_org: { type: string }, include_shell: { type: boolean }, mirror_access: { type: boolean }, justification: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Success' } } } }
+        "400": { description: "Missing object, unknown org, or justification too short", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "502": { description: "Salesforce describe failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/cli/clone-object/package:
+    post:
+      summary: "Build the force-app zip for a cloned object (fields + optional shell, tab, and access mirror)."
+      tags: [CLI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [object], properties: { object: { type: string }, source_org: { type: string }, include_shell: { type: boolean }, include_permset: { type: boolean }, include_tab: { type: boolean }, mirror_access: { type: boolean }, justification: { type: string } } }
+      responses:
+        "200": { description: Zip archive, content: { application/zip: { schema: { type: string, format: binary } } } }
+        "400": { description: "Missing object, unknown org, justification too short, or nothing to clone", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: "Package build failed", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }

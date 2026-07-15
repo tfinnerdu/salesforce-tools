@@ -350,15 +350,18 @@ honored. Value names are written verbatim; SF percent-encodes some value names
 representative, not org-exact — see `tests/test_cli_recordtype.py`). This closes
 the create → visible → on-the-page → selectable-per-record-type lifecycle.
 
-**API-shape note (standards follow-up).** The CLI tab keeps this app's
-blueprint-prefix routing (`/cli/...`) for consistency with the other tabs, and
-introduces the shared standards **error envelope** in `utils/responses.py`
-(`{success:false, error, code, request_id}` — a superset of `{success, data}`,
-so `MC.api` is unaffected) plus an OpenAPI stub at `static/openapi-cli.yaml`.
-Full Doane-standard API conformance — moving data/action routes under `/api/v1/`
-and mounting a `/swagger` UI (`flask-swagger-ui`) across all blueprints — is a
-deliberate, separate pass, not smuggled in via one feature. Adopt
-`utils.responses.error_response` in other blueprints when that pass happens.
+**API standards conformance.** The CLI tab introduced the shared standards
+**error envelope** in `utils/responses.py` (`{success:false, error, code,
+request_id}` — a superset of `{success, data}`, so `MC.api` is unaffected)
+plus a per-tab OpenAPI stub at `static/openapi-cli.yaml`. A later pass
+completed full Doane-standard conformance app-wide: every blueprint now
+splits into a `<name>_bp` (HTML pages, unversioned) and a `<name>_api_bp`
+(JSON data/action routes, under `/api/v1/<tab>/...`), `error_response`/`ok`
+are adopted everywhere (not just CLI), old pre-versioning JSON paths
+308-redirect to their new home (`register_legacy_json_redirect`), and a
+`/swagger` UI (`flask-swagger-ui`) serves the full app-wide contract from
+`static/openapi.yaml` (~190 operations across all 16 API blueprints + health).
+See "Tabs and their routes" above for the prefix table.
 
 ## Scheduled runs (Argo)
 

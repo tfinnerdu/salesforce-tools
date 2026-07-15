@@ -3,6 +3,7 @@ import logging
 import os
 
 from flask import Flask, redirect, url_for
+from flask_swagger_ui import get_swaggerui_blueprint
 
 from config import Config
 from db import init_db
@@ -29,6 +30,16 @@ logging.basicConfig(
     format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":%(message)s}',
 )
 logger = logging.getLogger(__name__)
+
+# Swagger UI for the app-wide /api/v1/ OpenAPI spec (static/openapi.yaml) —
+# the last piece of the Doane API standard: a mounted, browsable contract for
+# every JSON data/action route across all tabs.
+SWAGGER_URL = '/swagger'
+API_SPEC_URL = '/static/openapi.yaml'
+swagger_ui_bp = get_swaggerui_blueprint(
+    SWAGGER_URL, API_SPEC_URL,
+    config={'app_name': 'SF Mission Control API'},
+)
 
 
 def create_app() -> Flask:
@@ -68,6 +79,7 @@ def create_app() -> Flask:
     app.register_blueprint(cli_api_bp)
     app.register_blueprint(meta_bp)
     app.register_blueprint(meta_api_bp)
+    app.register_blueprint(swagger_ui_bp)
 
     @app.before_request
     def _ensure_active_org():
